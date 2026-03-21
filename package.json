@@ -1,0 +1,14 @@
+{
+  "name": "reddit-monitor",
+  "version": "1.0.0",
+  "description": "Reddit keyword monitor — alerts via email when matching posts appear",
+  "main": "monitor.js",
+  "type": "module",
+  "scripts": {
+    "start": "node monitor.js"
+  },
+  "dependencies": {
+    "node-cron": "^3.0.3",
+    "resend": "^4.0.0"
+  }
+}
