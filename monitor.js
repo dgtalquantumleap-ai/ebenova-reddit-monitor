@@ -127,8 +127,25 @@ Reply:`
   }
 }
 
+// ── Nairaland keywords ──────────────────────────────────────────────────────
+// Nairaland sections: Business, Properties, Career, Computers, Nairaland
+const NAIRALAND_KEYWORDS = [
+  { keyword: 'contract template',       section: 'business',    product: 'Signova'  },
+  { keyword: 'tenancy agreement',       section: 'properties',  product: 'Signova'  },
+  { keyword: 'client refused to pay',   section: 'business',    product: 'Signova'  },
+  { keyword: 'deed of assignment',      section: 'properties',  product: 'Signova'  },
+  { keyword: 'freelance contract',      section: 'career',      product: 'Signova'  },
+  { keyword: 'NDA agreement',           section: 'business',    product: 'Signova'  },
+  { keyword: 'quit notice',             section: 'properties',  product: 'Signova'  },
+  { keyword: 'legal document',          section: 'business',    product: 'Signova'  },
+  { keyword: 'share to classroom',      section: 'education',   product: 'Peekr'    },
+  { keyword: 'cleaning company lagos',  section: 'business',    product: 'FieldOps' },
+  { keyword: 'facility management',     section: 'business',    product: 'FieldOps' },
+]
+
 // ── Seen post tracker — persists in memory, resets on restart ────────────────
 const seenIds = new Set()
+const seenNairalandIds = new Set()
 
 // ── Reddit search — public JSON endpoint, no auth needed ─────────────────────
 async function searchReddit(keyword, subreddits) {
@@ -260,6 +277,49 @@ function buildEmailHtml(matches) {
   `
 }
 
+// ── Nairaland search — scrapes public search HTML ──────────────────────────
+async function searchNairaland(keyword, section) {
+  const results = []
+  const encoded = encodeURIComponent(keyword)
+  const url = `https://www.nairaland.com/search/posts/${encoded}/${section}/0/0`
+  try {
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; EbenovaMonitor/1.0)', 'Accept': 'text/html' }
+    })
+    if (!res.ok) return results
+    const html = await res.text()
+    const postPattern = /<td[^>]*>\s*<b>\s*<a href="(\/[^"]+)"[^>]*>([^<]+)<\/a>/gi
+    const seen = new Set()
+    let match
+    while ((match = postPattern.exec(html)) !== null) {
+      const path = match[1]
+      const title = match[2].trim()
+      if (!path || !title || path.length < 5) continue
+      const id = `nl_${path.replace(/\//g, '_')}`
+      if (seenNairalandIds.has(id) || seen.has(id)) continue
+      seen.add(id)
+      seenNairalandIds.add(id)
+      const matchIdx = postPattern.lastIndex
+      const snippet = html.slice(matchIdx, matchIdx + 500)
+        .replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 280)
+      results.push({
+        id, title,
+        url: `https://www.nairaland.com${path}`,
+        subreddit: `Nairaland / ${section}`,
+        author: 'nairaland',
+        score: 0, comments: 0,
+        body: snippet,
+        createdAt: new Date().toUTCString(),
+        keyword, source: 'nairaland',
+      })
+      if (results.length >= 5) break
+    }
+  } catch (err) {
+    console.error(`[nairaland] fetch error for "${keyword}":`, err.message)
+  }
+  return results
+}
+
 // ── Send alert email ──────────────────────────────────────────────────────────
 async function sendAlert(matches) {
   if (!RESEND_API_KEY) {
@@ -269,7 +329,9 @@ async function sendAlert(matches) {
   }
 
   const keywords = [...new Set(matches.map(m => m.keyword))]
-  const subject  = `Reddit: ${matches.length} new mention${matches.length !== 1 ? 's' : ''} — ${keywords.slice(0, 3).join(', ')}${keywords.length > 3 ? '…' : ''}`
+  const hasNairaland = matches.some(m => m.source === 'nairaland')
+  const platform = hasNairaland ? 'Reddit + Nairaland' : 'Reddit'
+  const subject  = `${platform}: ${matches.length} new mention${matches.length !== 1 ? 's' : ''} — ${keywords.slice(0, 3).join(', ')}${keywords.length > 3 ? '…' : ''}`
 
   try {
     await resend.emails.send({
@@ -292,16 +354,26 @@ async function poll() {
   console.log(`[monitor] Polling Reddit — ${new Date().toUTCString()}`)
   const allMatches = []
 
+  // Reddit
   for (const { keyword, subreddits, product } of KEYWORDS) {
     const matches = await searchReddit(keyword, subreddits)
     if (matches.length > 0) {
-      // Tag each match with the product it belongs to
       matches.forEach(m => { m.product = product })
-      console.log(`[monitor] "${keyword}": ${matches.length} new`)
+      console.log(`[monitor] Reddit "${keyword}": ${matches.length} new`)
       allMatches.push(...matches)
     }
-    // Polite gap between keyword searches
     await delay(2000)
+  }
+
+  // Nairaland
+  for (const { keyword, section, product } of NAIRALAND_KEYWORDS) {
+    const matches = await searchNairaland(keyword, section)
+    if (matches.length > 0) {
+      matches.forEach(m => { m.product = product })
+      console.log(`[monitor] Nairaland "${keyword}": ${matches.length} new`)
+      allMatches.push(...matches)
+    }
+    await delay(3000)
   }
 
   if (allMatches.length > 0) {
@@ -327,8 +399,8 @@ async function poll() {
 
 // ── Startup ───────────────────────────────────────────────────────────────────
 console.log('━'.repeat(60))
-console.log('  Ebenova Reddit Monitor')
-console.log(`  Watching ${KEYWORDS.length} keywords across Signova, Peekr, FieldOps`)
+console.log('  Ebenova Social Monitor (Reddit + Nairaland)')
+console.log(`  Reddit: ${KEYWORDS.length} keywords · Nairaland: ${NAIRALAND_KEYWORDS.length} keywords`)
 console.log(`  Polling every ${POLL_MINUTES} minutes`)
 console.log(`  Alerts → ${ALERT_EMAIL}`)
 console.log(`  AI drafts → ${ANTHROPIC_API_KEY ? 'ON (Claude)' : 'OFF (set ANTHROPIC_API_KEY)'}`)
