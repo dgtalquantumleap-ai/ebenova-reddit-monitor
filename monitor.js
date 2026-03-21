@@ -6,9 +6,9 @@
 import { Resend } from 'resend'
 import cron from 'node-cron'
 
-const RESEND_API_KEY    = process.env.RESEND_API_KEY
-const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY
-const ALERT_EMAIL       = process.env.ALERT_EMAIL    || 'info@ebenova.net'
+const RESEND_API_KEY = process.env.RESEND_API_KEY
+const GROQ_API_KEY   = process.env.GROQ_API_KEY
+const ALERT_EMAIL    = process.env.ALERT_EMAIL    || 'info@ebenova.net'
 const FROM_EMAIL        = process.env.FROM_EMAIL      || 'monitor@getsignova.com'
 const POLL_MINUTES      = parseInt(process.env.POLL_INTERVAL_MINUTES || '10')
 
@@ -76,9 +76,10 @@ const PRODUCT_CONTEXT = {
   },
 }
 
-// ── Auto-draft a reply using Claude API ──────────────────────────────────────
+// ── Auto-draft a reply using Groq (free tier — Llama 3.3 70b) ────────────────
 async function generateReplyDraft(post) {
-  if (!ANTHROPIC_API_KEY) return null
+  const groqKey = process.env.GROQ_API_KEY
+  if (!groqKey) return null
   const ctx = PRODUCT_CONTEXT[post.product]
   if (!ctx) return null
 
@@ -104,22 +105,21 @@ TASK: Write a short, genuine Reddit reply (3-6 sentences max).
 Reply:`
 
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
+        'Authorization': `Bearer ${groqKey}`,
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: 'llama-3.3-70b-versatile',
         max_tokens: 300,
         messages: [{ role: 'user', content: prompt }],
       }),
     })
     if (!res.ok) return null
     const data = await res.json()
-    const text = data.content?.[0]?.text?.trim() || null
+    const text = data.choices?.[0]?.message?.content?.trim() || null
     if (!text || text === 'SKIP') return null
     return text
   } catch {
@@ -403,7 +403,7 @@ console.log('  Ebenova Social Monitor (Reddit + Nairaland)')
 console.log(`  Reddit: ${KEYWORDS.length} keywords · Nairaland: ${NAIRALAND_KEYWORDS.length} keywords`)
 console.log(`  Polling every ${POLL_MINUTES} minutes`)
 console.log(`  Alerts → ${ALERT_EMAIL}`)
-console.log(`  AI drafts → ${ANTHROPIC_API_KEY ? 'ON (Claude)' : 'OFF (set ANTHROPIC_API_KEY)'}`)
+console.log(`  AI drafts → ${process.env.GROQ_API_KEY ? 'ON (Groq / Llama 3.3)' : 'OFF (set GROQ_API_KEY)'}`)
 console.log('━'.repeat(60))
 
 // Run once immediately on startup
