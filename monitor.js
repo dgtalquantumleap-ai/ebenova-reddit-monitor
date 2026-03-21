@@ -6,10 +6,11 @@
 import { Resend } from 'resend'
 import cron from 'node-cron'
 
-const RESEND_API_KEY = process.env.RESEND_API_KEY
-const ALERT_EMAIL    = process.env.ALERT_EMAIL    || 'info@ebenova.net'
-const FROM_EMAIL     = process.env.FROM_EMAIL      || 'monitor@getsignova.com'
-const POLL_MINUTES   = parseInt(process.env.POLL_INTERVAL_MINUTES || '10')
+const RESEND_API_KEY    = process.env.RESEND_API_KEY
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY
+const ALERT_EMAIL       = process.env.ALERT_EMAIL    || 'info@ebenova.net'
+const FROM_EMAIL        = process.env.FROM_EMAIL      || 'monitor@getsignova.com'
+const POLL_MINUTES      = parseInt(process.env.POLL_INTERVAL_MINUTES || '10')
 
 const resend = new Resend(RESEND_API_KEY)
 
@@ -55,6 +56,76 @@ const KEYWORDS = [
   { keyword: 'service business management app', subreddits: ['smallbusiness','Entrepreneur','startups'],                    product: 'FieldOps' },
 
 ]
+
+// ── Product context for reply drafts ─────────────────────────────────────────
+const PRODUCT_CONTEXT = {
+  Signova: {
+    url: 'getsignova.com',
+    description: 'Signova is an AI legal document generator. Users answer a few questions and get a professional document in under 3 minutes. 27 document types including NDAs, freelance contracts, tenancy agreements, privacy policies, and more. Free to preview, $4.99 to download. No account needed. Accepts card and USDT crypto. Serves Nigeria, Africa, and 180+ countries globally.',
+    tone: 'You are a helpful Nigerian founder who built Signova after watching a friend get burned with no contract. You know legal document problems deeply. Never be salesy. Answer the person\'s actual problem first. Mention Signova at the end only if it genuinely helps.',
+  },
+  Peekr: {
+    url: 'getpeekr.com',
+    description: 'Peekr is a free iOS app that lets you share photos, videos, and PDFs from your iPhone to any room instantly. Viewers just scan a QR code — no app download needed on their end. Perfect for teachers, church leaders, presenters, and event hosts. Free tier available, premium unlocks video and PDF sharing.',
+    tone: 'You are a helpful founder who built Peekr for teachers and presenters. Answer the person\'s sharing problem genuinely. Mention Peekr at the end only if it directly solves their situation.',
+  },
+  FieldOps: {
+    url: 'ebenova.net',
+    description: 'FieldOps is a web-based operations platform for Nigerian service businesses — cleaning companies, logistics firms, facility managers. It replaces WhatsApp group chats and paper records with a proper booking system, staff mobile app, job scheduling, and automated invoicing. Already live with a professional cleaning company in Calgary.',
+    tone: 'You are a founder who built FieldOps for African service business owners. Be practical and understand their operational pain. Mention FieldOps at the end only if it genuinely fits their situation.',
+  },
+}
+
+// ── Auto-draft a reply using Claude API ──────────────────────────────────────
+async function generateReplyDraft(post) {
+  if (!ANTHROPIC_API_KEY) return null
+  const ctx = PRODUCT_CONTEXT[post.product]
+  if (!ctx) return null
+
+  const prompt = `You are helping draft a Reddit reply for a founder.
+
+PRODUCT: ${post.product}
+${ctx.description}
+
+PERSONA: ${ctx.tone}
+
+REDDIT POST:
+Title: ${post.title}
+Subreddit: r/${post.subreddit}
+Body: ${post.body || '(no body text)'}
+
+TASK: Write a short, genuine Reddit reply (3-6 sentences max). 
+- Lead with actually helpful advice or empathy for their specific situation
+- Sound like a real person, not a bot or marketer
+- Only mention ${post.product} and ${ctx.url} at the very end, naturally
+- Never use bullet points or headers — plain conversational text only
+- If the post is NOT actually relevant to ${post.product}, reply with exactly: SKIP
+
+Reply:`
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 300,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    })
+    if (!res.ok) return null
+    const data = await res.json()
+    const text = data.content?.[0]?.text?.trim() || null
+    if (!text || text === 'SKIP') return null
+    return text
+  } catch {
+    return null
+  }
+}
 
 // ── Seen post tracker — persists in memory, resets on restart ────────────────
 const seenIds = new Set()
@@ -132,13 +203,18 @@ function buildEmailHtml(matches) {
     const totalForProduct = Object.values(keywords).flat().length
     const keywordSections = Object.entries(keywords).map(([keyword, posts]) => {
       const items = posts.map(p => `
-        <div style="margin-bottom:16px;padding:14px;background:#f9f9f9;border-left:4px solid #c9a84c;border-radius:4px;">
+        <div style="margin-bottom:20px;padding:14px;background:#f9f9f9;border-left:4px solid #c9a84c;border-radius:4px;">
           <div style="font-size:12px;color:#888;margin-bottom:5px;">
             r/${p.subreddit} · u/${p.author} · ${p.score} upvotes · ${p.comments} comments
           </div>
           <a href="${p.url}" style="font-size:15px;font-weight:600;color:#1a1a1a;text-decoration:none;">${p.title}</a>
           ${p.body ? `<p style="font-size:13px;color:#555;margin:7px 0 0;line-height:1.5;">${p.body}${p.body.length >= 300 ? '…' : ''}</p>` : ''}
           <a href="${p.url}" style="display:inline-block;margin-top:8px;font-size:12px;color:#c9a84c;font-weight:600;">Open thread →</a>
+          ${p.draft ? `
+          <div style="margin-top:12px;padding:12px;background:#fffdf0;border:1px solid #e8d87a;border-radius:6px;">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#a08c00;margin-bottom:6px;">✏️ Suggested reply</div>
+            <div style="font-size:13px;color:#333;line-height:1.6;white-space:pre-wrap;">${p.draft}</div>
+          </div>` : ''}
         </div>
       `).join('')
       return `
@@ -229,7 +305,20 @@ async function poll() {
   }
 
   if (allMatches.length > 0) {
-    console.log(`[monitor] Total new matches: ${allMatches.length} — sending alert`)
+    console.log(`[monitor] Total new matches: ${allMatches.length} — generating reply drafts…`)
+
+    // Generate drafts with concurrency limit of 3 to avoid API rate limits
+    const CONCURRENCY = 3
+    for (let i = 0; i < allMatches.length; i += CONCURRENCY) {
+      const batch = allMatches.slice(i, i + CONCURRENCY)
+      await Promise.all(batch.map(async m => {
+        m.draft = await generateReplyDraft(m)
+        if (m.draft) console.log(`[monitor] Draft generated for: "${m.title.slice(0, 60)}…"`)
+      }))
+      if (i + CONCURRENCY < allMatches.length) await delay(1000)
+    }
+
+    console.log(`[monitor] Sending alert email…`)
     await sendAlert(allMatches)
   } else {
     console.log('[monitor] No new matches this cycle')
@@ -242,6 +331,7 @@ console.log('  Ebenova Reddit Monitor')
 console.log(`  Watching ${KEYWORDS.length} keywords across Signova, Peekr, FieldOps`)
 console.log(`  Polling every ${POLL_MINUTES} minutes`)
 console.log(`  Alerts → ${ALERT_EMAIL}`)
+console.log(`  AI drafts → ${ANTHROPIC_API_KEY ? 'ON (Claude)' : 'OFF (set ANTHROPIC_API_KEY)'}`)
 console.log('━'.repeat(60))
 
 // Run once immediately on startup
