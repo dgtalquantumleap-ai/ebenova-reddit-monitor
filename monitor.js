@@ -22,17 +22,17 @@ const KEYWORDS = [
   // Legal document generator for freelancers, small businesses, Nigeria/Africa
   { keyword: 'freelance contract',          subreddits: ['freelance','freelancers','smallbusiness','Entrepreneur'],        product: 'Signova' },
   { keyword: 'unpaid invoice',              subreddits: ['freelance','freelancers','smallbusiness','legaladvice'],         product: 'Signova' },
-  { keyword: 'NDA template',               subreddits: null,                                                               product: 'Signova' },
+  { keyword: 'NDA template',               subreddits: ['freelance','legaladvice','smallbusiness','startups'],             product: 'Signova' },
   { keyword: 'tenancy agreement nigeria',   subreddits: ['Nigeria','lagos','nairaland'],                                   product: 'Signova' },
   { keyword: "client won't pay",           subreddits: ['freelance','smallbusiness','legaladvice','Entrepreneur'],        product: 'Signova' },
   { keyword: 'scope creep',                subreddits: ['freelance','agency','agencynewbies','SoloDevelopment'],           product: 'Signova' },
-  { keyword: 'legal document generator',   subreddits: null,                                                               product: 'Signova' },
-  { keyword: 'need a contract',            subreddits: ['freelance','smallbusiness','legaladvice'],                        product: 'Signova' },
-  { keyword: 'verbal agreement',           subreddits: ['legaladvice','smallbusiness','freelance'],                        product: 'Signova' },
+  { keyword: 'generate legal document',    subreddits: ['freelance','smallbusiness','legaladvice','Entrepreneur'],        product: 'Signova' },
+  { keyword: 'need a contract template',   subreddits: ['freelance','smallbusiness','legaladvice'],                        product: 'Signova' },
+  { keyword: 'only had verbal agreement',  subreddits: ['legaladvice','smallbusiness','freelance'],                        product: 'Signova' },
   { keyword: 'deed of assignment',         subreddits: ['Nigeria','lagos','naija'],                                        product: 'Signova' },
   { keyword: 'contract dispute',           subreddits: ['legaladvice','smallbusiness','freelance'],                        product: 'Signova' },
   { keyword: 'landlord tenant agreement',  subreddits: ['Nigeria','lagos','legaladvice','LandlordLady'],                   product: 'Signova' },
-  { keyword: 'privacy policy generator',   subreddits: null,                                                               product: 'Signova' },
+  { keyword: 'privacy policy generator',   subreddits: ['webdev','SaaS','startups','Entrepreneur','smallbusiness'],        product: 'Signova' },
   { keyword: 'how to write a contract',    subreddits: ['freelance','smallbusiness','Entrepreneur'],                       product: 'Signova' },
 
   // ── PEEKR — getpeekr.com ─────────────────────────────────────────────────
