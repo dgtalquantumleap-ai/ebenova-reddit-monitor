@@ -40,7 +40,7 @@ const KEYWORDS = [
   { keyword: 'share screen to multiple people', subreddits: ['Teachers','education','Professors','churchtech'],            product: 'Peekr' },
   { keyword: 'share photos with group',          subreddits: ['Teachers','photography','eventplanning','Weddings'],        product: 'Peekr' },
   { keyword: 'present from phone',               subreddits: ['Teachers','Professors','PublicSpeaking','education'],       product: 'Peekr' },
-  { keyword: 'QR code presentation',            subreddits: null,                                                           product: 'Peekr' },
+  { keyword: 'QR code presentation',            subreddits: ['Teachers','Professors','education','PublicSpeaking'],          product: 'Peekr' },
   { keyword: 'share PDF to class',              subreddits: ['Teachers','Professors','education'],                          product: 'Peekr' },
   { keyword: 'wireless presentation app',       subreddits: ['Teachers','AV','hometheater','techsupport'],                  product: 'Peekr' },
   { keyword: 'show photos without projector',   subreddits: ['Teachers','photography','Weddings','eventplanning'],          product: 'Peekr' },
@@ -56,6 +56,21 @@ const KEYWORDS = [
   { keyword: 'service business management app', subreddits: ['smallbusiness','Entrepreneur','startups'],                    product: 'FieldOps' },
 
 ]
+
+// ── Approved subreddit whitelist ────────────────────────────────────────────
+// Posts from ANY subreddit not on this list will be flagged DO NOT POST
+// and will NOT receive an AI draft — no matter what keyword matched
+const APPROVED_SUBREDDITS = new Set([
+  // Signova
+  'freelance','freelancers','smallbusiness','Entrepreneur','EntrepreneurRideAlong',
+  'SoloDevelopment','agency','agencynewbies','Nigeria','lagos','naija','nairaland',
+  'LandlordLady','webdev','SaaS','startups','IndieHackers','buildinpublic',
+  // Peekr
+  'Teachers','education','Professors','PublicSpeaking','churchtech',
+  'photography','eventplanning','Weddings','AV','hometheater','techsupport',
+  // FieldOps
+  'cleaning','housekeeping',
+])
 
 // ── Product context for reply drafts ─────────────────────────────────────────
 const PRODUCT_CONTEXT = {
@@ -83,26 +98,36 @@ async function generateReplyDraft(post) {
   const ctx = PRODUCT_CONTEXT[post.product]
   if (!ctx) return null
 
-  const prompt = `You are helping draft a Reddit reply for a founder.
+  // Hard whitelist check — never draft for unapproved subreddits
+  if (!APPROVED_SUBREDDITS.has(post.subreddit)) {
+    console.log(`[monitor] SKIP (not whitelisted): r/${post.subreddit}`)
+    return null
+  }
+
+  const prompt = `You are deciding whether a Reddit post is relevant enough to reply to for a specific product.
 
 PRODUCT: ${post.product}
 ${ctx.description}
-
-PERSONA: ${ctx.tone}
 
 REDDIT POST:
 Title: ${post.title}
 Subreddit: r/${post.subreddit}
 Body: ${post.body || '(no body text)'}
 
-TASK: Write a short, genuine Reddit reply (3-6 sentences max). 
-- Lead with actually helpful advice or empathy for their specific situation
-- Sound like a real person, not a bot or marketer
-- Only mention ${post.product} and ${ctx.url} at the very end, naturally
-- Never use bullet points or headers — plain conversational text only
-- If the post is NOT actually relevant to ${post.product}, reply with exactly: SKIP
+FIRST: Is this post DIRECTLY about a problem that ${post.product} solves?
+- The person must actually have the problem, not just mention it in passing
+- The subreddit must be relevant to the product's audience
+- Gaming, entertainment, personal life, news, and general discussion posts are NEVER relevant
 
-Reply:`
+If NOT directly relevant, you MUST respond with only the word: SKIP
+
+If YES it is directly relevant, write a short helpful Reddit reply (3-5 sentences):
+- Answer their actual problem first with genuine advice
+- Sound like a real person, not a marketer
+- Mention ${post.product} (${ctx.url}) only at the very end, naturally
+- Plain text only, no bullet points or headers
+
+Response:`
 
   try {
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -186,6 +211,7 @@ async function searchReddit(keyword, subreddits) {
           body:      (p.selftext || p.body || '').slice(0, 300),
           createdAt: new Date(createdAt).toUTCString(),
           keyword,
+          approved:  APPROVED_SUBREDDITS.has(p.subreddit),
         })
       }
     } catch (err) {
@@ -227,6 +253,10 @@ function buildEmailHtml(matches) {
           <a href="${p.url}" style="font-size:15px;font-weight:600;color:#1a1a1a;text-decoration:none;">${p.title}</a>
           ${p.body ? `<p style="font-size:13px;color:#555;margin:7px 0 0;line-height:1.5;">${p.body}${p.body.length >= 300 ? '…' : ''}</p>` : ''}
           <a href="${p.url}" style="display:inline-block;margin-top:8px;font-size:12px;color:#c9a84c;font-weight:600;">Open thread →</a>
+          ${!p.approved ? `
+          <div style="margin-top:10px;padding:8px 12px;background:#fdecea;border:1px solid #f5c6cb;border-radius:6px;font-size:12px;font-weight:700;color:#c0392b;">
+            ⚠️ DO NOT POST — r/${p.subreddit} is not an approved subreddit
+          </div>` : ''}
           ${p.draft ? `
           <div style="margin-top:12px;padding:12px;background:#fffdf0;border:1px solid #e8d87a;border-radius:6px;">
             <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#a08c00;margin-bottom:6px;">✏️ Suggested reply</div>
@@ -310,7 +340,7 @@ async function searchNairaland(keyword, section) {
         score: 0, comments: 0,
         body: snippet,
         createdAt: new Date().toUTCString(),
-        keyword, source: 'nairaland',
+        keyword, source: 'nairaland', approved: true,
       })
       if (results.length >= 5) break
     }
