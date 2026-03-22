@@ -73,6 +73,13 @@ const KEYWORDS = [
   { keyword: 'rent increase lagos',          subreddits: ['Nigeria','lagos','naija'],                                      product: 'Signova' },
   { keyword: 'landlord eviction nigeria',    subreddits: ['Nigeria','lagos','naija','LandlordLady'],                       product: 'Signova' },
 
+  // — WhatsApp negotiation pain points (Signova's unique feature) —
+  { keyword: 'agreed on whatsapp no contract', subreddits: ['freelance','freelancers','Nigeria','smallbusiness'],          product: 'Signova' },
+  { keyword: 'client changed price after',     subreddits: ['freelance','freelancers','smallbusiness','Entrepreneur'],     product: 'Signova' },
+  { keyword: 'no written agreement dispute',   subreddits: ['freelance','smallbusiness','Entrepreneur','Nigeria'],         product: 'Signova' },
+  { keyword: 'paid upfront no contract',       subreddits: ['freelance','smallbusiness','Nigeria','lagos'],                product: 'Signova' },
+  { keyword: 'verbal deal gone wrong',         subreddits: ['freelance','smallbusiness','Entrepreneur','Nigeria'],         product: 'Signova' },
+
   // ── PEEKR — getpeekr.com ─────────────────────────────────────────────────
   // Share photos/videos/PDFs from iPhone to a room via QR — no app for viewers
 
@@ -109,6 +116,12 @@ const KEYWORDS = [
   { keyword: 'show lyrics on screen church',    subreddits: ['churchtech','Christianity','church','Reformed'],             product: 'Peekr' },
   { keyword: 'worship display small church',    subreddits: ['churchtech','Christianity','church','Reformed'],             product: 'Peekr' },
   { keyword: 'photographer live preview',       subreddits: ['weddingphotography','photography','Weddings'],               product: 'Peekr' },
+
+  // — Teachers Pay Teachers audience — teachers who already pay for classroom tools —
+  { keyword: 'app for sharing content classroom', subreddits: ['Teachers','education','edtech','Professors'],              product: 'Peekr' },
+  { keyword: 'free tool for teachers share',      subreddits: ['Teachers','education','edtech','SubstituteTeachers'],      product: 'Peekr' },
+  { keyword: 'congregation song lyrics phone',    subreddits: ['churchtech','Christianity','church','Reformed'],            product: 'Peekr' },
+  { keyword: 'wedding slideshow live guests',     subreddits: ['Weddings','weddingplanning','weddingphotography'],         product: 'Peekr' },
 
   // ── FIELDOPS — ebenova.net (enquiry: info@ebenova.net) ───────────────────
   // Operations platform for Nigerian service businesses (cleaning, logistics, facility mgmt)
