@@ -135,7 +135,7 @@ async function generateReplyDraft(post) {
     return null
   }
 
-  const prompt = `You are deciding whether a Reddit post is relevant enough to reply to for a specific product.
+  const prompt = `You are a filter deciding whether a Reddit post is worth replying to for a specific product.
 
 PRODUCT: ${post.product}
 ${ctx.description}
@@ -145,14 +145,22 @@ Title: ${post.title}
 Subreddit: r/${post.subreddit}
 Body: ${post.body || '(no body text)'}
 
-FIRST: Is this post DIRECTLY about a problem that ${post.product} solves?
-- The person must actually have the problem, not just mention it in passing
-- The subreddit must be relevant to the product's audience
-- Gaming, entertainment, personal life, news, and general discussion posts are NEVER relevant
+STEP 1 — MANDATORY SKIP CHECKS. You MUST respond with only the word SKIP if ANY of these are true:
+- The post is about emotions, relationships, personal feelings, venting, or social situations
+- The person is asking for emotional support, validation, or interpersonal advice
+- The post is a rant, celebration, humor, or general discussion — not a practical problem
+- The keyword matched incidentally (e.g. "share" used in a social/emotional sense, not a tech sense)
+- The person is not actively looking for a tool, app, or service to solve a problem
+- The post is asking "what do I do about this person" rather than "how do I do this task"
 
-If NOT directly relevant, you MUST respond with only the word: SKIP
+STEP 2 — RELEVANCE CHECK. Only proceed if the post passes Step 1 AND:
+- The person has a concrete, practical problem that ${post.product} directly solves
+- They are actively seeking a solution (asking "how", "what tool", "is there an app")
+- The problem matches the core use case of ${post.product}, not just a keyword overlap
 
-If YES it is directly relevant, write a short helpful Reddit reply (3-5 sentences):
+If NOT relevant, respond with only the word: SKIP
+
+If YES genuinely relevant, write a short helpful Reddit reply (3-5 sentences):
 - Answer their actual problem first with genuine advice
 - Sound like a real person, not a marketer
 - Mention ${post.product} (${ctx.url}) only at the very end, naturally
@@ -239,7 +247,7 @@ async function searchReddit(keyword, subreddits) {
           author:    p.author,
           score:     p.score,
           comments:  p.num_comments,
-          body:      (p.selftext || p.body || '').slice(0, 300),
+          body:      (p.selftext || p.body || '').slice(0, 600),
           createdAt: new Date(createdAt).toUTCString(),
           keyword,
           approved:  APPROVED_SUBREDDITS.has(p.subreddit),
@@ -361,8 +369,8 @@ async function searchNairaland(keyword, section) {
       seen.add(id)
       seenNairalandIds.add(id)
       const matchIdx = postPattern.lastIndex
-      const snippet = html.slice(matchIdx, matchIdx + 500)
-        .replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 280)
+      const snippet = html.slice(matchIdx, matchIdx + 700)
+        .replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 600)
       results.push({
         id, title,
         url: `https://www.nairaland.com${path}`,
