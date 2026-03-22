@@ -63,6 +63,16 @@ const KEYWORDS = [
   { keyword: 'share PDF to class',              subreddits: ['Teachers','Professors','education'],                          product: 'Peekr' },
   { keyword: 'wireless presentation app',       subreddits: ['Teachers','AV','hometheater','techsupport'],                  product: 'Peekr' },
   { keyword: 'show photos without projector',   subreddits: ['Teachers','photography','Weddings','eventplanning'],          product: 'Peekr' },
+  // High-volume additions — these subreddits have 10-100x more daily posts
+  { keyword: 'no projector classroom',          subreddits: ['Teachers','education','Professors','SubstituteTeachers'],    product: 'Peekr' },
+  { keyword: 'share slides with students',      subreddits: ['Teachers','Professors','education','OnlineLearning'],        product: 'Peekr' },
+  { keyword: 'google classroom alternative',    subreddits: ['Teachers','education','Professors','edtech'],                product: 'Peekr' },
+  { keyword: 'show video to class',             subreddits: ['Teachers','Professors','education'],                         product: 'Peekr' },
+  { keyword: 'church presentation software',    subreddits: ['churchtech','Christianity','church','Reformed'],              product: 'Peekr' },
+  { keyword: 'share photos at wedding',         subreddits: ['Weddings','wedding','weddingplanning','eventplanning'],      product: 'Peekr' },
+  { keyword: 'display photos at event',         subreddits: ['eventplanning','Weddings','DIY','photography'],              product: 'Peekr' },
+  { keyword: 'cast phone to screen',            subreddits: ['techsupport','Teachers','AV','hometheater'],                 product: 'Peekr' },
+  { keyword: 'present without HDMI',            subreddits: ['Teachers','techsupport','AV','Professors'],                  product: 'Peekr' },
 
   // ── FIELDOPS — ebenova.net (enquiry: info@ebenova.net) ───────────────────
   // Operations platform for Nigerian service businesses (cleaning, logistics, facility mgmt)
@@ -87,6 +97,8 @@ const APPROVED_SUBREDDITS = new Set([
   // Peekr
   'Teachers','education','Professors','PublicSpeaking','churchtech',
   'photography','eventplanning','Weddings','AV','hometheater','techsupport',
+  'SubstituteTeachers','OnlineLearning','edtech','wedding','weddingplanning',
+  'Christianity','church','Reformed','DIY',
   // FieldOps
   'cleaning','housekeeping',
 ])
