@@ -68,6 +68,11 @@ const KEYWORDS = [
   { keyword: 'business partnership nigeria',subreddits: ['Nigeria','lagos','naija','Entrepreneur','smallbusiness'],       product: 'Signova' },
   { keyword: 'new client contract',        subreddits: ['freelance','freelancers','agency','agencynewbies'],              product: 'Signova' },
 
+  // — Lagos Tenancy Bill 2025 — active legislation creating immediate search demand —
+  { keyword: 'tenancy bill lagos',           subreddits: ['Nigeria','lagos','naija','nairaland'],                          product: 'Signova' },
+  { keyword: 'rent increase lagos',          subreddits: ['Nigeria','lagos','naija'],                                      product: 'Signova' },
+  { keyword: 'landlord eviction nigeria',    subreddits: ['Nigeria','lagos','naija','LandlordLady'],                       product: 'Signova' },
+
   // ── PEEKR — getpeekr.com ─────────────────────────────────────────────────
   // Share photos/videos/PDFs from iPhone to a room via QR — no app for viewers
 
@@ -100,6 +105,11 @@ const KEYWORDS = [
   { keyword: 'screen mirroring without app',    subreddits: ['techsupport','Teachers','AV','hometheater'],                product: 'Peekr' },
   { keyword: 'share video with audience',       subreddits: ['Teachers','PublicSpeaking','eventplanning','AV'],           product: 'Peekr' },
 
+  // — Church and photography trigger moments from market research —
+  { keyword: 'show lyrics on screen church',    subreddits: ['churchtech','Christianity','church','Reformed'],             product: 'Peekr' },
+  { keyword: 'worship display small church',    subreddits: ['churchtech','Christianity','church','Reformed'],             product: 'Peekr' },
+  { keyword: 'photographer live preview',       subreddits: ['weddingphotography','photography','Weddings'],               product: 'Peekr' },
+
   // ── FIELDOPS — ebenova.net (enquiry: info@ebenova.net) ───────────────────
   // Operations platform for Nigerian service businesses (cleaning, logistics, facility mgmt)
   { keyword: 'cleaning business software',      subreddits: ['EntrepreneurRideAlong','smallbusiness','Entrepreneur'],       product: 'FieldOps' },
@@ -126,7 +136,6 @@ const APPROVED_SUBREDDITS = new Set([
   'photography','eventplanning','Weddings','AV','hometheater','techsupport',
   'SubstituteTeachers','OnlineLearning','edtech','wedding','weddingplanning',
   'Christianity','church','Reformed','DIY','weddingphotography',
-  // FieldOps
   'cleaning','housekeeping',
 ])
 
@@ -221,6 +230,7 @@ Response:`
 // ── Nairaland keywords ──────────────────────────────────────────────────────
 // Nairaland sections: Business, Properties, Career, Computers, Nairaland
 const NAIRALAND_KEYWORDS = [
+  // — Signova: already-aware —
   { keyword: 'contract template',       section: 'business',    product: 'Signova'  },
   { keyword: 'tenancy agreement',       section: 'properties',  product: 'Signova'  },
   { keyword: 'client refused to pay',   section: 'business',    product: 'Signova'  },
@@ -229,9 +239,22 @@ const NAIRALAND_KEYWORDS = [
   { keyword: 'NDA agreement',           section: 'business',    product: 'Signova'  },
   { keyword: 'quit notice',             section: 'properties',  product: 'Signova'  },
   { keyword: 'legal document',          section: 'business',    product: 'Signova'  },
+  // — Signova: Lagos Tenancy Bill 2025 — active legislation, high search volume —
+  { keyword: 'tenancy bill',            section: 'properties',  product: 'Signova'  },
+  { keyword: 'lagos tenancy law',       section: 'properties',  product: 'Signova'  },
+  { keyword: 'landlord tenant dispute', section: 'properties',  product: 'Signova'  },
+  { keyword: 'tenant refused to pay',   section: 'properties',  product: 'Signova'  },
+  { keyword: 'eviction notice',         section: 'properties',  product: 'Signova'  },
+  // — Signova: Nigerian freelancer trigger moments —
+  { keyword: 'how to get paid freelance',section: 'career',     product: 'Signova'  },
+  { keyword: 'client owes me money',    section: 'business',    product: 'Signova'  },
+  { keyword: 'partnership agreement',   section: 'business',    product: 'Signova'  },
+  // — Peekr —
   { keyword: 'share to classroom',      section: 'education',   product: 'Peekr'    },
+  // — FieldOps —
   { keyword: 'cleaning company lagos',  section: 'business',    product: 'FieldOps' },
   { keyword: 'facility management',     section: 'business',    product: 'FieldOps' },
+  { keyword: 'cleaning business app',   section: 'business',    product: 'FieldOps' },
 ]
 
 // ── Seen post tracker — persists in memory, resets on restart ────────────────
