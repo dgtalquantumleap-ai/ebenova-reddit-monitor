@@ -39,6 +39,8 @@ const KEYWORDS = [
 
   // ── SIGNOVA — getsignova.com ─────────────────────────────────────────────
   // Legal document generator for freelancers, small businesses, Nigeria/Africa
+
+  // — Already-aware keywords (person knows what they need) —
   { keyword: 'freelance contract',          subreddits: ['freelance','freelancers','smallbusiness','Entrepreneur'],        product: 'Signova' },
   { keyword: 'unpaid invoice',              subreddits: ['freelance','freelancers','smallbusiness'],                       product: 'Signova' },
   { keyword: 'NDA template',               subreddits: ['freelance','smallbusiness','startups','SoloDevelopment'],         product: 'Signova' },
@@ -54,8 +56,22 @@ const KEYWORDS = [
   { keyword: 'privacy policy generator',   subreddits: ['webdev','SaaS','startups','Entrepreneur','smallbusiness'],        product: 'Signova' },
   { keyword: 'how to write a contract',    subreddits: ['freelance','smallbusiness','Entrepreneur'],                       product: 'Signova' },
 
+  // — Trigger-moment keywords (person has the problem, doesn't know the solution yet) —
+  { keyword: 'client refused to pay',      subreddits: ['freelance','freelancers','smallbusiness','Entrepreneur'],        product: 'Signova' },
+  { keyword: 'no written contract',        subreddits: ['freelance','freelancers','smallbusiness','Entrepreneur'],        product: 'Signova' },
+  { keyword: 'nothing in writing',         subreddits: ['freelance','smallbusiness','Entrepreneur'],                      product: 'Signova' },
+  { keyword: 'tenant refuses to leave',    subreddits: ['Nigeria','lagos','LandlordLady','naija'],                        product: 'Signova' },
+  { keyword: 'landlord problem nigeria',   subreddits: ['Nigeria','lagos','naija','nairaland'],                           product: 'Signova' },
+  { keyword: 'how to protect my work',     subreddits: ['freelance','freelancers','SoloDevelopment','Entrepreneur'],      product: 'Signova' },
+  { keyword: 'privacy policy for my app',  subreddits: ['webdev','SaaS','startups','androiddev','iOSProgramming'],        product: 'Signova' },
+  { keyword: 'terms and conditions website',subreddits: ['webdev','SaaS','startups','Entrepreneur','smallbusiness'],      product: 'Signova' },
+  { keyword: 'business partnership nigeria',subreddits: ['Nigeria','lagos','naija','Entrepreneur','smallbusiness'],       product: 'Signova' },
+  { keyword: 'new client contract',        subreddits: ['freelance','freelancers','agency','agencynewbies'],              product: 'Signova' },
+
   // ── PEEKR — getpeekr.com ─────────────────────────────────────────────────
   // Share photos/videos/PDFs from iPhone to a room via QR — no app for viewers
+
+  // — Already-aware keywords —
   { keyword: 'share screen to multiple people', subreddits: ['Teachers','education','Professors','churchtech'],            product: 'Peekr' },
   { keyword: 'share photos with group',          subreddits: ['Teachers','photography','eventplanning','Weddings'],        product: 'Peekr' },
   { keyword: 'present from phone',               subreddits: ['Teachers','Professors','PublicSpeaking','education'],       product: 'Peekr' },
@@ -63,7 +79,6 @@ const KEYWORDS = [
   { keyword: 'share PDF to class',              subreddits: ['Teachers','Professors','education'],                          product: 'Peekr' },
   { keyword: 'wireless presentation app',       subreddits: ['Teachers','AV','hometheater','techsupport'],                  product: 'Peekr' },
   { keyword: 'show photos without projector',   subreddits: ['Teachers','photography','Weddings','eventplanning'],          product: 'Peekr' },
-  // High-volume additions — these subreddits have 10-100x more daily posts
   { keyword: 'no projector classroom',          subreddits: ['Teachers','education','Professors','SubstituteTeachers'],    product: 'Peekr' },
   { keyword: 'share slides with students',      subreddits: ['Teachers','Professors','education','OnlineLearning'],        product: 'Peekr' },
   { keyword: 'google classroom alternative',    subreddits: ['Teachers','education','Professors','edtech'],                product: 'Peekr' },
@@ -73,6 +88,17 @@ const KEYWORDS = [
   { keyword: 'display photos at event',         subreddits: ['eventplanning','Weddings','DIY','photography'],              product: 'Peekr' },
   { keyword: 'cast phone to screen',            subreddits: ['techsupport','Teachers','AV','hometheater'],                 product: 'Peekr' },
   { keyword: 'present without HDMI',            subreddits: ['Teachers','techsupport','AV','Professors'],                  product: 'Peekr' },
+
+  // — Trigger-moment keywords (person has the problem, doesn't know Peekr exists) —
+  { keyword: 'share screen without cable',      subreddits: ['Teachers','techsupport','AV','Professors','education'],     product: 'Peekr' },
+  { keyword: 'show phone screen to class',      subreddits: ['Teachers','education','Professors'],                        product: 'Peekr' },
+  { keyword: 'church screen sharing',           subreddits: ['churchtech','Christianity','church','Reformed'],             product: 'Peekr' },
+  { keyword: 'photographer share photos live',  subreddits: ['photography','weddingphotography','Weddings','eventplanning'], product: 'Peekr' },
+  { keyword: 'live slideshow wedding',          subreddits: ['Weddings','weddingplanning','eventplanning','photography'],  product: 'Peekr' },
+  { keyword: 'present without laptop',          subreddits: ['Teachers','PublicSpeaking','techsupport','Professors'],     product: 'Peekr' },
+  { keyword: 'how to show students my phone',   subreddits: ['Teachers','education','Professors','SubstituteTeachers'],   product: 'Peekr' },
+  { keyword: 'screen mirroring without app',    subreddits: ['techsupport','Teachers','AV','hometheater'],                product: 'Peekr' },
+  { keyword: 'share video with audience',       subreddits: ['Teachers','PublicSpeaking','eventplanning','AV'],           product: 'Peekr' },
 
   // ── FIELDOPS — ebenova.net (enquiry: info@ebenova.net) ───────────────────
   // Operations platform for Nigerian service businesses (cleaning, logistics, facility mgmt)
@@ -94,11 +120,12 @@ const APPROVED_SUBREDDITS = new Set([
   'freelance','freelancers','smallbusiness','Entrepreneur','EntrepreneurRideAlong',
   'SoloDevelopment','agency','agencynewbies','Nigeria','lagos','naija','nairaland',
   'LandlordLady','webdev','SaaS','startups','IndieHackers','buildinpublic',
+  'androiddev','iOSProgramming',
   // Peekr
   'Teachers','education','Professors','PublicSpeaking','churchtech',
   'photography','eventplanning','Weddings','AV','hometheater','techsupport',
   'SubstituteTeachers','OnlineLearning','edtech','wedding','weddingplanning',
-  'Christianity','church','Reformed','DIY',
+  'Christianity','church','Reformed','DIY','weddingphotography',
   // FieldOps
   'cleaning','housekeeping',
 ])
