@@ -465,6 +465,13 @@ console.log(`  Reddit: ${KEYWORDS.length} keywords · Nairaland: ${NAIRALAND_KEY
 console.log(`  Polling every ${POLL_MINUTES} minutes`)
 console.log(`  Alerts → ${ALERT_EMAIL}`)
 console.log(`  AI drafts → ${process.env.GROQ_API_KEY ? 'ON (Groq / Llama 3.3)' : 'OFF (set GROQ_API_KEY)'}`)
+if (!process.env.GROQ_API_KEY) {
+  console.warn('  ⚠️  GROQ_API_KEY is not set — reply drafts will be SKIPPED for all matches')
+  console.warn('     Add GROQ_API_KEY to Railway Variables to enable AI reply drafts')
+}
+if (!process.env.RESEND_API_KEY) {
+  console.warn('  ⚠️  RESEND_API_KEY is not set — email alerts will be printed to console only')
+}
 console.log('━'.repeat(60))
 
 // Run once immediately on startup
