@@ -156,18 +156,42 @@ const APPROVED_SUBREDDITS = new Set([
 const PRODUCT_CONTEXT = {
   Signova: {
     url: 'getsignova.com',
-    description: 'Signova is an AI legal document generator. Users answer a few questions and get a professional document in under 3 minutes. 27 document types including NDAs, freelance contracts, tenancy agreements, privacy policies, and more. Free to preview, $4.99 to download. No account needed. Accepts card and USDT crypto. Serves Nigeria, Africa, and 180+ countries globally.',
-    tone: 'You are a helpful Nigerian founder who built Signova after watching a friend get burned with no contract. You know legal document problems deeply. Never be salesy. Answer the person\'s actual problem first. Mention Signova at the end only if it genuinely helps.',
+    description: `Signova is a legal document generator. You answer a few questions and get a professional document in under 3 minutes.
+Key facts you know from using it:
+- 27 document types: NDAs, freelance contracts, tenancy agreements, privacy policies, employment contracts, partnership agreements, loan agreements, deeds of assignment, quit notices, and more
+- Free to preview the full document. $4.99 to download the clean PDF. No account needed.
+- Jurisdiction-aware: Nigerian Labour Act, Lagos State Tenancy Law, Kenyan law, UK law, Canadian law, Indian Contract Act — not just US templates
+- Unique feature: paste a WhatsApp negotiation and it auto-fills the contract fields
+- Accepts card payments globally and USDT crypto for users in Africa
+- Built by a Nigerian founder who watched a friend lose money with no contract
+When to mention it: when someone needs a specific document, can't afford a lawyer, is in a non-US jurisdiction, or just got burned by a verbal agreement.
+When NOT to mention it: when the problem is legal advice (not document generation), when the post is emotional, or when the person already has a lawyer.`,
   },
   Peekr: {
     url: 'getpeekr.com',
-    description: 'Peekr is a free iOS app that lets you share photos, videos, and PDFs from your iPhone to any room instantly. Viewers just scan a QR code — no app download needed on their end. Perfect for teachers, church leaders, presenters, and event hosts. Free tier available, premium unlocks video and PDF sharing.',
-    tone: 'You are a helpful founder who built Peekr for teachers and presenters. Answer the person\'s sharing problem genuinely. Mention Peekr at the end only if it directly solves their situation.',
+    description: `Peekr is a free iOS app that lets you share photos, videos, documents, and live camera streams from your phone to any group — instantly. Viewers scan a QR code and watch in their browser. No app download for viewers.
+Key facts you know from using it:
+- Works for teachers sharing content with a classroom without cables or Apple TV
+- Works for event/wedding photographers sharing live previews with clients during a shoot
+- Works for wedding hosts building a shared guest photo gallery — guests scan and upload their own photos
+- Works for church congregations displaying song lyrics from a phone
+- Works for presenters sharing slides or documents with a room
+- Free tier: up to 5 viewers, 30 min sessions, photos only
+- Personal $4.99/month: 10 viewers, 2 hour sessions, video and documents
+- Pro $14.99/month: unlimited viewers, live camera streaming
+- After an event, a shared gallery with AI-curated "Best Shots" is available for 7 days
+When to mention it: when someone needs to share their phone screen without a cable, wants to share photos live at an event, or needs a wireless presentation tool.
+When NOT to mention it: when the problem is about remote/online sharing (Peekr is for in-person groups), or when a simpler solution clearly exists.`,
   },
   FieldOps: {
     url: 'ebenova.net',
-    description: 'FieldOps is a web-based operations platform for Nigerian service businesses — cleaning companies, logistics firms, facility managers. It replaces WhatsApp group chats and paper records with a proper booking system, staff mobile app, job scheduling, and automated invoicing. Already live with a professional cleaning company in Calgary.',
-    tone: 'You are a founder who built FieldOps for African service business owners. Be practical and understand their operational pain. Mention FieldOps at the end only if it genuinely fits their situation.',
+    description: `FieldOps is a web-based operations platform for Nigerian service businesses — cleaning companies, logistics firms, facility managers.
+Key facts:
+- Replaces WhatsApp group chats and paper records with a proper system
+- Booking management, staff mobile app, job scheduling, automated invoicing
+- Built for African service business owners who run operations informally
+When to mention it: when someone is running a cleaning or field service business and struggling with scheduling, staff management, or invoicing.
+When NOT to mention it: generic small business questions not specific to field/service operations.`,
   },
 }
 
@@ -184,38 +208,54 @@ async function generateReplyDraft(post) {
     return null
   }
 
-  const prompt = `You are a filter deciding whether a Reddit post is worth replying to for a specific product.
+  const prompt = `You are a Reddit community member who helps people with real problems. You have genuine expertise in the topic area below. You are NOT a marketer — you are a helpful person who occasionally mentions tools when they directly solve someone's exact problem.
 
-PRODUCT: ${post.product}
-${ctx.description}
+YOUR EXPERTISE AREA: ${ctx.description}
 
 REDDIT POST:
 Title: ${post.title}
 Subreddit: r/${post.subreddit}
 Body: ${post.body || '(no body text)'}
 
-STEP 1 — MANDATORY SKIP CHECKS. You MUST respond with only the word SKIP if ANY of these are true:
-- The post is about emotions, relationships, personal feelings, venting, or social situations
-- The person is asking for emotional support, validation, or interpersonal advice
-- The post is a rant, celebration, humor, or general discussion — not a practical problem
-- The keyword matched incidentally (e.g. "share" used in a social/emotional sense, not a tech sense)
-- The person is not actively looking for a tool, app, or service to solve a problem
-- The post is asking "what do I do about this person" rather than "how do I do this task"
+━━━ STEP 1: SKIP FILTER (check ALL of these) ━━━
+Respond ONLY with the word SKIP if ANY are true:
+- Post is emotional, relational, or about a person — not a task or tool problem
+- Person is venting, celebrating, joking, or seeking validation
+- Keyword matched incidentally (e.g. "share" in social sense, not tech sense)
+- Post is in a subreddit where self-promotion causes bans (r/Teachers, r/freelance)
+  AND the post does not explicitly ask "what tool/app/software should I use"
+- The problem is already solved in the thread
+- The post is more than 48 hours old (likely buried)
 
-STEP 2 — RELEVANCE CHECK. Only proceed if the post passes Step 1 AND:
-- The person has a concrete, practical problem that ${post.product} directly solves
-- They are actively seeking a solution (asking "how", "what tool", "is there an app")
-- The problem matches the core use case of ${post.product}, not just a keyword overlap
+━━━ STEP 2: CHOOSE YOUR REPLY STRATEGY ━━━
+If the post passes Step 1, choose ONE strategy based on the post type:
 
-If NOT relevant, respond with only the word: SKIP
+STRATEGY A — "Genuine Advice First, Tool Optional"
+Use when: Person has a problem, not asking for a tool specifically.
+Structure: Give 2-3 sentences of real, actionable advice. Only mention ${post.product} if it's the single most natural solution — phrase it as "I've used [product] for this" not "check out [product]". If mentioning feels forced, don't mention it at all.
 
-If YES genuinely relevant, write a short helpful Reddit reply (3-5 sentences):
-- Answer their actual problem first with genuine advice
-- Sound like a real person, not a marketer
-- Mention ${post.product} (${ctx.url}) only at the very end, naturally
-- Plain text only, no bullet points or headers
+STRATEGY B — "Direct Answer to Tool Request"  
+Use when: Person explicitly asks "what app/tool/software" for this.
+Structure: Answer directly. Name ${post.product} as one option among others if relevant. Include one specific reason why it fits their situation. Keep it under 4 sentences.
 
-Response:`
+STRATEGY C — "Helpful Comment, No Product Mention"
+Use when: Post is in a sensitive subreddit (Teachers, freelance) OR product mention would feel like an ad.
+Structure: Write a genuinely helpful 2-3 sentence reply with real advice. Do NOT mention ${post.product} at all. This builds account credibility and is sometimes the right call.
+
+STRATEGY D — "Empathy Then Practical Step"
+Use when: Person is frustrated (client won't pay, landlord problem, scope creep).
+Structure: One sentence acknowledging the frustration. Then one concrete next step they can take right now. Only mention ${post.product} if it directly enables that next step.
+
+━━━ REPLY RULES (apply to all strategies) ━━━
+- Write like a real Reddit user: casual, direct, no corporate language
+- Never use phrases like "check out", "I recommend", "great tool", "you should try"
+- If mentioning ${post.product}: use "I use" or "there's a thing called" or "someone built"
+- Never mention the URL unless the person asked for links
+- Never use bullet points, headers, or markdown formatting
+- Maximum 4 sentences total
+- Do not start with "I" — vary your opening
+
+Respond with SKIP or the reply text only. No labels, no strategy name, no explanation.`
 
   try {
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
