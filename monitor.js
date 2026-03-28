@@ -133,6 +133,47 @@ const KEYWORDS = [
   { keyword: 'invoicing for service business',  subreddits: ['smallbusiness','freelance','Entrepreneur'],                   product: 'FieldOps' },
   { keyword: 'service business management app', subreddits: ['smallbusiness','Entrepreneur','startups'],                    product: 'FieldOps' },
 
+  // ── EBENOVA API — api.ebenova.dev ─────────────────────────────────────────
+  // Legal document API for developers, SaaS founders, AI agent builders
+  { keyword: 'legal document API',              subreddits: ['webdev','SaaS','startups'],                                   product: 'Ebenova API' },
+  { keyword: 'contract generation API',         subreddits: ['webdev','IndieHackers'],                                      product: 'Ebenova API' },
+  { keyword: 'document automation API',         subreddits: ['webdev','SaaS'],                                              product: 'Ebenova API' },
+  { keyword: 'API for legal tech',              subreddits: ['webdev','legaltech','SaaS'],                                  product: 'Ebenova API' },
+  { keyword: 'generate contracts programmatically', subreddits: ['webdev','SaaS','startups'],                               product: 'Ebenova API' },
+
+  // ── EBENOVA MCP — MCP Server for Claude Desktop ───────────────────────────
+  // Model Context Protocol server for AI agents
+  { keyword: 'MCP server',                      subreddits: ['artificial','ClaudeAI','LocalLLaMA'],                         product: 'Ebenova MCP' },
+  { keyword: 'Claude Desktop tools',            subreddits: ['ClaudeAI','artificial'],                                      product: 'Ebenova MCP' },
+  { keyword: 'AI agent tools',                  subreddits: ['artificial','SaaS','startups'],                               product: 'Ebenova MCP' },
+  { keyword: 'model context protocol',          subreddits: ['ClaudeAI','artificial','webdev'],                             product: 'Ebenova MCP' },
+  { keyword: 'AI agent framework',              subreddits: ['artificial','webdev','SaaS'],                                 product: 'Ebenova MCP' },
+  { keyword: 'Claude AI automation',            subreddits: ['ClaudeAI','artificial','automation'],                         product: 'Ebenova MCP' },
+
+  // ── SCOPE GUARD — Contract enforcement for freelancers ────────────────────
+  // Freelance contract protection and change order enforcement
+  { keyword: 'change order',                    subreddits: ['freelance','Entrepreneur','smallbusiness'],                   product: 'Scope Guard' },
+  { keyword: 'satisfaction clause',             subreddits: ['freelance','legal','smallbusiness'],                          product: 'Scope Guard' },
+  { keyword: 'contract enforcement',            subreddits: ['freelance','legal','Entrepreneur'],                           product: 'Scope Guard' },
+  { keyword: 'freelance payment dispute',       subreddits: ['freelance','freelancers','legal'],                            product: 'Scope Guard' },
+  { keyword: 'breach of contract freelance',    subreddits: ['freelance','legal','Entrepreneur'],                           product: 'Scope Guard' },
+
+  // ── NIGERIA/AFRICA PAYMENTS — Signova crypto feature ──────────────────────
+  // USDT and crypto payments for African users
+  { keyword: 'Nigeria payment',                 subreddits: ['Nigeria','lagos','fintech'],                                  product: 'Signova' },
+  { keyword: 'bank transfer Nigeria',           subreddits: ['Nigeria','lagos','smallbusiness'],                            product: 'Signova' },
+  { keyword: 'USDT payment Nigeria',            subreddits: ['Nigeria','CryptoCurrency','fintech'],                         product: 'Signova' },
+  { keyword: 'crypto payment Africa',           subreddits: ['Nigeria','Kenya','Ghana','CryptoCurrency'],                   product: 'Signova' },
+  { keyword: 'pay with crypto Nigeria',         subreddits: ['Nigeria','CryptoCurrency','lagos'],                           product: 'Signova' },
+
+  // ── AI RECRUITING — Reddit Monitor V2 use case ────────────────────────────
+  // Semantic search for recruiting and hiring
+  { keyword: 'AI recruiting',                   subreddits: ['recruiting','artificial','startups'],                         product: 'Reddit Monitor V2' },
+  { keyword: 'hiring engineers',                subreddits: ['recruiting','webdev','startups'],                             product: 'Reddit Monitor V2' },
+  { keyword: 'startup hiring',                  subreddits: ['startups','recruiting','Entrepreneur'],                       product: 'Reddit Monitor V2' },
+  { keyword: 'candidate sourcing',              subreddits: ['recruiting','HR','startups'],                                 product: 'Reddit Monitor V2' },
+  { keyword: 'automated candidate screening',   subreddits: ['recruiting','artificial','HR'],                               product: 'Reddit Monitor V2' },
+
 ]
 
 // ── Approved subreddit whitelist ────────────────────────────────────────────
