@@ -174,6 +174,54 @@ const KEYWORDS = [
   { keyword: 'candidate sourcing',              subreddits: ['recruiting','HR','startups'],                                 product: 'Reddit Monitor V2' },
   { keyword: 'automated candidate screening',   subreddits: ['recruiting','artificial','HR'],                               product: 'Reddit Monitor V2' },
 
+  // ── API DEVELOPER KEYWORDS (15 keywords) ─────────────────────────────────
+  { keyword: 'legal document API',              subreddits: ['webdev','SaaS','IndieHackers'],                               product: 'Ebenova API' },
+  { keyword: 'NDA API',                         subreddits: ['webdev','SaaS','startups'],                                   product: 'Ebenova API' },
+  { keyword: 'contract generation API',         subreddits: ['webdev','SaaS'],                                              product: 'Ebenova API' },
+  { keyword: 'document generation API',         subreddits: ['webdev','SaaS'],                                              product: 'Ebenova API' },
+  { keyword: 'PDF generation API',              subreddits: ['webdev','SaaS'],                                              product: 'Ebenova API' },
+  { keyword: 'invoice API',                     subreddits: ['webdev','SaaS','freelance'],                                  product: 'Ebenova API' },
+  { keyword: 'API for contracts',               subreddits: ['webdev','IndieHackers'],                                      product: 'Ebenova API' },
+  { keyword: 'legal tech API',                  subreddits: ['webdev','legaltech'],                                         product: 'Ebenova API' },
+  { keyword: 'compliance API',                  subreddits: ['fintech','SaaS'],                                             product: 'Ebenova API' },
+  { keyword: 'KYC API',                         subreddits: ['fintech','SaaS','startups'],                                  product: 'Ebenova API' },
+  { keyword: 'payment API Africa',              subreddits: ['fintech','Africa','Nigeria'],                                 product: 'PocketBridge' },
+  { keyword: 'payout API',                      subreddits: ['fintech','SaaS'],                                             product: 'PocketBridge' },
+  { keyword: 'remittance API',                  subreddits: ['fintech','Nigeria','Africa'],                                 product: 'PocketBridge' },
+  { keyword: 'Stripe alternative',              subreddits: ['SaaS','IndieHackers','Nigeria'],                              product: 'PocketBridge' },
+  { keyword: 'Flutterwave alternative',         subreddits: ['fintech','Nigeria','Africa'],                                 product: 'PocketBridge' },
+
+  // ── MCP SERVER KEYWORDS (10 keywords) ────────────────────────────────────
+  { keyword: 'MCP server',                      subreddits: ['ClaudeAI','artificial','LocalLLaMA'],                         product: 'Ebenova MCP' },
+  { keyword: 'Model Context Protocol',          subreddits: ['ClaudeAI','artificial'],                                      product: 'Ebenova MCP' },
+  { keyword: 'Claude Desktop tools',            subreddits: ['ClaudeAI','artificial'],                                      product: 'Ebenova MCP' },
+  { keyword: 'Cursor IDE tools',                subreddits: ['CursorIDE','webdev'],                                         product: 'Ebenova MCP' },
+  { keyword: 'AI agent tools',                  subreddits: ['artificial','LocalLLaMA','LangChain'],                        product: 'Ebenova MCP' },
+  { keyword: 'AI agent API',                    subreddits: ['artificial','SaaS'],                                          product: 'Ebenova API' },
+  { keyword: 'build MCP server',                subreddits: ['ClaudeAI','webdev'],                                          product: 'Ebenova MCP' },
+  { keyword: 'MCP server tutorial',             subreddits: ['ClaudeAI','artificial'],                                      product: 'Ebenova MCP' },
+  { keyword: 'Smithery MCP',                    subreddits: ['ClaudeAI','artificial'],                                      product: 'Ebenova MCP' },
+  { keyword: 'Glama MCP',                       subreddits: ['ClaudeAI','artificial'],                                      product: 'Ebenova MCP' },
+
+  // ── FREELANCER PAIN KEYWORDS (10 keywords) ───────────────────────────────
+  { keyword: 'client won't pay',                subreddits: ['freelance','freelancers','Upwork'],                           product: 'Signova' },
+  { keyword: 'scope creep',                     subreddits: ['freelance','webdev','IndieHackers'],                          product: 'Scope Guard' },
+  { keyword: 'freelance contract',              subreddits: ['freelance','freelancers','Upwork'],                           product: 'Signova' },
+  { keyword: 'verbal agreement',                subreddits: ['freelance','smallbusiness'],                                  product: 'Signova' },
+  { keyword: 'need contract template',          subreddits: ['freelance','Entrepreneur','smallbusiness'],                   product: 'Signova' },
+  { keyword: 'Upwork suspended',                subreddits: ['Upwork','freelance','freelancers'],                           product: 'Signova' },
+  { keyword: 'Fiverr suspended',                subreddits: ['Fiverr','freelance'],                                         product: 'Signova' },
+  { keyword: 'freelancer protection',           subreddits: ['freelance','Entrepreneur'],                                   product: 'Signova' },
+  { keyword: 'independent contractor agreement',subreddits: ['freelance','smallbusiness'],                                  product: 'Signova' },
+  { keyword: '1099 contract',                   subreddits: ['freelance','tax','smallbusiness'],                            product: 'Signova' },
+
+  // ── BUSINESS/SERVICE KEYWORDS (5 keywords) ───────────────────────────────
+  { keyword: 'booking system',                  subreddits: ['smallbusiness','Entrepreneur','CleaningBusiness'],            product: 'FieldOps' },
+  { keyword: 'service business software',       subreddits: ['smallbusiness','Entrepreneur'],                               product: 'FieldOps' },
+  { keyword: 'cleaning business app',           subreddits: ['CleaningBusiness','smallbusiness'],                           product: 'FieldOps' },
+  { keyword: 'field service management',        subreddits: ['smallbusiness','Entrepreneur'],                               product: 'FieldOps' },
+  { keyword: 'HVAC software',                   subreddits: ['HVAC','smallbusiness'],                                       product: 'FieldOps' },
+
 ]
 
 // ── Approved subreddit whitelist ────────────────────────────────────────────
