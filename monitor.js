@@ -38,7 +38,10 @@ const RESEND_API_KEY = process.env.RESEND_API_KEY
 const GROQ_API_KEY   = process.env.GROQ_API_KEY
 const ALERT_EMAIL    = process.env.ALERT_EMAIL    || 'info@ebenova.net'
 const FROM_EMAIL        = process.env.FROM_EMAIL      || 'monitor@getsignova.com'
-const POLL_MINUTES      = parseInt(process.env.POLL_INTERVAL_MINUTES || '10')
+const POLL_MINUTES      = parseInt(process.env.POLL_INTERVAL_MINUTES || '15')
+
+// ── Memory optimization: max posts to keep in memory ─────────────────────────
+const MAX_POSTS_IN_MEMORY = 10000
 
 const resend = new Resend(RESEND_API_KEY)
 
@@ -467,7 +470,14 @@ async function searchReddit(keyword, subreddits) {
     }
 
     // Polite delay between requests — avoid rate limiting
-    await delay(1200)
+    await delay(2000)
+
+    // Memory cleanup: clear old posts if we exceed the limit
+    if (seenIds.size > MAX_POSTS_IN_MEMORY) {
+      const idsToRemove = Array.from(seenIds).slice(0, 5000)
+      idsToRemove.forEach(id => seenIds.delete(id))
+      console.log(`[monitor] 🧹 Cleared ${idsToRemove.length} old posts from memory (seenIds: ${seenIds.size})`)
+    }
   }
 
   return results
@@ -629,60 +639,66 @@ const delay = ms => new Promise(r => setTimeout(r, ms))
 
 // ── Main poll cycle ───────────────────────────────────────────────────────────
 async function poll() {
-  console.log(`\n[monitor] ========== POLLING CYCLE START: ${new Date().toISOString()} ==========`)
-  console.log(`[monitor] Searching ${KEYWORDS.length} keywords across Reddit`)
-  console.log(`[monitor] Nairaland: ${NAIRALAND_KEYWORDS.length} keywords\n`)
-  const allMatches = []
-  let matchesFound = 0
+  try {
+    console.log(`\n[monitor] ========== POLLING CYCLE START: ${new Date().toISOString()} ==========`)
+    console.log(`[monitor] Searching ${KEYWORDS.length} keywords across Reddit`)
+    console.log(`[monitor] Nairaland: ${NAIRALAND_KEYWORDS.length} keywords\n`)
+    const allMatches = []
+    let matchesFound = 0
 
-  // Reddit
-  for (const { keyword, subreddits, product } of KEYWORDS) {
-    console.log(`[monitor] Searching "${keyword.keyword}" in r/${subreddits ? subreddits.join(', r/') : 'all of Reddit'}`)
-    const matches = await searchReddit(keyword.keyword, subreddits)
-    if (matches.length > 0) {
-      matches.forEach(m => { m.product = product })
-      console.log(`[monitor] Reddit "${keyword.keyword}": ${matches.length} new`)
-      matchesFound += matches.length
-      allMatches.push(...matches)
-    }
-    await delay(2000)
-  }
-
-  // Nairaland
-  for (const { keyword, section, product } of NAIRALAND_KEYWORDS) {
-    const matches = await searchNairaland(keyword, section)
-    if (matches.length > 0) {
-      matches.forEach(m => { m.product = product })
-      console.log(`[monitor] Nairaland "${keyword}": ${matches.length} new`)
-      matchesFound += matches.length
-      allMatches.push(...matches)
-    }
-    await delay(3000)
-  }
-
-  if (allMatches.length > 0) {
-    console.log(`[monitor] Total new matches: ${allMatches.length} — generating reply drafts…`)
-
-    // Generate drafts with concurrency limit of 3 to avoid API rate limits
-    const CONCURRENCY = 3
-    for (let i = 0; i < allMatches.length; i += CONCURRENCY) {
-      const batch = allMatches.slice(i, i + CONCURRENCY)
-      await Promise.all(batch.map(async m => {
-        m.draft = await generateReplyDraft(m)
-        if (m.draft) console.log(`[monitor] Draft generated for: "${m.title.slice(0, 60)}…"`)
-      }))
-      if (i + CONCURRENCY < allMatches.length) await delay(1000)
+    // Reddit
+    for (const { keyword, subreddits, product } of KEYWORDS) {
+      console.log(`[monitor] Searching "${keyword.keyword}" in r/${subreddits ? subreddits.join(', r/') : 'all of Reddit'}`)
+      const matches = await searchReddit(keyword.keyword, subreddits)
+      if (matches.length > 0) {
+        matches.forEach(m => { m.product = product })
+        console.log(`[monitor] Reddit "${keyword.keyword}": ${matches.length} new`)
+        matchesFound += matches.length
+        allMatches.push(...matches)
+      }
+      await delay(2000)
     }
 
-    console.log(`[monitor] Sending alert email…`)
-    await sendAlert(allMatches)
-  } else {
-    console.log('[monitor] No new matches this cycle')
-  }
+    // Nairaland
+    for (const { keyword, section, product } of NAIRALAND_KEYWORDS) {
+      const matches = await searchNairaland(keyword, section)
+      if (matches.length > 0) {
+        matches.forEach(m => { m.product = product })
+        console.log(`[monitor] Nairaland "${keyword}": ${matches.length} new`)
+        matchesFound += matches.length
+        allMatches.push(...matches)
+      }
+      await delay(3000)
+    }
 
-  console.log(`\n[monitor] ========== POLLING CYCLE END: ${new Date().toISOString()} ==========`)
-  console.log(`[monitor] Total matches this cycle: ${matchesFound}`)
-  console.log(`[monitor] Next poll in ${POLL_MINUTES} minutes\n`)
+    if (allMatches.length > 0) {
+      console.log(`[monitor] Total new matches: ${allMatches.length} — generating reply drafts…`)
+
+      // Generate drafts with concurrency limit of 3 to avoid API rate limits
+      const CONCURRENCY = 3
+      for (let i = 0; i < allMatches.length; i += CONCURRENCY) {
+        const batch = allMatches.slice(i, i + CONCURRENCY)
+        await Promise.all(batch.map(async m => {
+          m.draft = await generateReplyDraft(m)
+          if (m.draft) console.log(`[monitor] Draft generated for: "${m.title.slice(0, 60)}…"`)
+        }))
+        if (i + CONCURRENCY < allMatches.length) await delay(1000)
+      }
+
+      console.log(`[monitor] Sending alert email…`)
+      await sendAlert(allMatches)
+    } else {
+      console.log('[monitor] No new matches this cycle')
+    }
+
+    console.log(`\n[monitor] ========== POLLING CYCLE END: ${new Date().toISOString()} ==========`)
+    console.log(`[monitor] Total matches this cycle: ${matchesFound}`)
+    console.log(`[monitor] Next poll in ${POLL_MINUTES} minutes\n`)
+  } catch (error) {
+    console.error(`[monitor] ❌ Polling error: ${error.message}`)
+    console.error(`[monitor] Stack: ${error.stack}`)
+    // Don't rethrow — let next cycle retry
+  }
 }
 
 // ── Startup ───────────────────────────────────────────────────────────────────
