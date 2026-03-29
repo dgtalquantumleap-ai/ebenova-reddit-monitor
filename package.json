@@ -5,10 +5,14 @@
   "main": "monitor.js",
   "type": "module",
   "scripts": {
-    "start": "node monitor.js"
+    "start": "node monitor.js",
+    "test": "node test-reddit-monitor.js"
   },
   "dependencies": {
     "node-cron": "^3.0.3",
     "resend": "^4.0.0"
+  },
+  "devDependencies": {
+    "dotenv": "^16.0.0"
   }
 }
