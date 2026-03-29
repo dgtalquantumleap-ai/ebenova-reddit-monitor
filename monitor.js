@@ -216,7 +216,7 @@ const KEYWORDS = [
   { keyword: 'Glama MCP',                       subreddits: ['ClaudeAI','artificial'],                                      product: 'Ebenova MCP' },
 
   // ── FREELANCER PAIN KEYWORDS (10 keywords) ───────────────────────────────
-  { keyword: 'client won't pay',                subreddits: ['freelance','freelancers','Upwork'],                           product: 'Signova' },
+  { keyword: "client won't pay",                subreddits: ['freelance','freelancers','Upwork'],                           product: 'Signova' },
   { keyword: 'scope creep',                     subreddits: ['freelance','webdev','IndieHackers'],                          product: 'Scope Guard' },
   { keyword: 'freelance contract',              subreddits: ['freelance','freelancers','Upwork'],                           product: 'Signova' },
   { keyword: 'verbal agreement',                subreddits: ['freelance','smallbusiness'],                                  product: 'Signova' },
