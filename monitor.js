@@ -25,6 +25,15 @@ try {
 import { Resend } from 'resend'
 import cron from 'node-cron'
 
+// ── Memory monitoring — log every 5 minutes ──────────────────────────────────
+setInterval(() => {
+  const used = process.memoryUsage()
+  const heapUsedMB = Math.round(used.heapUsed / 1024 / 1024)
+  const heapTotalMB = Math.round(used.heapTotal / 1024 / 1024)
+  const rssMB = Math.round(used.rss / 1024 / 1024)
+  console.log(`[monitor] 📊 Memory: Heap ${heapUsedMB}/${heapTotalMB}MB | RSS ${rssMB}MB`)
+}, 300000) // 5 minutes
+
 const RESEND_API_KEY = process.env.RESEND_API_KEY
 const GROQ_API_KEY   = process.env.GROQ_API_KEY
 const ALERT_EMAIL    = process.env.ALERT_EMAIL    || 'info@ebenova.net'
@@ -423,6 +432,11 @@ async function searchReddit(keyword, subreddits) {
       const data = await res.json()
       const posts = data?.data?.children || []
 
+      console.log(`[monitor] Reddit API response: ${posts.length} posts found for "${keyword}"`)
+      if (posts.length > 0) {
+        console.log(`[monitor] Top 3 posts: ${posts.slice(0, 3).map(p => p.data.title).join(' | ')}`)
+      }
+
       for (const post of posts) {
         const p = post.data
         if (seenIds.has(p.id)) continue
@@ -431,6 +445,9 @@ async function searchReddit(keyword, subreddits) {
         // Only alert on posts from last 60 minutes — guards against restarts missing content
         if (ageMs > 60 * 60 * 1000) continue
         seenIds.add(p.id)
+        console.log(`[monitor] 🎯 NEW MATCH FOUND: "${keyword}" → ${p.title}`)
+        console.log(`[monitor] Post URL: https://reddit.com${p.permalink}`)
+        console.log(`[monitor] Post age: ${p.created_utc} (${Math.floor((Date.now() - createdAt) / 3600000)} hours old)`)
         results.push({
           id:        p.id,
           title:     p.title || p.body?.slice(0, 100) || '(no title)',
@@ -612,15 +629,20 @@ const delay = ms => new Promise(r => setTimeout(r, ms))
 
 // ── Main poll cycle ───────────────────────────────────────────────────────────
 async function poll() {
-  console.log(`[monitor] Polling Reddit — ${new Date().toUTCString()}`)
+  console.log(`\n[monitor] ========== POLLING CYCLE START: ${new Date().toISOString()} ==========`)
+  console.log(`[monitor] Searching ${KEYWORDS.length} keywords across Reddit`)
+  console.log(`[monitor] Nairaland: ${NAIRALAND_KEYWORDS.length} keywords\n`)
   const allMatches = []
+  let matchesFound = 0
 
   // Reddit
   for (const { keyword, subreddits, product } of KEYWORDS) {
-    const matches = await searchReddit(keyword, subreddits)
+    console.log(`[monitor] Searching "${keyword.keyword}" in r/${subreddits ? subreddits.join(', r/') : 'all of Reddit'}`)
+    const matches = await searchReddit(keyword.keyword, subreddits)
     if (matches.length > 0) {
       matches.forEach(m => { m.product = product })
-      console.log(`[monitor] Reddit "${keyword}": ${matches.length} new`)
+      console.log(`[monitor] Reddit "${keyword.keyword}": ${matches.length} new`)
+      matchesFound += matches.length
       allMatches.push(...matches)
     }
     await delay(2000)
@@ -632,6 +654,7 @@ async function poll() {
     if (matches.length > 0) {
       matches.forEach(m => { m.product = product })
       console.log(`[monitor] Nairaland "${keyword}": ${matches.length} new`)
+      matchesFound += matches.length
       allMatches.push(...matches)
     }
     await delay(3000)
@@ -656,6 +679,10 @@ async function poll() {
   } else {
     console.log('[monitor] No new matches this cycle')
   }
+
+  console.log(`\n[monitor] ========== POLLING CYCLE END: ${new Date().toISOString()} ==========`)
+  console.log(`[monitor] Total matches this cycle: ${matchesFound}`)
+  console.log(`[monitor] Next poll in ${POLL_MINUTES} minutes\n`)
 }
 
 // ── Startup ───────────────────────────────────────────────────────────────────
