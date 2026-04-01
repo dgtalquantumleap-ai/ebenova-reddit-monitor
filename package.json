@@ -9,7 +9,9 @@
     "start:api": "node api-server.js",
     "start:v1": "node monitor.js",
     "start:v2": "node monitor-v2.js",
-    "test": "node test-reddit-monitor.js"
+    "test": "node test-reddit-monitor.js",
+    "provision": "node scripts/provision-client.js",
+    "provision:dry": "node scripts/provision-client.js --dry-run"
   },
   "dependencies": {
     "@upstash/redis": "^1.34.0",

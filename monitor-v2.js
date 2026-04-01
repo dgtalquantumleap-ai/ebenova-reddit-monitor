@@ -27,11 +27,14 @@ import { Resend }  from 'resend'
 import { Redis }   from '@upstash/redis'
 import cron        from 'node-cron'
 
-const RESEND_API_KEY  = process.env.RESEND_API_KEY
-const GROQ_API_KEY    = process.env.GROQ_API_KEY
-const FROM_EMAIL      = process.env.FROM_EMAIL || 'insights@ebenova.dev'
-const POLL_MINUTES    = parseInt(process.env.POLL_INTERVAL_MINUTES || '15')
-const MAX_SEEN        = 50_000   // max post IDs to track globally
+const RESEND_API_KEY   = process.env.RESEND_API_KEY
+const GROQ_API_KEY     = process.env.GROQ_API_KEY
+const OPENAI_API_KEY   = process.env.OPENAI_API_KEY   // embeddings for semantic search
+const VOYAGE_API_KEY   = process.env.VOYAGE_API_KEY   // alternative: cheaper than OpenAI
+const FROM_EMAIL       = process.env.FROM_EMAIL || 'insights@ebenova.dev'
+const POLL_MINUTES     = parseInt(process.env.POLL_INTERVAL_MINUTES || '15')
+const MAX_SEEN         = 50_000
+const SEMANTIC_ENABLED = !!(OPENAI_API_KEY || VOYAGE_API_KEY)
 
 // ── Redis client ──────────────────────────────────────────────────────────────
 // Upstash REST only (same as Signova's lib/redis.js).
@@ -79,7 +82,112 @@ const APPROVED_SUBREDDITS = new Set([
   'cleaning','housekeeping','recruiting','HR','artificial','ClaudeAI','LocalLLaMA',
   'LangChain','CursorIDE','legaltech','fintech','Africa','Kenya','Ghana',
   'CryptoCurrency','Upwork','Fiverr','tax','CleaningBusiness','HVAC',
+  // ── AI Recruiting / Jobs (added for Insights clients in this space) ────────
+  'cscareerquestions','cscareeradvice','ExperiencedDevs','forhire',
+  'MachineLearning','learnmachinelearning','datascience','MLjobs',
+  'recruitinghell','jobsearchhacks','jobs','remotework','techjobs',
+  'YCombinator','venturecapital','angels','product_management','ProductManagement',
 ])
+
+// ── Semantic search (V2) ─────────────────────────────────────────────────────
+// Uses text-embedding-3-small (OpenAI) or voyage-lite-02-instruct (Voyage AI)
+// to find posts by intent rather than exact keyword match.
+// Falls back to keyword search if embeddings are unavailable.
+
+const embeddingCache = new Map() // cache embeddings to save API calls
+
+async function getEmbedding(text) {
+  const key = text.slice(0, 100)
+  if (embeddingCache.has(key)) return embeddingCache.get(key)
+
+  try {
+    if (OPENAI_API_KEY) {
+      const res = await fetch('https://api.openai.com/v1/embeddings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${OPENAI_API_KEY}` },
+        body: JSON.stringify({ model: 'text-embedding-3-small', input: text.slice(0, 2000) }),
+      })
+      if (!res.ok) return null
+      const data = await res.json()
+      const vec = data?.data?.[0]?.embedding || null
+      if (vec) embeddingCache.set(key, vec)
+      return vec
+    }
+
+    if (process.env.VOYAGE_API_KEY) {
+      const res = await fetch('https://api.voyageai.com/v1/embeddings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.VOYAGE_API_KEY}` },
+        body: JSON.stringify({ model: 'voyage-lite-02-instruct', input: [text.slice(0, 2000)] }),
+      })
+      if (!res.ok) return null
+      const data = await res.json()
+      const vec = data?.data?.[0]?.embedding || null
+      if (vec) embeddingCache.set(key, vec)
+      return vec
+    }
+  } catch (err) {
+    console.error('[v2][semantic] Embedding error:', err.message)
+  }
+  return null
+}
+
+function cosineSimilarity(a, b) {
+  if (!a || !b || a.length !== b.length) return 0
+  let dot = 0, normA = 0, normB = 0
+  for (let i = 0; i < a.length; i++) {
+    dot   += a[i] * b[i]
+    normA += a[i] * a[i]
+    normB += b[i] * b[i]
+  }
+  return dot / (Math.sqrt(normA) * Math.sqrt(normB))
+}
+
+// Fetch recent posts from a subreddit and score them semantically against the keyword intent.
+async function semanticSearchSubreddit(monitorId, subreddit, keywordEntry, queryEmbedding) {
+  const results = []
+  const url = `https://www.reddit.com/r/${subreddit}/new.json?limit=25`
+  try {
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'ebenova-insights/2.0 (semantic)' },
+    })
+    if (!res.ok) return results
+    const data = await res.json()
+    const posts = data?.data?.children || []
+    const THRESHOLD = parseFloat(process.env.SEMANTIC_THRESHOLD || '0.35')
+
+    for (const post of posts) {
+      const p = post.data
+      if (hasSeen(monitorId, p.id)) continue
+      if (Date.now() - p.created_utc * 1000 > 60 * 60 * 1000) continue
+
+      const postText = `${p.title} ${(p.selftext || '').slice(0, 400)}`
+      const postEmbedding = await getEmbedding(postText)
+      const score = cosineSimilarity(queryEmbedding, postEmbedding)
+
+      if (score >= THRESHOLD) {
+        markSeen(monitorId, p.id)
+        results.push({
+          id: p.id, title: p.title || '(no title)',
+          url: `https://reddit.com${p.permalink}`,
+          subreddit: p.subreddit, author: p.author,
+          score: p.score, comments: p.num_comments,
+          body: (p.selftext || '').slice(0, 600),
+          createdAt: new Date(p.created_utc * 1000).toISOString(),
+          keyword: keywordEntry.keyword,
+          source: 'reddit',
+          approved: APPROVED_SUBREDDITS.has(p.subreddit),
+          semanticScore: Math.round(score * 100) / 100,
+          searchMode: 'semantic',
+        })
+      }
+      await delay(200) // small delay between embedding calls
+    }
+  } catch (err) {
+    console.error(`[v2][semantic] Error scanning r/${subreddit}:`, err.message)
+  }
+  return results
+}
 
 // ── Reddit search ─────────────────────────────────────────────────────────────
 // Returns new posts (< 60 min old) not yet seen for this monitor.
@@ -322,7 +430,7 @@ async function runMonitor(monitor) {
     // Merge per-keyword productContext with monitor-level context
     const ctx = kw.productContext || monitor.productContext || ''
 
-    // Reddit
+    // Reddit — keyword search (always runs)
     const redditMatches = await searchReddit(monitor.id, kw)
     for (const m of redditMatches) {
       m.productContext = ctx
@@ -332,6 +440,27 @@ async function runMonitor(monitor) {
       console.log(`${label} Reddit "${kw.keyword}": ${redditMatches.length} new`)
     }
     await delay(2000)
+
+    // Reddit — semantic search (V2, runs if embeddings configured + monitor on growth/scale plan)
+    const semanticEnabled = SEMANTIC_ENABLED && ['growth', 'scale'].includes(monitor.plan)
+    if (semanticEnabled && kw.subreddits?.length > 0) {
+      const queryEmbedding = await getEmbedding(
+        `${kw.keyword} ${kw.productContext || monitor.productContext || ''}`.slice(0, 500)
+      )
+      if (queryEmbedding) {
+        for (const sr of kw.subreddits.slice(0, 5)) {
+          const semanticMatches = await semanticSearchSubreddit(monitor.id, sr, kw, queryEmbedding)
+          for (const m of semanticMatches) {
+            m.productContext = ctx
+            allMatches.push(m)
+          }
+          if (semanticMatches.length > 0) {
+            console.log(`${label} Semantic r/${sr} "${kw.keyword}": ${semanticMatches.length} new`)
+          }
+          await delay(1500)
+        }
+      }
+    }
 
     // Nairaland (only if keyword has a nairalandSection set)
     if (kw.nairalandSection) {
@@ -446,8 +575,10 @@ async function poll() {
 console.log('━'.repeat(60))
 console.log('  Ebenova Insights Worker v2 — Multi-tenant Reddit Monitor')
 console.log(`  Poll interval: ${POLL_MINUTES} minutes`)
-console.log(`  AI drafts: ${GROQ_API_KEY ? 'ON (Groq / Llama 3.3 70b)' : 'OFF — set GROQ_API_KEY'}`)
-console.log(`  Email alerts: ${RESEND_API_KEY ? 'ON (Resend)' : 'OFF — set RESEND_API_KEY'}`)
+console.log(`  AI drafts:      ${GROQ_API_KEY ? 'ON (Groq / Llama 3.3 70b)' : 'OFF — set GROQ_API_KEY'}`)
+console.log(`  Semantic V2:    ${OPENAI_API_KEY ? 'ON (OpenAI text-embedding-3-small)' : process.env.VOYAGE_API_KEY ? 'ON (Voyage AI)' : 'OFF — set OPENAI_API_KEY or VOYAGE_API_KEY to enable'}`)
+console.log(`  Semantic threshold: ${process.env.SEMANTIC_THRESHOLD || '0.35'} (adjust with SEMANTIC_THRESHOLD)`)
+console.log(`  Email alerts:   ${RESEND_API_KEY ? 'ON (Resend)' : 'OFF — set RESEND_API_KEY'}`)
 console.log(`  Redis: ${process.env.UPSTASH_REDIS_REST_URL ? 'Upstash REST' : '⚠️  UPSTASH_REDIS_REST_URL not set'}`)
 console.log('  Monitors loaded from: insights:active_monitors (Redis set)')
 console.log('━'.repeat(60))
