@@ -648,11 +648,11 @@ async function poll() {
 
     // Reddit
     for (const { keyword, subreddits, product } of KEYWORDS) {
-      console.log(`[monitor] Searching "${keyword.keyword}" in r/${subreddits ? subreddits.join(', r/') : 'all of Reddit'}`)
-      const matches = await searchReddit(keyword.keyword, subreddits)
+      console.log(`[monitor] Searching "${keyword}" in r/${subreddits ? subreddits.join(', r/') : 'all of Reddit'}`)
+      const matches = await searchReddit(keyword, subreddits)
       if (matches.length > 0) {
         matches.forEach(m => { m.product = product })
-        console.log(`[monitor] Reddit "${keyword.keyword}": ${matches.length} new`)
+        console.log(`[monitor] Reddit "${keyword}": ${matches.length} new`)
         matchesFound += matches.length
         allMatches.push(...matches)
       }
