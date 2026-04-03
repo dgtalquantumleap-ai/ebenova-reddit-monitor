@@ -53,12 +53,12 @@ const KEYWORDS = [
   // Legal document generator for freelancers, small businesses, Nigeria/Africa
 
   // — Already-aware keywords (person knows what they need) —
-  { keyword: 'freelance contract',          subreddits: ['freelance','freelancers','smallbusiness','Entrepreneur'],        product: 'Signova' },
+  { keyword: 'freelance contract',          subreddits: ['freelance','freelancers','smallbusiness','Entrepreneur','Upwork'], product: 'Signova' },
   { keyword: 'unpaid invoice',              subreddits: ['freelance','freelancers','smallbusiness'],                       product: 'Signova' },
   { keyword: 'NDA template',               subreddits: ['freelance','smallbusiness','startups','SoloDevelopment'],         product: 'Signova' },
   { keyword: 'tenancy agreement nigeria',   subreddits: ['Nigeria','lagos','nairaland'],                                   product: 'Signova' },
-  { keyword: "client won't pay",           subreddits: ['freelance','smallbusiness','Entrepreneur'],                      product: 'Signova' },
-  { keyword: 'scope creep',                subreddits: ['freelance','agency','agencynewbies','SoloDevelopment'],           product: 'Signova' },
+  { keyword: "client won't pay",           subreddits: ['freelance','freelancers','smallbusiness','Entrepreneur','Upwork'], product: 'Signova' },
+  { keyword: 'scope creep',                subreddits: ['freelance','agency','agencynewbies','SoloDevelopment','webdev','IndieHackers'], product: 'Scope Guard' },
   { keyword: 'generate legal document',    subreddits: ['freelance','smallbusiness','Entrepreneur'],                      product: 'Signova' },
   { keyword: 'need a contract template',   subreddits: ['freelance','smallbusiness'],                                     product: 'Signova' },
   { keyword: 'only had verbal agreement',  subreddits: ['smallbusiness','freelance','Entrepreneur'],                      product: 'Signova' },
@@ -147,8 +147,8 @@ const KEYWORDS = [
 
   // ── EBENOVA API — api.ebenova.dev ─────────────────────────────────────────
   // Legal document API for developers, SaaS founders, AI agent builders
-  { keyword: 'legal document API',              subreddits: ['webdev','SaaS','startups'],                                   product: 'Ebenova API' },
-  { keyword: 'contract generation API',         subreddits: ['webdev','IndieHackers'],                                      product: 'Ebenova API' },
+  { keyword: 'legal document API',              subreddits: ['webdev','SaaS','startups','IndieHackers'],                    product: 'Ebenova API' },
+  { keyword: 'contract generation API',         subreddits: ['webdev','SaaS','IndieHackers'],                               product: 'Ebenova API' },
   { keyword: 'document automation API',         subreddits: ['webdev','SaaS'],                                              product: 'Ebenova API' },
   { keyword: 'API for legal tech',              subreddits: ['webdev','legaltech','SaaS'],                                  product: 'Ebenova API' },
   { keyword: 'generate contracts programmatically', subreddits: ['webdev','SaaS','startups'],                               product: 'Ebenova API' },
@@ -157,7 +157,7 @@ const KEYWORDS = [
   // Model Context Protocol server for AI agents
   { keyword: 'MCP server',                      subreddits: ['artificial','ClaudeAI','LocalLLaMA'],                         product: 'Ebenova MCP' },
   { keyword: 'Claude Desktop tools',            subreddits: ['ClaudeAI','artificial'],                                      product: 'Ebenova MCP' },
-  { keyword: 'AI agent tools',                  subreddits: ['artificial','SaaS','startups'],                               product: 'Ebenova MCP' },
+  { keyword: 'AI agent tools',                  subreddits: ['artificial','SaaS','startups','LocalLLaMA','LangChain'],      product: 'Ebenova MCP' },
   { keyword: 'model context protocol',          subreddits: ['ClaudeAI','artificial','webdev'],                             product: 'Ebenova MCP' },
   { keyword: 'AI agent framework',              subreddits: ['artificial','webdev','SaaS'],                                 product: 'Ebenova MCP' },
   { keyword: 'Claude AI automation',            subreddits: ['ClaudeAI','artificial','automation'],                         product: 'Ebenova MCP' },
@@ -186,10 +186,8 @@ const KEYWORDS = [
   { keyword: 'candidate sourcing',              subreddits: ['recruiting','HR','startups'],                                 product: 'Reddit Monitor V2' },
   { keyword: 'automated candidate screening',   subreddits: ['recruiting','artificial','HR'],                               product: 'Reddit Monitor V2' },
 
-  // ── API DEVELOPER KEYWORDS (15 keywords) ─────────────────────────────────
-  { keyword: 'legal document API',              subreddits: ['webdev','SaaS','IndieHackers'],                               product: 'Ebenova API' },
+  // ── EBENOVA API — additional keywords ─────────────────────────────────────
   { keyword: 'NDA API',                         subreddits: ['webdev','SaaS','startups'],                                   product: 'Ebenova API' },
-  { keyword: 'contract generation API',         subreddits: ['webdev','SaaS'],                                              product: 'Ebenova API' },
   { keyword: 'document generation API',         subreddits: ['webdev','SaaS'],                                              product: 'Ebenova API' },
   { keyword: 'PDF generation API',              subreddits: ['webdev','SaaS'],                                              product: 'Ebenova API' },
   { keyword: 'invoice API',                     subreddits: ['webdev','SaaS','freelance'],                                  product: 'Ebenova API' },
@@ -197,28 +195,24 @@ const KEYWORDS = [
   { keyword: 'legal tech API',                  subreddits: ['webdev','legaltech'],                                         product: 'Ebenova API' },
   { keyword: 'compliance API',                  subreddits: ['fintech','SaaS'],                                             product: 'Ebenova API' },
   { keyword: 'KYC API',                         subreddits: ['fintech','SaaS','startups'],                                  product: 'Ebenova API' },
+  { keyword: 'AI agent API',                    subreddits: ['artificial','SaaS'],                                          product: 'Ebenova API' },
+
+  // ── POCKETBRIDGE — payment API for Africa ─────────────────────────────────
   { keyword: 'payment API Africa',              subreddits: ['fintech','Africa','Nigeria'],                                 product: 'PocketBridge' },
   { keyword: 'payout API',                      subreddits: ['fintech','SaaS'],                                             product: 'PocketBridge' },
   { keyword: 'remittance API',                  subreddits: ['fintech','Nigeria','Africa'],                                 product: 'PocketBridge' },
   { keyword: 'Stripe alternative',              subreddits: ['SaaS','IndieHackers','Nigeria'],                              product: 'PocketBridge' },
   { keyword: 'Flutterwave alternative',         subreddits: ['fintech','Nigeria','Africa'],                                 product: 'PocketBridge' },
 
-  // ── MCP SERVER KEYWORDS (10 keywords) ────────────────────────────────────
-  { keyword: 'MCP server',                      subreddits: ['ClaudeAI','artificial','LocalLLaMA'],                         product: 'Ebenova MCP' },
-  { keyword: 'Model Context Protocol',          subreddits: ['ClaudeAI','artificial'],                                      product: 'Ebenova MCP' },
-  { keyword: 'Claude Desktop tools',            subreddits: ['ClaudeAI','artificial'],                                      product: 'Ebenova MCP' },
+  // ── EBENOVA MCP — additional keywords ─────────────────────────────────────
+  { keyword: 'Model Context Protocol',          subreddits: ['ClaudeAI','artificial','webdev'],                             product: 'Ebenova MCP' },
   { keyword: 'Cursor IDE tools',                subreddits: ['CursorIDE','webdev'],                                         product: 'Ebenova MCP' },
-  { keyword: 'AI agent tools',                  subreddits: ['artificial','LocalLLaMA','LangChain'],                        product: 'Ebenova MCP' },
-  { keyword: 'AI agent API',                    subreddits: ['artificial','SaaS'],                                          product: 'Ebenova API' },
   { keyword: 'build MCP server',                subreddits: ['ClaudeAI','webdev'],                                          product: 'Ebenova MCP' },
   { keyword: 'MCP server tutorial',             subreddits: ['ClaudeAI','artificial'],                                      product: 'Ebenova MCP' },
   { keyword: 'Smithery MCP',                    subreddits: ['ClaudeAI','artificial'],                                      product: 'Ebenova MCP' },
   { keyword: 'Glama MCP',                       subreddits: ['ClaudeAI','artificial'],                                      product: 'Ebenova MCP' },
 
-  // ── FREELANCER PAIN KEYWORDS (10 keywords) ───────────────────────────────
-  { keyword: "client won't pay",                subreddits: ['freelance','freelancers','Upwork'],                           product: 'Signova' },
-  { keyword: 'scope creep',                     subreddits: ['freelance','webdev','IndieHackers'],                          product: 'Scope Guard' },
-  { keyword: 'freelance contract',              subreddits: ['freelance','freelancers','Upwork'],                           product: 'Signova' },
+  // ── SIGNOVA — additional freelancer keywords ───────────────────────────────
   { keyword: 'verbal agreement',                subreddits: ['freelance','smallbusiness'],                                  product: 'Signova' },
   { keyword: 'need contract template',          subreddits: ['freelance','Entrepreneur','smallbusiness'],                   product: 'Signova' },
   { keyword: 'Upwork suspended',                subreddits: ['Upwork','freelance','freelancers'],                           product: 'Signova' },
@@ -227,11 +221,10 @@ const KEYWORDS = [
   { keyword: 'independent contractor agreement',subreddits: ['freelance','smallbusiness'],                                  product: 'Signova' },
   { keyword: '1099 contract',                   subreddits: ['freelance','tax','smallbusiness'],                            product: 'Signova' },
 
-  // ── BUSINESS/SERVICE KEYWORDS (5 keywords) ───────────────────────────────
+  // ── FIELDOPS — additional keywords ────────────────────────────────────────
   { keyword: 'booking system',                  subreddits: ['smallbusiness','Entrepreneur','CleaningBusiness'],            product: 'FieldOps' },
   { keyword: 'service business software',       subreddits: ['smallbusiness','Entrepreneur'],                               product: 'FieldOps' },
   { keyword: 'cleaning business app',           subreddits: ['CleaningBusiness','smallbusiness'],                           product: 'FieldOps' },
-  { keyword: 'field service management',        subreddits: ['smallbusiness','Entrepreneur'],                               product: 'FieldOps' },
   { keyword: 'HVAC software',                   subreddits: ['HVAC','smallbusiness'],                                       product: 'FieldOps' },
 
 ]
