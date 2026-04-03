@@ -178,14 +178,6 @@ const KEYWORDS = [
   { keyword: 'crypto payment Africa',           subreddits: ['Nigeria','Kenya','Ghana','CryptoCurrency'],                   product: 'Signova' },
   { keyword: 'pay with crypto Nigeria',         subreddits: ['Nigeria','CryptoCurrency','lagos'],                           product: 'Signova' },
 
-  // ── AI RECRUITING — Reddit Monitor V2 use case ────────────────────────────
-  // Semantic search for recruiting and hiring
-  { keyword: 'AI recruiting',                   subreddits: ['recruiting','artificial','startups'],                         product: 'Reddit Monitor V2' },
-  { keyword: 'hiring engineers',                subreddits: ['recruiting','webdev','startups'],                             product: 'Reddit Monitor V2' },
-  { keyword: 'startup hiring',                  subreddits: ['startups','recruiting','Entrepreneur'],                       product: 'Reddit Monitor V2' },
-  { keyword: 'candidate sourcing',              subreddits: ['recruiting','HR','startups'],                                 product: 'Reddit Monitor V2' },
-  { keyword: 'automated candidate screening',   subreddits: ['recruiting','artificial','HR'],                               product: 'Reddit Monitor V2' },
-
   // ── EBENOVA API — additional keywords ─────────────────────────────────────
   { keyword: 'NDA API',                         subreddits: ['webdev','SaaS','startups'],                                   product: 'Ebenova API' },
   { keyword: 'document generation API',         subreddits: ['webdev','SaaS'],                                              product: 'Ebenova API' },
@@ -244,6 +236,16 @@ const APPROVED_SUBREDDITS = new Set([
   'SubstituteTeachers','OnlineLearning','edtech','wedding','weddingplanning',
   'Christianity','church','Reformed','DIY','weddingphotography',
   'cleaning','housekeeping',
+  // Ebenova API / MCP
+  'artificial','ClaudeAI','LocalLLaMA','LangChain','CursorIDE','automation','legaltech',
+  // Scope Guard / legal
+  'legal','Upwork','Fiverr','tax',
+  // FieldOps
+  'CleaningBusiness','HVAC',
+  // PocketBridge / Africa payments
+  'fintech','Africa','Kenya','Ghana','CryptoCurrency',
+  // AI Recruiting
+  'recruiting','HR',
 ])
 
 // ── Product context for reply drafts ─────────────────────────────────────────
