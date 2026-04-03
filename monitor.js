@@ -294,6 +294,50 @@ Key facts:
 When to mention it: when someone is running a cleaning or field service business and struggling with scheduling, staff management, or invoicing.
 When NOT to mention it: generic small business questions not specific to field/service operations.`,
   },
+  'Ebenova API': {
+    url: 'api.ebenova.dev',
+    description: `The Ebenova API lets developers generate legal documents programmatically — NDAs, freelance contracts, privacy policies, employment agreements, and more — with a single API call.
+Key facts:
+- REST API, JSON in/out, responses in under 2 seconds
+- 27 document types, jurisdiction-aware (Nigerian, UK, Canadian, Indian, Kenyan law)
+- No per-seat pricing — pay per document generation or flat monthly
+- Built for SaaS founders, legal tech startups, and AI agent builders who need document generation without building it themselves
+- Works in any language with an HTTP client
+When to mention it: when a developer or SaaS founder needs to generate contracts, NDAs, or legal documents inside their own product. When someone asks about document automation APIs or legal tech APIs.
+When NOT to mention it: when the person just needs a single document for themselves (point them to Signova instead), or when they're asking about legal advice not document generation.`,
+  },
+  'Ebenova MCP': {
+    url: 'api.ebenova.dev',
+    description: `The Ebenova MCP server lets AI agents (Claude Desktop, Cursor, custom agents) generate professional legal documents directly from a conversation — no copy-paste, no browser.
+Key facts:
+- Model Context Protocol (MCP) server — works with any MCP-compatible AI client
+- Generates NDAs, contracts, privacy policies, tenancy agreements, and more via natural language
+- Listed on Smithery and Glama MCP directories
+- Free to try; connects to the same document engine powering Signova
+When to mention it: when someone is building or using AI agents and wants them to be able to generate legal documents, or when someone is asking about useful MCP servers for Claude Desktop or Cursor.
+When NOT to mention it: when the person is not using Claude Desktop or an MCP-compatible tool.`,
+  },
+  'Scope Guard': {
+    url: 'getsignova.com',
+    description: `Scope Guard is Signova's contract enforcement layer for freelancers — it helps you generate change orders, enforce satisfaction clauses, and document scope disputes before they become payment disputes.
+Key facts:
+- Built into Signova — not a separate product
+- Generates change order documents when clients add work mid-project
+- Tracks what was agreed, what changed, and what was approved in writing
+- Helps freelancers who got burned by scope creep or "that's not what I meant" clients
+When to mention it: when a freelancer is dealing with scope creep, a client disputing work, or asking how to protect themselves from contract disputes mid-project.
+When NOT to mention it: when the post is about a payment that already failed to come in — Signova's main contract templates are more relevant then.`,
+  },
+  PocketBridge: {
+    url: 'ebenova.net',
+    description: `PocketBridge is a payment API for African businesses — it handles payouts, remittances, and collections for companies operating in Nigeria, Ghana, Kenya, and other African markets.
+Key facts:
+- Alternative to Stripe for African-market businesses where Stripe isn't available
+- Supports bank transfers, mobile money, and USDT crypto payouts
+- Built for fintech startups and SaaS companies serving African users
+When to mention it: when a developer or founder is building a product for African users and struggling with payments infrastructure, or when someone explicitly asks about Stripe alternatives for Nigeria/Africa.
+When NOT to mention it: when the person is a consumer looking to send or receive money personally — this is a developer/business API.`,
+  },
 }
 
 // ── Auto-draft a reply using Groq (free tier — Llama 3.3 70b) ────────────────
@@ -508,6 +552,7 @@ function buildEmailHtml(matches) {
           <div style="font-size:12px;color:#888;margin-bottom:5px;">
             r/${p.subreddit} · u/${p.author} · ${p.score} upvotes · ${p.comments} comments
           </div>
+          ${p.priority_score >= 8 ? `<div style="display:inline-block;margin-bottom:6px;background:#c9a84c;color:#000;padding:2px 8px;border-radius:3px;font-size:10px;font-weight:700;letter-spacing:0.5px;">🔥 HIGH PRIORITY</div>` : ''}
           <a href="${p.url}" style="font-size:15px;font-weight:600;color:#1a1a1a;text-decoration:none;">${p.title}</a>
           ${p.body ? `<p style="font-size:13px;color:#555;margin:7px 0 0;line-height:1.5;">${p.body}${p.body.length >= 300 ? '…' : ''}</p>` : ''}
           <a href="${p.url}" style="display:inline-block;margin-top:8px;font-size:12px;color:#c9a84c;font-weight:600;">Open thread →</a>
@@ -634,6 +679,43 @@ async function sendAlert(matches) {
   }
 }
 
+// ── Priority scoring ──────────────────────────────────────────────────────────
+// Higher score = surface earlier in email digest
+function scorePost(post) {
+  let score = 0
+  const ageMs = Date.now() - new Date(post.createdAt).getTime()
+
+  // Freshness — decays fast
+  if (ageMs < 15  * 60 * 1000) score += 4  // < 15 min: very fresh
+  else if (ageMs < 30 * 60 * 1000) score += 2  // < 30 min
+  else if (ageMs < 60 * 60 * 1000) score += 1  // < 60 min
+
+  // Engagement signals
+  if (post.score    > 50) score += 3
+  else if (post.score > 10) score += 2
+  else if (post.score > 2)  score += 1
+
+  if (post.comments > 20) score += 3
+  else if (post.comments > 5) score += 2
+  else if (post.comments > 0) score += 1
+
+  // High-intent subreddits
+  const highIntent = ['freelance','freelancers','Nigeria','lagos','SaaS','IndieHackers','ClaudeAI']
+  if (highIntent.includes(post.subreddit)) score += 2
+
+  // Body has strong intent signals
+  const body = (post.body || '').toLowerCase()
+  const title = (post.title || '').toLowerCase()
+  const text = title + ' ' + body
+  if (/\bneed\b|\blooking for\b|\bwhat (do|should) i\b|\bany (tool|app|software|way)\b/.test(text)) score += 2
+  if (/\bhelp\b|\badvice\b|\brecommend\b/.test(text)) score += 1
+
+  // AI draft generated = higher confidence it's worth engaging
+  if (post.draft) score += 2
+
+  return score
+}
+
 // ── Utility ───────────────────────────────────────────────────────────────────
 const delay = ms => new Promise(r => setTimeout(r, ms))
 
@@ -684,6 +766,12 @@ async function poll() {
         }))
         if (i + CONCURRENCY < allMatches.length) await delay(1000)
       }
+
+      // Sort by priority score so email surfaces best leads first
+      allMatches.forEach(m => { m.priority_score = scorePost(m) })
+      allMatches.sort((a, b) => b.priority_score - a.priority_score)
+      const highPriority = allMatches.filter(m => m.priority_score >= 8).length
+      if (highPriority > 0) console.log(`[monitor] 🔥 ${highPriority} HIGH PRIORITY match(es) this cycle`)
 
       console.log(`[monitor] Sending alert email…`)
       await sendAlert(allMatches)
