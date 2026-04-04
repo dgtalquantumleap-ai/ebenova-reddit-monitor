@@ -219,6 +219,20 @@ const KEYWORDS = [
   { keyword: 'cleaning business app',           subreddits: ['CleaningBusiness','smallbusiness'],                           product: 'FieldOps' },
   { keyword: 'HVAC software',                   subreddits: ['HVAC','smallbusiness'],                                       product: 'FieldOps' },
 
+  // ── FREELANCERS UNION AUDIENCE (Apr 2026) ────────────────────────────────
+  // Targeting pain points that @freelancersu (85.9K followers) posts about:
+  // contracts, getting paid, client disputes, creative protections
+  { keyword: 'kill fee creative',              subreddits: ['freelance','freelancers','copywriting','writing','graphic_design'], product: 'Signova' },
+  { keyword: 'creative brief contract',        subreddits: ['graphic_design','photography','videography','copywriting'],        product: 'Signova' },
+  { keyword: 'photographer contract template', subreddits: ['photography','weddingphotography','freelancers'],                   product: 'Signova' },
+  { keyword: 'copywriter contract',            subreddits: ['copywriting','freelancers','writing'],                              product: 'Signova' },
+  { keyword: 'client ghosted after delivery',  subreddits: ['freelance','freelancers','graphic_design'],                         product: 'Signova' },
+  { keyword: 'revision clause contract',       subreddits: ['graphic_design','freelancers','photography','videography'],         product: 'Signova' },
+  { keyword: 'freelance contract dispute',     subreddits: ['freelance','freelancers','smallbusiness'],                          product: 'Signova' },
+  { keyword: 'content creator contract',       subreddits: ['content_marketing','freelancers','socialmediamanagement','marketing'], product: 'Signova' },
+  { keyword: 'influencer contract template',   subreddits: ['socialmediamanagement','marketing','freelancers'],                  product: 'Signova' },
+  { keyword: 'videographer contract',          subreddits: ['videography','filmmakers','freelancers','weddingphotography'],      product: 'Signova' },
+
 ]
 
 // ── Approved subreddit whitelist ────────────────────────────────────────────
@@ -246,6 +260,10 @@ const APPROVED_SUBREDDITS = new Set([
   'fintech','Africa','Kenya','Ghana','CryptoCurrency',
   // AI Recruiting
   'recruiting','HR',
+  // Freelancers Union audience — creative freelancers
+  'graphic_design','copywriting','writing','photography','videography',
+  'filmmakers','socialmediamanagement','marketing','content_marketing',
+  'digitalnomad',
 ])
 
 // ── Product context for reply drafts ─────────────────────────────────────────

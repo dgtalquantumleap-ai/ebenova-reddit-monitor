@@ -87,6 +87,10 @@ const APPROVED_SUBREDDITS = new Set([
   'MachineLearning','learnmachinelearning','datascience','MLjobs',
   'recruitinghell','jobsearchhacks','jobs','remotework','techjobs',
   'YCombinator','venturecapital','angels','product_management','ProductManagement',
+  // ── Freelancers Union audience ───────────────────────────────────────
+  'freelance','freelancers','graphic_design','writing','copywriting',
+  'photography','videography','webdev','marketing','socialmediamanagement',
+  'malelivingspace','digitalnomad','workingdigitalnomad',
 ])
 
 // ── Semantic search (V2) ─────────────────────────────────────────────────────
