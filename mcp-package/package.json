@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "esbuild": "^0.28.0",
     "zod": "^3.23.0"
   },
   "keywords": [
@@ -30,7 +31,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ebenova/reddit-monitor.git"
+    "url": "git+https://github.com/dgtalquantumleap-ai/ebenova-reddit-monitor.git"
   },
   "engines": {
     "node": ">=18"
