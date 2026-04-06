@@ -1,0 +1,13 @@
+{
+  "actorSpecification": 1,
+  "name": "reddit-brand-monitor",
+  "title": "Reddit Brand Monitor + AI Reply Drafter",
+  "description": "Monitor Reddit and Nairaland for brand, product, or keyword mentions. Returns structured posts with AI-drafted replies ready to post. No Reddit API key needed.",
+  "version": "0.1",
+  "buildTag": "latest",
+  "main": "apify-actor.js",
+  "input": "../INPUT_SCHEMA.json",
+  "meta": {
+    "templateId": "starter-node"
+  }
+}
