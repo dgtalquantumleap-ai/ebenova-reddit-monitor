@@ -43,7 +43,8 @@ const POLL_MINUTES      = parseInt(process.env.POLL_INTERVAL_MINUTES || '15')
 // ── Memory optimization: max posts to keep in memory ─────────────────────────
 const MAX_POSTS_IN_MEMORY = 10000
 
-const resend = new Resend(RESEND_API_KEY)
+const resend = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null
+if (!resend) console.log('[monitor] ⚠️  RESEND_API_KEY not set — email alerts disabled')
 
 // ── Keywords to monitor ───────────────────────────────────────────────────────
 // Each entry: { keyword, subreddits (optional — omit to search all of Reddit), product }
@@ -678,6 +679,12 @@ async function sendAlert(matches) {
   const hasNairaland = matches.some(m => m.source === 'nairaland')
   const platform = hasNairaland ? 'Reddit + Nairaland' : 'Reddit'
   const subject  = `${platform}: ${matches.length} new mention${matches.length !== 1 ? 's' : ''} — ${keywords.slice(0, 3).join(', ')}${keywords.length > 3 ? '…' : ''}`
+
+  if (!resend) {
+    console.log(`[monitor] ⚠️  Email skipped — ${subject}`)
+    console.log(`[monitor] Matches: ${JSON.stringify(matches.map(m => ({ title: m.title, url: m.url })))}`)
+    return
+  }
 
   try {
     await resend.emails.send({

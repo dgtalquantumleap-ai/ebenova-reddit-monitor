@@ -1,0 +1,50 @@
+{
+  "title": "Reddit Brand Monitor — Input",
+  "description": "Configure keywords, product context, and search options for monitoring Reddit (and optionally Nairaland) for brand mentions.",
+  "type": "object",
+  "schemaVersion": 1,
+  "properties": {
+    "keywords": {
+      "title": "Keywords to monitor",
+      "type": "array",
+      "description": "Enter the keywords you want to search for. Each can be a simple string or an object with optional subreddits to target.",
+      "editor": "stringList",
+      "prefill": ["freelance contract", "NDA template"]
+    },
+    "productContext": {
+      "title": "Product / expertise context",
+      "type": "string",
+      "description": "Describe your product or area of expertise in 1–3 sentences. This is used to generate AI-drafted replies that are relevant to each post.",
+      "editor": "textarea",
+      "prefill": "I build freelance contract templates for independent contractors in Africa."
+    },
+    "maxPostAgeHours": {
+      "title": "Max post age (hours)",
+      "type": "integer",
+      "description": "Only return posts newer than this many hours. Set lower for fresher results, higher for a broader sweep.",
+      "minimum": 1,
+      "maximum": 168,
+      "default": 24
+    },
+    "includeNairaland": {
+      "title": "Include Nairaland search",
+      "type": "boolean",
+      "description": "Also search Nairaland (Nigeria's largest forum) for the given keywords.",
+      "default": false
+    },
+    "generateReplies": {
+      "title": "Generate AI reply drafts",
+      "type": "boolean",
+      "description": "Generate AI-drafted replies for approved subreddit posts. Requires a Groq API key.",
+      "default": true
+    },
+    "groqApiKey": {
+      "title": "Groq API key",
+      "type": "string",
+      "description": "Your Groq API key for AI reply generation. Alternatively set GROQ_API_KEY as an environment variable in the actor settings.",
+      "editor": "textfield",
+      "prefill": ""
+    }
+  },
+  "required": ["keywords", "productContext"]
+}

@@ -39,12 +39,16 @@ const SEMANTIC_ENABLED = !!(OPENAI_API_KEY || VOYAGE_API_KEY)
 // ── Redis client ──────────────────────────────────────────────────────────────
 // Upstash REST only (same as Signova's lib/redis.js).
 // Set UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN in Railway vars.
+// If missing, returns null and multi-tenant features are disabled.
 function getRedis() {
   const url   = process.env.UPSTASH_REDIS_REST_URL  || process.env.REDIS_URL
   const token = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.REDIS_TOKEN
-  if (!url) throw new Error('UPSTASH_REDIS_REST_URL not set')
+  if (!url) return null
   return new Redis({ url, token })
 }
+
+const redis = getRedis()
+if (!redis) console.log('[v2] ⚠️  Redis not configured — multi-tenant features disabled')
 
 const resend = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null
 
@@ -587,19 +591,22 @@ console.log(`  Redis: ${process.env.UPSTASH_REDIS_REST_URL ? 'Upstash REST' : '�
 console.log('  Monitors loaded from: insights:active_monitors (Redis set)')
 console.log('━'.repeat(60))
 
-if (!process.env.UPSTASH_REDIS_REST_URL) {
-  console.error('[v2] ❌ UPSTASH_REDIS_REST_URL is required. Set it in Railway vars.')
-  process.exit(1)
+if (!redis) {
+  console.warn('[v2] ⚠️  Running without Redis — multi-tenant features disabled. Set UPSTASH_REDIS_REST_URL to enable.')
+  // Keep process alive but skip polling
+  setInterval(() => {
+    console.log('[v2] ⏳ Idle — waiting for Redis to be configured…')
+  }, 300_000)
+} else {
+  // Memory usage logging every 5 minutes
+  setInterval(() => {
+    const m = process.memoryUsage()
+    console.log(`[v2] 📊 Memory: Heap ${Math.round(m.heapUsed/1024/1024)}/${Math.round(m.heapTotal/1024/1024)}MB | RSS ${Math.round(m.rss/1024/1024)}MB | Seen entries: ${seenMap.size}`)
+  }, 300_000)
+
+  // Run once on startup, then on cron
+  poll()
+  const cron_expr = `*/${POLL_MINUTES} * * * *`
+  cron.schedule(cron_expr, poll)
+  console.log(`[v2] Cron scheduled: ${cron_expr}`)
 }
-
-// Memory usage logging every 5 minutes
-setInterval(() => {
-  const m = process.memoryUsage()
-  console.log(`[v2] 📊 Memory: Heap ${Math.round(m.heapUsed/1024/1024)}/${Math.round(m.heapTotal/1024/1024)}MB | RSS ${Math.round(m.rss/1024/1024)}MB | Seen entries: ${seenMap.size}`)
-}, 300_000)
-
-// Run once on startup, then on cron
-poll()
-const cron_expr = `*/${POLL_MINUTES} * * * *`
-cron.schedule(cron_expr, poll)
-console.log(`[v2] Cron scheduled: ${cron_expr}`)
