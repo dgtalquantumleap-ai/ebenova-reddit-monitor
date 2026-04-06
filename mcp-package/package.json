@@ -1,0 +1,53 @@
+{
+  "name": "@ebenova/reddit-monitor-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for Reddit & Nairaland keyword monitoring with AI-drafted replies. Search for brand mentions, monitor keywords, and generate context-aware reply drafts — directly from Claude Desktop, Cursor, or any MCP client.",
+  "type": "module",
+  "main": "index.js",
+  "bin": {
+    "ebenova-reddit-monitor-mcp": "index.js"
+  },
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^3.23.0"
+  },
+  "keywords": [
+    "mcp",
+    "reddit",
+    "nairaland",
+    "brand-monitoring",
+    "social-media",
+    "keyword-monitoring",
+    "ai-replies",
+    "marketing",
+    "ebenova",
+    "smithery"
+  ],
+  "author": "Ebenova Solutions <api@ebenova.dev>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ebenova/reddit-monitor.git"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "smithery": {
+    "name": "ebenova-reddit-monitor",
+    "entryPoint": "index.js",
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "GROQ_API_KEY": {
+          "type": "string",
+          "description": "Groq API key for AI reply draft generation. Get one free at https://console.groq.com",
+          "default": "",
+          "required": false
+        }
+      }
+    }
+  }
+}

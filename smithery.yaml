@@ -1,28 +1,20 @@
-# Smithery.ai configuration for Reddit Brand Monitor MCP
-# https://smithery.ai/docs/config
+# Smithery configuration for @ebenova/reddit-monitor-mcp
+# https://smithery.ai/docs/build/publish
 
-name: reddit-brand-monitor
-description: Monitor Reddit and Nairaland for keyword mentions, with AI-drafted replies ready to post.
-author: ebenova
-license: MIT
-repository: https://github.com/ebenova/reddit-monitor
-
-tools:
-  - name: search_reddit
-    description: Search Reddit for recent posts matching given keywords
-  - name: monitor_keywords
-    description: Search Reddit and optionally Nairaland for keyword mentions with AI reply drafts
-  - name: generate_reply_draft
-    description: Generate an AI reply draft for a specific Reddit post
-  - name: check_subreddit_approval
-    description: Check if a subreddit is in the approved list for brand mentions
-
-categories:
-  - social-media
-  - research
-  - marketing
-
-env:
-  GROQ_API_KEY:
-    description: Groq API key for AI reply draft generation (optional — search works without it)
-    required: false
+startCommand:
+  type: stdio
+  configSchema:
+    type: object
+    properties:
+      GROQ_API_KEY:
+        type: string
+        description: "Groq API key for AI reply draft generation. Get one free at https://console.groq.com. Optional — search works without it."
+    required: []
+  commandFunction: |
+    (config) => ({
+      command: 'npx',
+      args: ['-y', '@ebenova/reddit-monitor-mcp'],
+      env: {
+        GROQ_API_KEY: config.GROQ_API_KEY || ''
+      }
+    })

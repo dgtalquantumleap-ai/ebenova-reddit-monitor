@@ -39,7 +39,7 @@ const ADMIN_KEY = process.env.MONITOR_ADMIN_KEY   // for internal provisioning
 function getRedis() {
   const url   = process.env.UPSTASH_REDIS_REST_URL
   const token = process.env.UPSTASH_REDIS_REST_TOKEN
-  if (!url) throw new Error('UPSTASH_REDIS_REST_URL not set')
+  if (!url || !token) throw new Error('UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN must both be set')
   return new Redis({ url, token })
 }
 
@@ -52,7 +52,8 @@ async function authenticate(req) {
     const redis = getRedis()
     const raw = await redis.get(`apikey:${key}`)
     if (!raw) return { ok: false, status: 401, error: { code: 'INVALID_KEY', message: 'API key not found' } }
-    const keyData = typeof raw === 'string' ? JSON.parse(raw) : raw
+    let keyData
+    try { keyData = typeof raw === 'string' ? JSON.parse(raw) : raw } catch { return { ok: false, status: 500, error: { code: 'CORRUPT_KEY_DATA', message: 'Key data is corrupt' } } }
     if (!keyData.insights) return {
       ok: false, status: 403,
       error: { code: 'INSIGHTS_ACCESS_REQUIRED', message: 'This key does not have Insights access. See ebenova.dev/insights' }
@@ -83,7 +84,7 @@ app.use((req, res, next) => {
 // ── GET /health ────────────────────────────────────────────────────────────
 app.get('/health', async (req, res) => {
   let redisOk = false
-  try { const r = getRedis(); await r.ping(); redisOk = true } catch (_) {}
+  try { const r = getRedis(); await r.ping(); redisOk = true } catch (err) { console.error('[health] Redis ping failed:', err.message) }
   res.json({
     status: 'ok',
     service: 'ebenova-insights-api',
@@ -192,8 +193,8 @@ app.get('/v1/matches', async (req, res) => {
     if (!raw) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Monitor not found' } })
     const m = typeof raw === 'string' ? JSON.parse(raw) : raw
     if (m.owner !== auth.owner) return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'Not your monitor' } })
-    const lim = Math.min(parseInt(limit) || 20, 100)
-    const off = parseInt(offset) || 0
+    const lim = Math.min(Math.max(parseInt(limit) || 20, 1), 100)
+    const off = Math.max(parseInt(offset) || 0, 0)
     const ids = await redis.lrange(`insights:matches:${monitor_id}`, off, off + lim - 1) || []
     const matches = []
     for (const matchId of ids) {
