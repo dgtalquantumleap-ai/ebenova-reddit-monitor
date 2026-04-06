@@ -39,6 +39,7 @@ const GROQ_API_KEY   = process.env.GROQ_API_KEY
 const ALERT_EMAIL    = process.env.ALERT_EMAIL    || 'info@ebenova.net'
 const FROM_EMAIL        = process.env.FROM_EMAIL      || 'monitor@getsignova.com'
 const POLL_MINUTES      = parseInt(process.env.POLL_INTERVAL_MINUTES || '15')
+const POST_MAX_AGE_HOURS = parseInt(process.env.POST_MAX_AGE_HOURS || '3') // max age for email alerts
 
 // ── Memory optimization: max posts to keep in memory ─────────────────────────
 const MAX_POSTS_IN_MEMORY = 10000
@@ -500,15 +501,23 @@ async function searchReddit(keyword, subreddits) {
 
       for (const post of posts) {
         const p = post.data
-        if (seenIds.has(p.id)) continue
+        if (seenIds.has(p.id)) {
+          console.log(`[monitor] ⏭️ Already seen: "${p.title?.slice(0, 50)}" (${p.id})`)
+          continue
+        }
         const createdAt = p.created_utc * 1000
         const ageMs = Date.now() - createdAt
-        // Only alert on posts from last 60 minutes — guards against restarts missing content
-        if (ageMs > 60 * 60 * 1000) continue
+        const ageHours = (ageMs / (60 * 60 * 1000)).toFixed(1)
+        // Only alert on posts within the configured max age (default 3 hours)
+        // Guards against restarts re-alerting on very old content
+        if (ageMs > POST_MAX_AGE_HOURS * 60 * 60 * 1000) {
+          console.log(`[monitor] ⏰ Too old (${ageHours}h): "${p.title?.slice(0, 50)}" (max: ${POST_MAX_AGE_HOURS}h)`)
+          continue
+        }
         seenIds.add(p.id)
         console.log(`[monitor] 🎯 NEW MATCH FOUND: "${keyword}" → ${p.title}`)
         console.log(`[monitor] Post URL: https://reddit.com${p.permalink}`)
-        console.log(`[monitor] Post age: ${p.created_utc} (${Math.floor((Date.now() - createdAt) / 3600000)} hours old)`)
+        console.log(`[monitor] Post age: ${ageHours} hours old`)
         results.push({
           id:        p.id,
           title:     p.title || p.body?.slice(0, 100) || '(no title)',
@@ -814,6 +823,7 @@ console.log('━'.repeat(60))
 console.log('  Ebenova Social Monitor (Reddit + Nairaland)')
 console.log(`  Reddit: ${KEYWORDS.length} keywords · Nairaland: ${NAIRALAND_KEYWORDS.length} keywords`)
 console.log(`  Polling every ${POLL_MINUTES} minutes`)
+console.log(`  Post max age: ${POST_MAX_AGE_HOURS} hours (adjust with POST_MAX_AGE_HOURS)`)
 console.log(`  Alerts → ${ALERT_EMAIL}`)
 console.log(`  AI drafts → ${process.env.GROQ_API_KEY ? 'ON (Groq / Llama 3.3)' : 'OFF (set GROQ_API_KEY)'}`)
 if (!process.env.GROQ_API_KEY) {
