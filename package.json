@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "start": "node start-all.js",
+    "start:actor": "node apify-actor.js",
     "start:api": "node api-server.js",
     "start:v1": "node monitor.js",
     "start:v2": "node monitor-v2.js",
