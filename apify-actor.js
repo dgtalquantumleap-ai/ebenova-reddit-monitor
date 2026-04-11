@@ -11,19 +11,43 @@
 //   apify run --input '{"keywords":["freelance contract"],"productContext":"I build freelance contract templates.","maxPostAgeHours":24,"includeNairaland":true,"generateReplies":true}'
 
 import { Actor } from 'apify'
-import { HttpsProxyAgent } from 'https-proxy-agent'
+import axios from 'axios'
 
 await Actor.init()
 
-// ── Proxy setup — routes Reddit requests through Apify residential proxy ─────
-let proxyAgent = null
+// ── Proxy setup — routes Reddit requests through Apify proxy ─────────────────
+let proxyUrl = null
 try {
   const proxyConfig = await Actor.createProxyConfiguration({ useApifyProxy: true })
-  const proxyUrl = await proxyConfig.newUrl()
-  proxyAgent = new HttpsProxyAgent(proxyUrl)
+  proxyUrl = await proxyConfig.newUrl()
   console.log('[actor] Apify proxy configured')
 } catch (e) {
-  console.warn('[actor] Proxy unavailable — falling back to direct fetch:', e.message)
+  console.warn('[actor] Proxy unavailable — falling back to direct:', e.message)
+}
+
+// ── Reddit OAuth token (free, bypasses datacenter 403s) ──────────────────────
+let redditToken = null
+const REDDIT_CLIENT_ID = process.env.REDDIT_CLIENT_ID || ''
+const REDDIT_CLIENT_SECRET = process.env.REDDIT_CLIENT_SECRET || ''
+
+async function getRedditToken() {
+  if (!REDDIT_CLIENT_ID || !REDDIT_CLIENT_SECRET) return null
+  try {
+    const resp = await axios.post(
+      'https://www.reddit.com/api/v1/access_token',
+      'grant_type=client_credentials',
+      {
+        auth: { username: REDDIT_CLIENT_ID, password: REDDIT_CLIENT_SECRET },
+        headers: { 'User-Agent': 'reddit-brand-monitor/2.0 by ebenova' },
+        ...(proxyUrl ? { proxy: false, httpsAgent: new (await import('https-proxy-agent')).HttpsProxyAgent(proxyUrl) } : {}),
+      }
+    )
+    console.log('[actor] Reddit OAuth token obtained')
+    return resp.data.access_token
+  } catch (e) {
+    console.warn('[actor] Reddit OAuth failed, using public API:', e.message)
+    return null
+  }
 }
 
 // ── Read user input ──────────────────────────────────────────────────────────
@@ -50,6 +74,9 @@ const normalizedKeywords = keywords.map(k =>
 
 const GROQ_API_KEY = groqApiKey || process.env.GROQ_API_KEY || ''
 const MAX_AGE_MS = maxPostAgeHours * 60 * 60 * 1000
+
+// Get Reddit token once before searches
+redditToken = await getRedditToken()
 
 // ── Approved subreddits — never draft a reply if not on this list ─────────────
 const APPROVED_SUBREDDITS = new Set([
@@ -78,31 +105,33 @@ const delay = ms => new Promise(r => setTimeout(r, ms))
 // Deduplicate results by post ID across all keyword searches
 const seenIds = new Set()
 
-// ── Reddit search (from monitor-v2.js, unchanged logic) ──────────────────────
+// ── Reddit search ─────────────────────────────────────────────────────────────
 async function searchReddit(keywordEntry) {
   const { keyword, subreddits = [] } = keywordEntry
   const results = []
   const encoded = encodeURIComponent(keyword)
 
+  const baseUrl = redditToken ? 'https://oauth.reddit.com' : 'https://www.reddit.com'
   const urls = subreddits.length > 0
     ? subreddits.map(sr =>
-        `https://www.reddit.com/r/${sr}/search.json?q=${encoded}&sort=new&limit=25&t=week&restrict_sr=1`
+        `${baseUrl}/r/${sr}/search.json?q=${encoded}&sort=new&limit=25&t=week&restrict_sr=1`
       )
-    : [`https://www.reddit.com/search.json?q=${encoded}&sort=new&limit=25&t=week`]
+    : [`${baseUrl}/search.json?q=${encoded}&sort=new&limit=25&t=week`]
+
+  const headers = {
+    'User-Agent': 'reddit-brand-monitor/2.0 by ebenova',
+    ...(redditToken ? { 'Authorization': `Bearer ${redditToken}` } : {}),
+  }
 
   for (const url of urls) {
     try {
-      const res = await fetch(url, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' },
-        ...(proxyAgent ? { agent: proxyAgent } : {}),
+      const { HttpsProxyAgent } = await import('https-proxy-agent')
+      const resp = await axios.get(url, {
+        headers,
+        timeout: 15000,
+        ...(proxyUrl ? { proxy: false, httpsAgent: new HttpsProxyAgent(proxyUrl) } : {}),
       })
-      if (!res.ok) {
-        console.warn(`[actor]   Reddit returned ${res.status} for "${keyword}" — skipping`)
-        await delay(5000)
-        continue
-      }
-      const data = await res.json()
-      const posts = data?.data?.children || []
+      const posts = resp.data?.data?.children || []
       const subredditName = url.includes('/r/') ? url.split('/r/')[1].split('/')[0] : 'all'
       console.log(`[actor]   "${keyword}" in r/${subredditName} → ${posts.length} posts`)
 
@@ -129,7 +158,8 @@ async function searchReddit(keywordEntry) {
         })
       }
     } catch (err) {
-      console.error(`[actor] Reddit fetch error "${keyword}":`, err.message)
+      const status = err.response?.status
+      console.error(`[actor] Reddit fetch error "${keyword}": ${status || err.message}`)
     }
     await delay(1500)
   }
