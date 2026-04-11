@@ -11,8 +11,20 @@
 //   apify run --input '{"keywords":["freelance contract"],"productContext":"I build freelance contract templates.","maxPostAgeHours":24,"includeNairaland":true,"generateReplies":true}'
 
 import { Actor } from 'apify'
+import { HttpsProxyAgent } from 'https-proxy-agent'
 
 await Actor.init()
+
+// ── Proxy setup — routes Reddit requests through Apify residential proxy ─────
+let proxyAgent = null
+try {
+  const proxyConfig = await Actor.createProxyConfiguration({ useApifyProxy: true })
+  const proxyUrl = await proxyConfig.newUrl()
+  proxyAgent = new HttpsProxyAgent(proxyUrl)
+  console.log('[actor] Apify proxy configured')
+} catch (e) {
+  console.warn('[actor] Proxy unavailable — falling back to direct fetch:', e.message)
+}
 
 // ── Read user input ──────────────────────────────────────────────────────────
 const input = await Actor.getInput()
@@ -81,7 +93,8 @@ async function searchReddit(keywordEntry) {
   for (const url of urls) {
     try {
       const res = await fetch(url, {
-        headers: { 'User-Agent': 'reddit-brand-monitor/1.0 (apify-actor)' },
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' },
+        ...(proxyAgent ? { agent: proxyAgent } : {}),
       })
       if (!res.ok) {
         console.warn(`[actor]   Reddit returned ${res.status} for "${keyword}" — skipping`)
