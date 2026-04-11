@@ -470,9 +470,29 @@ const NAIRALAND_KEYWORDS = [
   { keyword: 'cleaning business app',   section: 'business',    product: 'FieldOps' },
 ]
 
+// ── Hacker News keywords ──────────────────────────────────────────────────────
+// HN audience: developers, technical founders, early adopters
+const HN_KEYWORDS = [
+  // Ebenova API / MCP
+  { keyword: 'legal document API',           product: 'Ebenova API'  },
+  { keyword: 'contract generation API',      product: 'Ebenova API'  },
+  { keyword: 'document automation',          product: 'Ebenova API'  },
+  { keyword: 'PDF generation API',           product: 'Ebenova API'  },
+  { keyword: 'model context protocol',       product: 'Ebenova MCP'  },
+  { keyword: 'MCP server',                   product: 'Ebenova MCP'  },
+  // Signova — dev/founder angle
+  { keyword: 'freelance contract',           product: 'Signova'      },
+  { keyword: 'client refused to pay',        product: 'Signova'      },
+  { keyword: 'scope creep',                  product: 'Scope Guard'  },
+  // PocketBridge
+  { keyword: 'payment API Africa',           product: 'PocketBridge' },
+  { keyword: 'Stripe alternative',           product: 'PocketBridge' },
+]
+
 // ── Seen post tracker — persists in memory, resets on restart ────────────────
 const seenIds = new Set()
 const seenNairalandIds = new Set()
+const seenHnIds = new Set()
 
 // ── Reddit search — public JSON endpoint, no auth needed ─────────────────────
 async function searchReddit(keyword, subreddits) {
@@ -573,7 +593,7 @@ function buildEmailHtml(matches) {
       const items = posts.map(p => `
         <div style="margin-bottom:20px;padding:14px;background:#f9f9f9;border-left:4px solid #c9a84c;border-radius:4px;">
           <div style="font-size:12px;color:#888;margin-bottom:5px;">
-            r/${p.subreddit} · u/${p.author} · ${p.score} upvotes · ${p.comments} comments
+            ${p.source === 'hackernews' ? 'HN' : p.source === 'indiehackers' ? 'IndieHackers' : `r/${p.subreddit}`} · ${p.author} · ${p.score} points · ${p.comments} comments
           </div>
           ${p.priority_score >= 8 ? `<div style="display:inline-block;margin-bottom:6px;background:#c9a84c;color:#000;padding:2px 8px;border-radius:3px;font-size:10px;font-weight:700;letter-spacing:0.5px;">🔥 HIGH PRIORITY</div>` : ''}
           <a href="${p.url}" style="font-size:15px;font-weight:600;color:#1a1a1a;text-decoration:none;">${p.title}</a>
@@ -676,6 +696,46 @@ async function searchNairaland(keyword, section) {
   return results
 }
 
+// ── Hacker News search — Algolia API, free, no auth ──────────────────────────
+async function searchHackerNews(keyword) {
+  const results = []
+  const encoded = encodeURIComponent(keyword)
+  const since   = Math.floor((Date.now() - POST_MAX_AGE_HOURS * 60 * 60 * 1000) / 1000)
+  const url     = `https://hn.algolia.com/api/v1/search_by_date?query=${encoded}&tags=story&numericFilters=created_at_i>${since}&hitsPerPage=10`
+  try {
+    const res = await fetch(url, { headers: { 'User-Agent': 'ebenova-monitor/1.0' } })
+    if (!res.ok) return results
+    const data = await res.json()
+    for (const hit of (data.hits || [])) {
+      if (seenHnIds.has(hit.objectID)) continue
+      seenHnIds.add(hit.objectID)
+      const ageHours = ((Date.now() / 1000 - hit.created_at_i) / 3600).toFixed(1)
+      console.log(`[hn] 🎯 NEW MATCH: "${keyword}" → ${hit.title}`)
+      console.log(`[hn] URL: https://news.ycombinator.com/item?id=${hit.objectID} (${ageHours}h old)`)
+      results.push({
+        id:        hit.objectID,
+        title:     hit.title || '(no title)',
+        url:       `https://news.ycombinator.com/item?id=${hit.objectID}`,
+        subreddit: 'HackerNews',
+        author:    hit.author || 'unknown',
+        score:     hit.points || 0,
+        comments:  hit.num_comments || 0,
+        body:      (hit.story_text || '').replace(/<[^>]+>/g, ' ').slice(0, 600),
+        createdAt: new Date(hit.created_at_i * 1000).toUTCString(),
+        keyword,
+        source:    'hackernews',
+        approved:  true,
+      })
+    }
+  } catch (err) {
+    console.error(`[hn] fetch error for "${keyword}":`, err.message)
+  }
+  return results
+}
+
+// Note: IndieHackers forum posts require Firebase auth — not publicly accessible.
+// The r/IndieHackers subreddit (already in KEYWORDS) covers this audience on Reddit.
+
 // ── Send alert email ──────────────────────────────────────────────────────────
 async function sendAlert(matches) {
   if (!RESEND_API_KEY) {
@@ -685,8 +745,9 @@ async function sendAlert(matches) {
   }
 
   const keywords = [...new Set(matches.map(m => m.keyword))]
-  const hasNairaland = matches.some(m => m.source === 'nairaland')
-  const platform = hasNairaland ? 'Reddit + Nairaland' : 'Reddit'
+  const sources = [...new Set(matches.map(m => m.source || 'reddit'))]
+  const platformMap = { reddit: 'Reddit', nairaland: 'Nairaland', hackernews: 'HN', indiehackers: 'IH' }
+  const platform = sources.map(s => platformMap[s] || s).join(' + ')
   const subject  = `${platform}: ${matches.length} new mention${matches.length !== 1 ? 's' : ''} — ${keywords.slice(0, 3).join(', ')}${keywords.length > 3 ? '…' : ''}`
 
   if (!resend) {
@@ -749,7 +810,14 @@ function scorePost(post) {
 const delay = ms => new Promise(r => setTimeout(r, ms))
 
 // ── Main poll cycle ───────────────────────────────────────────────────────────
+let isPolling = false
+
 async function poll() {
+  if (isPolling) {
+    console.log('[monitor] ⏭️  Previous cycle still running — skipping this tick')
+    return
+  }
+  isPolling = true
   try {
     console.log(`\n[monitor] ========== POLLING CYCLE START: ${new Date().toISOString()} ==========`)
     console.log(`[monitor] Searching ${KEYWORDS.length} keywords across Reddit`)
@@ -781,6 +849,20 @@ async function poll() {
       }
       await delay(3000)
     }
+
+    // Hacker News
+    for (const { keyword, product } of HN_KEYWORDS) {
+      console.log(`[hn] Searching "${keyword}"`)
+      const matches = await searchHackerNews(keyword)
+      if (matches.length > 0) {
+        matches.forEach(m => { m.product = product })
+        console.log(`[hn] "${keyword}": ${matches.length} new`)
+        matchesFound += matches.length
+        allMatches.push(...matches)
+      }
+      await delay(1500)
+    }
+
 
     if (allMatches.length > 0) {
       console.log(`[monitor] Total new matches: ${allMatches.length} — generating reply drafts…`)
@@ -815,13 +897,15 @@ async function poll() {
     console.error(`[monitor] ❌ Polling error: ${error.message}`)
     console.error(`[monitor] Stack: ${error.stack}`)
     // Don't rethrow — let next cycle retry
+  } finally {
+    isPolling = false
   }
 }
 
 // ── Startup ───────────────────────────────────────────────────────────────────
 console.log('━'.repeat(60))
-console.log('  Ebenova Social Monitor (Reddit + Nairaland)')
-console.log(`  Reddit: ${KEYWORDS.length} keywords · Nairaland: ${NAIRALAND_KEYWORDS.length} keywords`)
+console.log('  Ebenova Social Monitor (Reddit + Nairaland + HN)')
+console.log(`  Reddit: ${KEYWORDS.length} · Nairaland: ${NAIRALAND_KEYWORDS.length} · HN: ${HN_KEYWORDS.length} keywords`)
 console.log(`  Polling every ${POLL_MINUTES} minutes`)
 console.log(`  Post max age: ${POST_MAX_AGE_HOURS} hours (adjust with POST_MAX_AGE_HOURS)`)
 console.log(`  Alerts → ${ALERT_EMAIL}`)

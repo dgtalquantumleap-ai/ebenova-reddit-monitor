@@ -1,6 +1,6 @@
 {
   "name": "@ebenova/reddit-monitor-mcp",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "MCP server for Reddit & Nairaland keyword monitoring with AI-drafted replies. Search for brand mentions, monitor keywords, and generate context-aware reply drafts — directly from Claude Desktop, Cursor, or any MCP client.",
   "type": "module",
   "main": "index.js",
