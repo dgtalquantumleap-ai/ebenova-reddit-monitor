@@ -29,6 +29,7 @@
   ],
   "author": "Ebenova Solutions <api@ebenova.dev>",
   "license": "MIT",
+  "homepage": "https://api.ebenova.dev/reddit-monitor",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/dgtalquantumleap-ai/ebenova-reddit-monitor.git"
