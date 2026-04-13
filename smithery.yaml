@@ -1,5 +1,8 @@
 # Smithery configuration for @ebenova/reddit-monitor-mcp
 # https://smithery.ai/docs/build/publish
+# Server card: https://api.ebenova.dev/reddit-monitor/.well-known/mcp/server-card.json
+
+homepage: https://api.ebenova.dev/reddit-monitor
 
 startCommand:
   type: stdio
