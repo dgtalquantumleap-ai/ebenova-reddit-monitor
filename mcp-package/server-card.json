@@ -1,0 +1,17 @@
+{
+  "name": "Reddit Monitor",
+  "description": "Monitor Reddit and Nairaland for brand mentions, keywords, and competitor activity. Get AI-powered summaries and alerts delivered to your workflow.",
+  "version": "1.0.0",
+  "author": "Ebenova Solutions",
+  "homepage": "https://ebenova.dev/insights",
+  "license": "MIT",
+  "tools": [
+    { "name": "search_reddit", "description": "Search Reddit posts and comments for a keyword or brand mention" },
+    { "name": "monitor_keyword", "description": "Set up ongoing monitoring for a keyword across subreddits" },
+    { "name": "get_alerts", "description": "Get recent alerts and matches from active monitors" },
+    { "name": "analyze_sentiment", "description": "AI-powered sentiment analysis on Reddit mentions" }
+  ],
+  "config": {
+    "GROQ_API_KEY": { "type": "string", "required": false, "description": "Optional Groq API key for AI summaries — get one free at https://console.groq.com" }
+  }
+}
