@@ -194,11 +194,12 @@ Respond with SKIP or the reply only. No labels or explanation.`
   } catch { return null }
 }
 
-// ── MCP Server ───────────────────────────────────────────────────────────────
-const server = new McpServer({
-  name: '@ebenova/reddit-monitor-mcp',
-  version: '1.0.0',
-})
+// ── Server factory ────────────────────────────────────────────────────────────
+function createServer() {
+  const server = new McpServer({
+    name: '@ebenova/reddit-monitor-mcp',
+    version: '1.0.1',
+  })
 
 // Tool 1: Search Reddit for keywords
 server.tool(
@@ -332,7 +333,27 @@ server.tool(
   }
 )
 
+  return server
+}
+
+// ── Smithery sandbox export ───────────────────────────────────────────────────
+export function createSandboxServer() {
+  return createServer()
+}
+
+export default function createServerFromConfig(config = {}) {
+  return createServer()
+}
+
 // ── Start ────────────────────────────────────────────────────────────────────
-const transport = new StdioServerTransport()
-await server.connect(transport)
-console.error('[mcp] @ebenova/reddit-monitor-mcp running on stdio')
+async function main() {
+  const server = createServer()
+  const transport = new StdioServerTransport()
+  await server.connect(transport)
+  process.stderr.write('[mcp] @ebenova/reddit-monitor-mcp running on stdio\n')
+}
+
+main().catch(err => {
+  process.stderr.write(`[reddit-monitor-mcp] Fatal: ${err.message}\n`)
+  process.exit(1)
+})

@@ -1,0 +1,27 @@
+# MCPize Configuration
+# Docs: https://mcpize.com/docs/mcpize-yaml
+
+version: 1
+
+name: "Reddit & Nairaland Monitor"
+slug: "ebenova-reddit-monitor"
+
+runtime: node
+
+build:
+  install: "npm install"
+  command: "echo 'No build step required'"
+
+start:
+  type: stdio
+  command: "node index.js"
+
+bridge:
+  mode: stdio
+
+configSchema:
+  type: object
+  properties:
+    GROQ_API_KEY:
+      type: string
+      description: "Groq API key for AI reply draft generation. Get one free at https://console.groq.com. Optional — keyword search works without it."

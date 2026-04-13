@@ -1,0 +1,65 @@
+# Smithery MCP Server Configuration
+# https://smithery.ai/docs/build/publish
+
+name: ebenova-reddit-monitor
+version: 1.0.1
+description: Monitor Reddit and Nairaland for keyword mentions about your product. Generate community-tone AI reply drafts using Groq LLaMA. Works without an API key for search-only use.
+
+author: Ebenova Solutions <api@ebenova.dev>
+license: MIT
+homepage: https://ebenova.dev
+repository: https://github.com/dgtalquantumleap-ai/ebenova-reddit-monitor
+
+keywords:
+  - reddit
+  - nairaland
+  - monitor
+  - brand-monitoring
+  - social-media
+  - keyword-monitoring
+  - ai-replies
+  - marketing
+  - distribution
+  - founder
+  - ebenova
+
+configSchema:
+  type: object
+  properties:
+    GROQ_API_KEY:
+      type: string
+      description: "Groq API key for AI reply draft generation. Get one free at https://console.groq.com. Optional — keyword search and monitoring work without it."
+      required: false
+
+deployment:
+  type: stdio
+  command: node
+  args:
+    - index.js
+
+startCommand: "node index.js"
+entryPoint: "index.js"
+runtime: nodejs
+
+capabilities:
+  tools:
+    - name: search_reddit
+      description: "Search Reddit for recent posts matching given keywords"
+    - name: monitor_keywords
+      description: "Search Reddit and Nairaland with AI reply draft generation"
+    - name: generate_reply_draft
+      description: "Generate an AI community-tone reply for a specific post"
+    - name: check_subreddit_approval
+      description: "Check if subreddits are safe for brand mentions"
+
+examples:
+  - name: "Find brand mentions"
+    prompt: "Search Reddit for 'scope creep' and 'freelance contract' mentions in the last 24 hours"
+  - name: "Monitor with AI replies"
+    prompt: "Monitor Reddit for 'NDA template' and generate reply drafts — my product is Ebenova, an AI legal doc generator for freelancers"
+  - name: "Check a subreddit"
+    prompt: "Is r/freelance approved for brand mentions?"
+
+support:
+  email: api@ebenova.dev
+  documentation: https://ebenova.dev/docs
