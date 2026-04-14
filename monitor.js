@@ -221,6 +221,16 @@ const KEYWORDS = [
   { keyword: 'cleaning business app',           subreddits: ['CleaningBusiness','smallbusiness'],                           product: 'FieldOps' },
   { keyword: 'HVAC software',                   subreddits: ['HVAC','smallbusiness'],                                       product: 'FieldOps' },
 
+  // ── NIGERIA DATA PROTECTION / NDPA COMPLIANCE (Apr 2026) ──────────────────
+  // Surfaced from Rosemary Onu-Okeke (DataLex Consulting) conversation
+  // Nigerian fintechs need DPAs, privacy policies, data processing agreements
+  { keyword: 'NDPA compliance nigeria',        subreddits: ['Nigeria','fintech','legaltech'],                            product: 'Signova' },
+  { keyword: 'data protection nigeria',        subreddits: ['Nigeria','fintech','startups','legaltech'],                 product: 'Signova' },
+  { keyword: 'NDPC audit nigeria',             subreddits: ['Nigeria','fintech','legaltech'],                            product: 'Signova' },
+  { keyword: 'data processing agreement',      subreddits: ['Nigeria','fintech','SaaS','startups','legaltech'],          product: 'Signova' },
+  { keyword: 'privacy policy nigeria',         subreddits: ['Nigeria','webdev','startups','SaaS'],                       product: 'Signova' },
+  { keyword: 'GDPR compliance startup',        subreddits: ['startups','SaaS','webdev','Entrepreneur'],                  product: 'Signova' },
+
   // ── FREELANCERS UNION AUDIENCE (Apr 2026) ────────────────────────────────
   // Targeting pain points that @freelancersu (85.9K followers) posts about:
   // contracts, getting paid, client disputes, creative protections
