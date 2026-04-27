@@ -70,8 +70,7 @@ router.post('/checkout', async (req, res) => {
       line_items: [{ price: planConfig.priceId, quantity: 1 }],
       success_url: successUrl || `${req.headers.origin || 'https://ebenova.dev'}/dashboard?upgrade=success`,
       cancel_url:  cancelUrl  || `${req.headers.origin || 'https://ebenova.dev'}/dashboard?upgrade=cancelled`,
-      metadata: { apiKey: auth.apiKey, owner: auth.owner, plan },
-      // Pre-fill email if we have it
+      metadata: { apiKey: auth.apiKey, owner: auth.owner, plan, ownerEmail: auth.keyData.email || auth.owner },
       customer_email: auth.keyData.email || undefined,
     })
     res.json({ success: true, checkoutUrl: session.url })
@@ -123,10 +122,12 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
 
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object
-      const { apiKey, plan } = session.metadata || {}
-      const customerId = session.customer
+      const { apiKey, plan, ownerEmail } = session.metadata || {}
+      const customerId  = session.customer
+      const customerEmail = session.customer_details?.email || ownerEmail || ''
 
-      if (apiKey && plan) {
+      if (apiKey) {
+        // Existing user — upgrade their plan
         const raw = await redis.get(`apikey:${apiKey}`)
         if (raw) {
           const keyData = typeof raw === 'string' ? JSON.parse(raw) : raw
@@ -134,6 +135,38 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
           await redis.set(`apikey:${apiKey}`, JSON.stringify(updated))
           console.log(`[stripe] ✅ Upgraded ${apiKey} to ${plan} plan`)
         }
+      } else if (customerEmail) {
+        // New customer (no existing API key) — provision one
+        const { randomBytes } = await import('crypto')
+        const newKey = `ins_${randomBytes(16).toString('hex')}`
+        const now = new Date().toISOString()
+        const keyData = {
+          owner: customerEmail,
+          email: customerEmail,
+          insights: true,
+          insightsPlan: plan || 'growth',
+          stripeCustomerId: customerId,
+          createdAt: now,
+          source: 'stripe-checkout',
+        }
+        await redis.set(`apikey:${newKey}`, JSON.stringify(keyData))
+        await redis.set(`insights:signup:${customerEmail}`, JSON.stringify({ key: newKey, createdAt: now }))
+
+        // Send welcome email with new key
+        const resendKey = process.env.RESEND_API_KEY
+        if (resendKey) {
+          const { Resend } = await import('resend')
+          const resend = new Resend(resendKey)
+          const from = process.env.FROM_EMAIL || 'insights@ebenova.dev'
+          const appUrl = process.env.APP_URL || 'https://ebenova-insights-production.up.railway.app'
+          await resend.emails.send({
+            from, to: customerEmail,
+            subject: `Your Ebenova Insights API key (${(plan||'growth').charAt(0).toUpperCase()+(plan||'growth').slice(1)} plan)`,
+            html: `<p>Thanks for upgrading! Here's your API key:</p><p style="font-family:monospace;font-size:16px;font-weight:bold;">${newKey}</p><p><a href="${appUrl}/dashboard">Open dashboard →</a></p>`,
+          }).catch(err => console.error('[stripe] Welcome email failed:', err.message))
+        }
+
+        console.log(`[stripe] ✅ Provisioned new key for ${customerEmail} on ${plan} plan`)
       }
     }
 

@@ -26,7 +26,12 @@ try {
 import { Resend }  from 'resend'
 import { Redis }   from '@upstash/redis'
 import cron        from 'node-cron'
-import { sendSlackAlert } from './lib/slack.js'
+import { sendSlackAlert }  from './lib/slack.js'
+import searchMedium        from './lib/scrapers/medium.js'
+import searchSubstack      from './lib/scrapers/substack.js'
+import searchQuora         from './lib/scrapers/quora.js'
+import searchUpwork        from './lib/scrapers/upwork.js'
+import searchFiverr        from './lib/scrapers/fiverr.js'
 
 const RESEND_API_KEY   = process.env.RESEND_API_KEY
 const GROQ_API_KEY     = process.env.GROQ_API_KEY
@@ -441,6 +446,60 @@ async function runMonitor(monitor) {
       }
     }
 
+  }
+
+  // ── Extended platform scrapers (per-monitor, respects plan) ──────────────
+  const seenIds = { has: (id) => hasSeen(monitor.id, id), add: (id) => markSeen(monitor.id, id) }
+  const maxAgeMs = 24 * 60 * 60 * 1000 // 24h for v2 monitors
+
+  if (monitor.includeMedium !== false) {
+    for (const kw of monitor.keywords) {
+      const ctx = kw.productContext || monitor.productContext || ''
+      const matches = await searchMedium(kw, { seenIds, delay, MAX_AGE_MS: maxAgeMs })
+      matches.forEach(m => { m.productContext = ctx; allMatches.push(m) })
+      if (matches.length) console.log(`${label} Medium "${kw.keyword}": ${matches.length} new`)
+      await delay(1500)
+    }
+  }
+
+  if (monitor.includeSubstack !== false) {
+    for (const kw of monitor.keywords) {
+      const ctx = kw.productContext || monitor.productContext || ''
+      const matches = await searchSubstack(kw, { seenIds, delay, MAX_AGE_MS: maxAgeMs })
+      matches.forEach(m => { m.productContext = ctx; allMatches.push(m) })
+      if (matches.length) console.log(`${label} Substack "${kw.keyword}": ${matches.length} new`)
+      await delay(1500)
+    }
+  }
+
+  if (monitor.includeQuora !== false) {
+    for (const kw of monitor.keywords) {
+      const ctx = kw.productContext || monitor.productContext || ''
+      const matches = await searchQuora(kw, { seenIds, delay, MAX_AGE_MS: maxAgeMs })
+      matches.forEach(m => { m.productContext = ctx; allMatches.push(m) })
+      if (matches.length) console.log(`${label} Quora "${kw.keyword}": ${matches.length} new`)
+      await delay(2000)
+    }
+  }
+
+  if (monitor.includeUpworkForum !== false) {
+    for (const kw of monitor.keywords) {
+      const ctx = kw.productContext || monitor.productContext || ''
+      const matches = await searchUpwork(kw, { seenIds, delay, MAX_AGE_MS: maxAgeMs })
+      matches.forEach(m => { m.productContext = ctx; allMatches.push(m) })
+      if (matches.length) console.log(`${label} Upwork "${kw.keyword}": ${matches.length} new`)
+      await delay(3000)
+    }
+  }
+
+  if (monitor.includeFiverrForum !== false) {
+    for (const kw of monitor.keywords) {
+      const ctx = kw.productContext || monitor.productContext || ''
+      const matches = await searchFiverr(kw, { seenIds, delay, MAX_AGE_MS: maxAgeMs })
+      matches.forEach(m => { m.productContext = ctx; allMatches.push(m) })
+      if (matches.length) console.log(`${label} Fiverr "${kw.keyword}": ${matches.length} new`)
+      await delay(3000)
+    }
   }
 
   if (allMatches.length === 0) {

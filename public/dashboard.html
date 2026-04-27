@@ -53,14 +53,58 @@ async function apiFetch(path, opts = {}, apiKey) {
 
 // ── API Key Modal ────────────────────────────────────────────────────────────
 function ApiKeyModal({ onSave }) {
-  const [val, setVal] = useState('');
-  return (
-    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.85)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:999}}>
+  const [mode, setMode] = useState('choose'); // choose | signup | login
+  const [email, setEmail] = useState('');
+  const [name, setName] = useState('');
+  const [key, setKey] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState('');
+  const [err, setErr] = useState('');
+
+  const signup = async () => {
+    setErr(''); setMsg(''); setLoading(true);
+    const r = await fetch('/v1/auth/signup', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email, name }) });
+    const d = await r.json();
+    setLoading(false);
+    if (d.success) setMsg(d.message || 'Check your email for your API key.');
+    else setErr(d.error?.message || 'Signup failed.');
+  };
+
+  if (mode === 'choose') return (
+    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.92)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:999}}>
+      <div className="card" style={{maxWidth:440,width:'90%',padding:36,textAlign:'center'}}>
+        <div style={{fontSize:22,fontWeight:800,marginBottom:8,color:'#c9a84c'}}>📡 Ebenova Insights</div>
+        <div style={{fontSize:14,color:'#666',marginBottom:32}}>Monitor Reddit, HN, Upwork, Fiverr & more for buying-intent posts.</div>
+        <button className="btn-gold" style={{width:'100%',marginBottom:12,fontSize:15}} onClick={()=>setMode('signup')}>Create free account</button>
+        <button className="btn-outline" style={{width:'100%',fontSize:15}} onClick={()=>setMode('login')}>I already have an API key</button>
+      </div>
+    </div>
+  );
+
+  if (mode === 'signup') return (
+    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.92)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:999}}>
       <div className="card" style={{maxWidth:440,width:'90%',padding:32}}>
-        <div style={{fontSize:20,fontWeight:700,marginBottom:8}}>Enter your API key</div>
-        <div style={{fontSize:13,color:'#888',marginBottom:20}}>Your key is stored in your browser only. Get one at ebenova.dev/insights.</div>
-        <input placeholder="ins_..." value={val} onChange={e=>setVal(e.target.value)} style={{marginBottom:16}} onKeyDown={e=>e.key==='Enter'&&val.trim()&&onSave(val.trim())} />
-        <button className="btn-gold" style={{width:'100%'}} onClick={()=>val.trim()&&onSave(val.trim())}>Save key</button>
+        <div style={{fontSize:18,fontWeight:700,marginBottom:20}}>Create free account</div>
+        <div style={{display:'flex',flexDirection:'column',gap:12}}>
+          <input placeholder="Your name (optional)" value={name} onChange={e=>setName(e.target.value)} />
+          <input type="email" placeholder="Email address" value={email} onChange={e=>setEmail(e.target.value)} onKeyDown={e=>e.key==='Enter'&&email&&signup()} />
+          {err && <div style={{color:'#ff8080',fontSize:13}}>{err}</div>}
+          {msg && <div style={{color:'#80ff80',fontSize:13,padding:'10px 14px',background:'#0a2a0a',borderRadius:6}}>{msg}</div>}
+          {!msg && <button className="btn-gold" onClick={signup} disabled={loading||!email}>{loading?'Sending…':'Get my free API key'}</button>}
+          <button onClick={()=>setMode('choose')} style={{background:'none',border:'none',color:'#555',cursor:'pointer',fontSize:13}}>← Back</button>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.92)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:999}}>
+      <div className="card" style={{maxWidth:440,width:'90%',padding:32}}>
+        <div style={{fontSize:18,fontWeight:700,marginBottom:8}}>Enter your API key</div>
+        <div style={{fontSize:13,color:'#888',marginBottom:20}}>Paste the key from your signup email.</div>
+        <input placeholder="ins_..." value={key} onChange={e=>setKey(e.target.value)} style={{marginBottom:16}} onKeyDown={e=>e.key==='Enter'&&key.trim()&&onSave(key.trim())} />
+        <button className="btn-gold" style={{width:'100%',marginBottom:12}} onClick={()=>key.trim()&&onSave(key.trim())}>Open dashboard</button>
+        <button onClick={()=>setMode('choose')} style={{background:'none',border:'none',color:'#555',cursor:'pointer',fontSize:13,display:'block',width:'100%'}}>← Back</button>
       </div>
     </div>
   );
