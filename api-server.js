@@ -13,7 +13,13 @@
 
 import express from 'express'
 import { readFileSync } from 'fs'
-import { resolve } from 'path'
+import { resolve, join } from 'path'
+import { fileURLToPath } from 'url'
+import { dirname } from 'path'
+import stripeRoutes from './routes/stripe.js'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname  = dirname(__filename)
 
 // ── Load .env ──────────────────────────────────────────────────────────────
 try {
@@ -73,6 +79,9 @@ const PLAN_LIMITS = {
 // ── App ────────────────────────────────────────────────────────────────────
 const app = express()
 app.use(express.json())
+app.use(express.static(join(__dirname, 'public')))
+app.get('/', (req, res) => res.sendFile(join(__dirname, 'public', 'index.html')))
+app.get('/dashboard', (req, res) => res.sendFile(join(__dirname, 'public', 'dashboard.html')))
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS, PATCH')
@@ -80,6 +89,10 @@ app.use((req, res, next) => {
   if (req.method === 'OPTIONS') return res.status(200).end()
   next()
 })
+
+// ── Stripe billing ─────────────────────────────────────────────────────────
+// Webhook route uses express.raw() internally — must be mounted before express.json() would re-parse it
+app.use('/v1/billing', stripeRoutes)
 
 // ── GET /health ────────────────────────────────────────────────────────────
 app.get('/health', async (req, res) => {
@@ -129,7 +142,7 @@ app.get('/v1/monitors', async (req, res) => {
 app.post('/v1/monitors', async (req, res) => {
   const auth = await authenticate(req)
   if (!auth.ok) return res.status(auth.status).json({ success: false, error: auth.error })
-  const { name, keywords = [], productContext, alertEmail } = req.body
+  const { name, keywords = [], productContext, alertEmail, slackWebhookUrl } = req.body
   const plan = auth.keyData.insightsPlan || 'starter'
   const limits = PLAN_LIMITS[plan] || PLAN_LIMITS.starter
   if (!name?.trim()) return res.status(400).json({ success: false, error: { code: 'MISSING_FIELD', message: '"name" is required' } })
@@ -150,6 +163,7 @@ app.post('/v1/monitors', async (req, res) => {
     const now = new Date().toISOString()
     const monitor = { id, owner: auth.owner, name: name.trim().slice(0, 100), keywords: cleanKws,
       productContext: (productContext || '').slice(0, 2000), alertEmail: alertEmail || auth.owner,
+      slackWebhookUrl: (slackWebhookUrl || '').slice(0, 500),
       active: true, plan, createdAt: now, lastPollAt: null, totalMatchesFound: 0 }
     await redis.set(`insights:monitor:${id}`, JSON.stringify(monitor))
     await redis.sadd(`insights:monitors:${auth.owner}`, id)

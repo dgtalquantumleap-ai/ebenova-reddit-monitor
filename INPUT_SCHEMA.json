@@ -44,6 +44,36 @@
       "description": "Your Groq API key for AI reply generation. Alternatively set GROQ_API_KEY as an environment variable in the actor settings.",
       "editor": "textfield",
       "prefill": ""
+    },
+    "includeMedium": {
+      "title": "Include Medium",
+      "type": "boolean",
+      "description": "Search Medium tag feeds for matching posts.",
+      "default": true
+    },
+    "includeSubstack": {
+      "title": "Include Substack",
+      "type": "boolean",
+      "description": "Search Substack for matching posts.",
+      "default": true
+    },
+    "includeQuora": {
+      "title": "Include Quora",
+      "type": "boolean",
+      "description": "Search Quora questions for matching keywords.",
+      "default": true
+    },
+    "includeUpworkForum": {
+      "title": "Include Upwork Community",
+      "type": "boolean",
+      "description": "Search the Upwork Community forums for matching posts.",
+      "default": true
+    },
+    "includeFiverrForum": {
+      "title": "Include Fiverr Community",
+      "type": "boolean",
+      "description": "Search the Fiverr Community forums for matching posts.",
+      "default": true
     }
   },
   "required": ["keywords", "productContext"]

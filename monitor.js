@@ -23,7 +23,24 @@ try {
 } catch (_) {}
 
 import { Resend } from 'resend'
+import { Redis } from '@upstash/redis'
 import cron from 'node-cron'
+import searchMedium   from './lib/scrapers/medium.js'
+import searchSubstack from './lib/scrapers/substack.js'
+import searchQuora    from './lib/scrapers/quora.js'
+import searchUpwork   from './lib/scrapers/upwork.js'
+import searchFiverr   from './lib/scrapers/fiverr.js'
+import { sendSlackAlert } from './lib/slack.js'
+
+// ── Redis client (optional — seenIds fallback when process restarts) ──────────
+function getRedis() {
+  const url   = process.env.UPSTASH_REDIS_REST_URL  || process.env.REDIS_URL
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.REDIS_TOKEN
+  if (!url) return null
+  try { return new Redis({ url, token }) } catch { return null }
+}
+const redis = getRedis()
+if (!redis) console.log('[monitor] ⚠️  Redis not configured — seenIds will reset on restart')
 
 // ── Memory monitoring — log every 5 minutes ──────────────────────────────────
 setInterval(() => {
@@ -450,36 +467,6 @@ Respond with SKIP or the reply text only. No labels, no strategy name, no explan
   }
 }
 
-// ── Nairaland keywords ──────────────────────────────────────────────────────
-// Nairaland sections: Business, Properties, Career, Computers, Nairaland
-const NAIRALAND_KEYWORDS = [
-  // — Signova: already-aware —
-  { keyword: 'contract template',       section: 'business',    product: 'Signova'  },
-  { keyword: 'tenancy agreement',       section: 'properties',  product: 'Signova'  },
-  { keyword: 'client refused to pay',   section: 'business',    product: 'Signova'  },
-  { keyword: 'deed of assignment',      section: 'properties',  product: 'Signova'  },
-  { keyword: 'freelance contract',      section: 'career',      product: 'Signova'  },
-  { keyword: 'NDA agreement',           section: 'business',    product: 'Signova'  },
-  { keyword: 'quit notice',             section: 'properties',  product: 'Signova'  },
-  { keyword: 'legal document',          section: 'business',    product: 'Signova'  },
-  // — Signova: Lagos Tenancy Bill 2025 — active legislation, high search volume —
-  { keyword: 'tenancy bill',            section: 'properties',  product: 'Signova'  },
-  { keyword: 'lagos tenancy law',       section: 'properties',  product: 'Signova'  },
-  { keyword: 'landlord tenant dispute', section: 'properties',  product: 'Signova'  },
-  { keyword: 'tenant refused to pay',   section: 'properties',  product: 'Signova'  },
-  { keyword: 'eviction notice',         section: 'properties',  product: 'Signova'  },
-  // — Signova: Nigerian freelancer trigger moments —
-  { keyword: 'how to get paid freelance',section: 'career',     product: 'Signova'  },
-  { keyword: 'client owes me money',    section: 'business',    product: 'Signova'  },
-  { keyword: 'partnership agreement',   section: 'business',    product: 'Signova'  },
-  // — Peekr —
-  { keyword: 'share to classroom',      section: 'education',   product: 'Peekr'    },
-  // — FieldOps —
-  { keyword: 'cleaning company lagos',  section: 'business',    product: 'FieldOps' },
-  { keyword: 'facility management',     section: 'business',    product: 'FieldOps' },
-  { keyword: 'cleaning business app',   section: 'business',    product: 'FieldOps' },
-]
-
 // ── Hacker News keywords ──────────────────────────────────────────────────────
 // HN audience: developers, technical founders, early adopters
 const HN_KEYWORDS = [
@@ -499,9 +486,8 @@ const HN_KEYWORDS = [
   { keyword: 'Stripe alternative',           product: 'PocketBridge' },
 ]
 
-// ── Seen post tracker — persists in memory, resets on restart ────────────────
+// ── Seen post tracker — persists in memory, backed by Redis on restart ───────
 const seenIds = new Set()
-const seenNairalandIds = new Set()
 const seenHnIds = new Set()
 
 // ── Reddit search — public JSON endpoint, no auth needed ─────────────────────
@@ -531,6 +517,13 @@ async function searchReddit(keyword, subreddits) {
 
       for (const post of posts) {
         const p = post.data
+        // Check memory first, then Redis fallback (handles restarts)
+        if (!seenIds.has(p.id) && redis) {
+          try {
+            const inRedis = await redis.get(`seen:v1:${p.id}`)
+            if (inRedis) seenIds.add(p.id) // backfill memory
+          } catch (_) {}
+        }
         if (seenIds.has(p.id)) {
           console.log(`[monitor] ⏭️ Already seen: "${p.title?.slice(0, 50)}" (${p.id})`)
           continue
@@ -545,6 +538,8 @@ async function searchReddit(keyword, subreddits) {
           continue
         }
         seenIds.add(p.id)
+        // Persist to Redis so restarts don't re-alert on the same post (3-day TTL)
+        if (redis) redis.setex(`seen:v1:${p.id}`, 60 * 60 * 24 * 3, '1').catch(() => {})
         console.log(`[monitor] 🎯 NEW MATCH FOUND: "${keyword}" → ${p.title}`)
         console.log(`[monitor] Post URL: https://reddit.com${p.permalink}`)
         console.log(`[monitor] Post age: ${ageHours} hours old`)
@@ -603,7 +598,7 @@ function buildEmailHtml(matches) {
       const items = posts.map(p => `
         <div style="margin-bottom:20px;padding:14px;background:#f9f9f9;border-left:4px solid #c9a84c;border-radius:4px;">
           <div style="font-size:12px;color:#888;margin-bottom:5px;">
-            ${p.source === 'hackernews' ? 'HN' : p.source === 'indiehackers' ? 'IndieHackers' : `r/${p.subreddit}`} · ${p.author} · ${p.score} points · ${p.comments} comments
+            ${p.source === 'hackernews' ? 'HN' : p.source === 'medium' ? '📰 Medium' : p.source === 'substack' ? '📧 Substack' : p.source === 'quora' ? '💬 Quora' : p.source === 'upwork' ? '💼 Upwork Community' : p.source === 'fiverr' ? '🟢 Fiverr Community' : p.source === 'indiehackers' ? 'IndieHackers' : `r/${p.subreddit}`} · ${p.author} · ${p.score} points · ${p.comments} comments
           </div>
           ${p.priority_score >= 8 ? `<div style="display:inline-block;margin-bottom:6px;background:#c9a84c;color:#000;padding:2px 8px;border-radius:3px;font-size:10px;font-weight:700;letter-spacing:0.5px;">🔥 HIGH PRIORITY</div>` : ''}
           <a href="${p.url}" style="font-size:15px;font-weight:600;color:#1a1a1a;text-decoration:none;">${p.title}</a>
@@ -663,49 +658,6 @@ function buildEmailHtml(matches) {
   `
 }
 
-// ── Nairaland search — scrapes public search HTML ──────────────────────────
-async function searchNairaland(keyword, section) {
-  const results = []
-  const encoded = encodeURIComponent(keyword)
-  const url = `https://www.nairaland.com/search/posts/${encoded}/${section}/0/0`
-  try {
-    const res = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; EbenovaMonitor/1.0)', 'Accept': 'text/html' }
-    })
-    if (!res.ok) return results
-    const html = await res.text()
-    const postPattern = /<td[^>]*>\s*<b>\s*<a href="(\/[^"]+)"[^>]*>([^<]+)<\/a>/gi
-    const seen = new Set()
-    let match
-    while ((match = postPattern.exec(html)) !== null) {
-      const path = match[1]
-      const title = match[2].trim()
-      if (!path || !title || path.length < 5) continue
-      const id = `nl_${path.replace(/\//g, '_')}`
-      if (seenNairalandIds.has(id) || seen.has(id)) continue
-      seen.add(id)
-      seenNairalandIds.add(id)
-      const matchIdx = postPattern.lastIndex
-      const snippet = html.slice(matchIdx, matchIdx + 700)
-        .replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 600)
-      results.push({
-        id, title,
-        url: `https://www.nairaland.com${path}`,
-        subreddit: `Nairaland / ${section}`,
-        author: 'nairaland',
-        score: 0, comments: 0,
-        body: snippet,
-        createdAt: new Date().toUTCString(),
-        keyword, source: 'nairaland', approved: true,
-      })
-      if (results.length >= 5) break
-    }
-  } catch (err) {
-    console.error(`[nairaland] fetch error for "${keyword}":`, err.message)
-  }
-  return results
-}
-
 // ── Hacker News search — Algolia API, free, no auth ──────────────────────────
 async function searchHackerNews(keyword) {
   const results = []
@@ -756,7 +708,7 @@ async function sendAlert(matches) {
 
   const keywords = [...new Set(matches.map(m => m.keyword))]
   const sources = [...new Set(matches.map(m => m.source || 'reddit'))]
-  const platformMap = { reddit: 'Reddit', nairaland: 'Nairaland', hackernews: 'HN', indiehackers: 'IH' }
+  const platformMap = { reddit: 'Reddit', hackernews: 'HN', medium: 'Medium', substack: 'Substack', quora: 'Quora', upwork: 'Upwork', fiverr: 'Fiverr', indiehackers: 'IH' }
   const platform = sources.map(s => platformMap[s] || s).join(' + ')
   const subject  = `${platform}: ${matches.length} new mention${matches.length !== 1 ? 's' : ''} — ${keywords.slice(0, 3).join(', ')}${keywords.length > 3 ? '…' : ''}`
 
@@ -830,8 +782,7 @@ async function poll() {
   isPolling = true
   try {
     console.log(`\n[monitor] ========== POLLING CYCLE START: ${new Date().toISOString()} ==========`)
-    console.log(`[monitor] Searching ${KEYWORDS.length} keywords across Reddit`)
-    console.log(`[monitor] Nairaland: ${NAIRALAND_KEYWORDS.length} keywords\n`)
+    console.log(`[monitor] Searching ${KEYWORDS.length} keywords across Reddit + HN\n`)
     const allMatches = []
     let matchesFound = 0
 
@@ -848,18 +799,6 @@ async function poll() {
       await delay(2000)
     }
 
-    // Nairaland
-    for (const { keyword, section, product } of NAIRALAND_KEYWORDS) {
-      const matches = await searchNairaland(keyword, section)
-      if (matches.length > 0) {
-        matches.forEach(m => { m.product = product })
-        console.log(`[monitor] Nairaland "${keyword}": ${matches.length} new`)
-        matchesFound += matches.length
-        allMatches.push(...matches)
-      }
-      await delay(3000)
-    }
-
     // Hacker News
     for (const { keyword, product } of HN_KEYWORDS) {
       console.log(`[hn] Searching "${keyword}"`)
@@ -873,6 +812,75 @@ async function poll() {
       await delay(1500)
     }
 
+    // Medium
+    if (process.env.INCLUDE_MEDIUM !== 'false') {
+      for (const kw of KEYWORDS) {
+        const matches = await searchMedium(kw, { seenIds, delay, MAX_AGE_MS: POST_MAX_AGE_HOURS * 3600000 })
+        if (matches.length > 0) {
+          matches.forEach(m => { m.product = kw.product })
+          console.log(`[medium] "${kw.keyword}": ${matches.length} new`)
+          matchesFound += matches.length
+          allMatches.push(...matches)
+        }
+        await delay(1500)
+      }
+    }
+
+    // Substack
+    if (process.env.INCLUDE_SUBSTACK !== 'false') {
+      for (const kw of KEYWORDS) {
+        const matches = await searchSubstack(kw, { seenIds, delay, MAX_AGE_MS: POST_MAX_AGE_HOURS * 3600000 })
+        if (matches.length > 0) {
+          matches.forEach(m => { m.product = kw.product })
+          console.log(`[substack] "${kw.keyword}": ${matches.length} new`)
+          matchesFound += matches.length
+          allMatches.push(...matches)
+        }
+        await delay(1500)
+      }
+    }
+
+    // Quora
+    if (process.env.INCLUDE_QUORA !== 'false') {
+      for (const kw of KEYWORDS) {
+        const matches = await searchQuora(kw, { seenIds, delay, MAX_AGE_MS: POST_MAX_AGE_HOURS * 3600000 })
+        if (matches.length > 0) {
+          matches.forEach(m => { m.product = kw.product })
+          console.log(`[quora] "${kw.keyword}": ${matches.length} new`)
+          matchesFound += matches.length
+          allMatches.push(...matches)
+        }
+        await delay(2000)
+      }
+    }
+
+    // Upwork Community
+    if (process.env.INCLUDE_UPWORK_FORUM !== 'false') {
+      for (const kw of KEYWORDS) {
+        const matches = await searchUpwork(kw, { seenIds, delay, MAX_AGE_MS: POST_MAX_AGE_HOURS * 3600000 })
+        if (matches.length > 0) {
+          matches.forEach(m => { m.product = kw.product })
+          console.log(`[upwork] "${kw.keyword}": ${matches.length} new`)
+          matchesFound += matches.length
+          allMatches.push(...matches)
+        }
+        await delay(3000)
+      }
+    }
+
+    // Fiverr Community
+    if (process.env.INCLUDE_FIVERR_FORUM !== 'false') {
+      for (const kw of KEYWORDS) {
+        const matches = await searchFiverr(kw, { seenIds, delay, MAX_AGE_MS: POST_MAX_AGE_HOURS * 3600000 })
+        if (matches.length > 0) {
+          matches.forEach(m => { m.product = kw.product })
+          console.log(`[fiverr] "${kw.keyword}": ${matches.length} new`)
+          matchesFound += matches.length
+          allMatches.push(...matches)
+        }
+        await delay(3000)
+      }
+    }
 
     if (allMatches.length > 0) {
       console.log(`[monitor] Total new matches: ${allMatches.length} — generating reply drafts…`)
@@ -896,6 +904,11 @@ async function poll() {
 
       console.log(`[monitor] Sending alert email…`)
       await sendAlert(allMatches)
+      const slackUrl = process.env.SLACK_WEBHOOK_URL
+      if (slackUrl) {
+        await sendSlackAlert(slackUrl, allMatches)
+        console.log(`[monitor] Slack alert sent — ${allMatches.length} matches`)
+      }
     } else {
       console.log('[monitor] No new matches this cycle')
     }
@@ -914,8 +927,8 @@ async function poll() {
 
 // ── Startup ───────────────────────────────────────────────────────────────────
 console.log('━'.repeat(60))
-console.log('  Ebenova Social Monitor (Reddit + Nairaland + HN)')
-console.log(`  Reddit: ${KEYWORDS.length} · Nairaland: ${NAIRALAND_KEYWORDS.length} · HN: ${HN_KEYWORDS.length} keywords`)
+console.log('  Ebenova Social Monitor (Reddit + HN + Medium + Substack + Quora + Upwork + Fiverr)')
+console.log(`  Reddit: ${KEYWORDS.length} · HN: ${HN_KEYWORDS.length} keywords`)
 console.log(`  Polling every ${POLL_MINUTES} minutes`)
 console.log(`  Post max age: ${POST_MAX_AGE_HOURS} hours (adjust with POST_MAX_AGE_HOURS)`)
 console.log(`  Alerts → ${ALERT_EMAIL}`)

@@ -26,6 +26,7 @@ try {
 import { Resend }  from 'resend'
 import { Redis }   from '@upstash/redis'
 import cron        from 'node-cron'
+import { sendSlackAlert } from './lib/slack.js'
 
 const RESEND_API_KEY   = process.env.RESEND_API_KEY
 const GROQ_API_KEY     = process.env.GROQ_API_KEY
@@ -60,8 +61,20 @@ function hasSeen(monitorId, postId) {
   return seenMap.has(`${monitorId}:${postId}`)
 }
 
+// Redis-backed seen check — backfills memory so restarts don't re-alert (3-day TTL)
+async function hasSeenWithRedis(monitorId, postId) {
+  if (hasSeen(monitorId, postId)) return true
+  if (!redis) return false
+  try {
+    const r = await redis.get(`seen:v2:${monitorId}:${postId}`)
+    if (r) { seenMap.set(`${monitorId}:${postId}`, true); return true }
+  } catch (_) {}
+  return false
+}
+
 function markSeen(monitorId, postId) {
   seenMap.set(`${monitorId}:${postId}`, true)
+  if (redis) redis.setex(`seen:v2:${monitorId}:${postId}`, 60 * 60 * 24 * 3, '1').catch(() => {})
   if (seenMap.size > MAX_SEEN) {
     // Prune oldest 10k entries
     const keys = [...seenMap.keys()].slice(0, 10000)
@@ -166,7 +179,7 @@ async function semanticSearchSubreddit(monitorId, subreddit, keywordEntry, query
 
     for (const post of posts) {
       const p = post.data
-      if (hasSeen(monitorId, p.id)) continue
+      if (await hasSeenWithRedis(monitorId, p.id)) continue
       if (Date.now() - p.created_utc * 1000 > 60 * 60 * 1000) continue
 
       const postText = `${p.title} ${(p.selftext || '').slice(0, 400)}`
@@ -221,7 +234,7 @@ async function searchReddit(monitorId, keywordEntry) {
 
       for (const post of posts) {
         const p = post.data
-        if (hasSeen(monitorId, p.id)) continue
+        if (await hasSeenWithRedis(monitorId, p.id)) continue
         if (Date.now() - p.created_utc * 1000 > 60 * 60 * 1000) continue
         markSeen(monitorId, p.id)
         results.push({
@@ -247,48 +260,6 @@ async function searchReddit(monitorId, keywordEntry) {
   return results
 }
 
-// ── Nairaland search ──────────────────────────────────────────────────────────
-async function searchNairaland(monitorId, keywordEntry) {
-  const { keyword, nairalandSection = 'business' } = keywordEntry
-  const results = []
-  const encoded = encodeURIComponent(keyword)
-  const url = `https://www.nairaland.com/search/posts/${encoded}/${nairalandSection}/0/0`
-  try {
-    const res = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; EbenovaInsights/2.0)', 'Accept': 'text/html' },
-    })
-    if (!res.ok) return results
-    const html = await res.text()
-    const pattern = /<td[^>]*>\s*<b>\s*<a href="(\/[^"]+)"[^>]*>([^<]+)<\/a>/gi
-    const seen = new Set()
-    let match
-    while ((match = pattern.exec(html)) !== null) {
-      const path  = match[1]
-      const title = match[2].trim()
-      if (!path || !title || path.length < 5) continue
-      const id = `nl_${path.replace(/\//g, '_')}`
-      if (hasSeen(monitorId, id) || seen.has(id)) continue
-      seen.add(id)
-      markSeen(monitorId, id)
-      const snippet = html.slice(pattern.lastIndex, pattern.lastIndex + 700)
-        .replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 500)
-      results.push({
-        id, title,
-        url:       `https://www.nairaland.com${path}`,
-        subreddit: `Nairaland/${nairalandSection}`,
-        author:    'nairaland',
-        score:     0, comments: 0,
-        body:      snippet,
-        createdAt: new Date().toISOString(),
-        keyword,   source: 'nairaland', approved: true,
-      })
-      if (results.length >= 5) break
-    }
-  } catch (err) {
-    console.error(`[v2] Nairaland fetch error "${keyword}":`, err.message)
-  }
-  return results
-}
 
 // ── AI reply draft ────────────────────────────────────────────────────────────
 // Uses monitor's productContext so each customer's drafts are tailored to them.
@@ -355,7 +326,7 @@ function buildAlertEmail(monitor, matches) {
     const items = posts.map(p => `
       <div style="margin-bottom:18px;padding:14px;background:#f9f9f9;border-left:4px solid #c9a84c;border-radius:4px;">
         <div style="font-size:12px;color:#888;margin-bottom:5px;">
-          ${p.source === 'nairaland' ? '🇳🇬' : '📌'} ${p.subreddit} · u/${p.author} · ${p.score} upvotes
+          ${p.source === 'hackernews' ? 'HN' : p.source === 'medium' ? '📰 Medium' : p.source === 'substack' ? '📧 Substack' : p.source === 'quora' ? '💬 Quora' : p.source === 'upwork' ? '💼 Upwork' : p.source === 'fiverr' ? '🟢 Fiverr' : `r/${p.subreddit}`} · u/${p.author} · ${p.score} upvotes
         </div>
         <a href="${p.url}" style="font-size:15px;font-weight:600;color:#1a1a1a;text-decoration:none;">${p.title}</a>
         ${p.body ? `<p style="font-size:13px;color:#555;margin:7px 0 0;line-height:1.5;">${p.body}${p.body.length >= 300 ? '…' : ''}</p>` : ''}
@@ -470,18 +441,6 @@ async function runMonitor(monitor) {
       }
     }
 
-    // Nairaland (only if keyword has a nairalandSection set)
-    if (kw.nairalandSection) {
-      const nlMatches = await searchNairaland(monitor.id, kw)
-      for (const m of nlMatches) {
-        m.productContext = ctx
-        allMatches.push(m)
-      }
-      if (nlMatches.length > 0) {
-        console.log(`${label} Nairaland "${kw.keyword}": ${nlMatches.length} new`)
-      }
-      await delay(3000)
-    }
   }
 
   if (allMatches.length === 0) {
@@ -519,6 +478,13 @@ async function runMonitor(monitor) {
   }
 
   await sendMonitorAlert(monitor, allMatches)
+
+  // Slack alert (uses per-monitor webhook if set, falls back to global env var)
+  const slackUrl = monitor.slackWebhookUrl || process.env.SLACK_WEBHOOK_URL
+  if (slackUrl && allMatches.length > 0) {
+    await sendSlackAlert(slackUrl, allMatches)
+    console.log(`${label} Slack alert sent — ${allMatches.length} matches`)
+  }
 }
 
 // ── Main poll cycle ───────────────────────────────────────────────────────────
