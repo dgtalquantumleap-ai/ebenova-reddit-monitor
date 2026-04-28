@@ -766,5 +766,29 @@
   </div>
 </footer>
 
+<!-- Invite-code propagation: if landed via ?invite=CODE, rewrite /dashboard
+     links to carry the code through to the AuthModal signup flow. -->
+<script>
+(function () {
+  var params = new URLSearchParams(location.search);
+  var invite = params.get('invite');
+  if (!invite) return;
+  // Persist for return visits within this session
+  try { sessionStorage.setItem('ebi_invite', invite); } catch (e) {}
+  // Append ?invite=CODE to every internal /dashboard link
+  document.querySelectorAll('a[href^="/dashboard"]').forEach(function (a) {
+    var href = a.getAttribute('href');
+    if (!href) return;
+    var sep = href.indexOf('?') === -1 ? '?' : '&';
+    a.setAttribute('href', href + sep + 'invite=' + encodeURIComponent(invite));
+  });
+  // Lightweight badge so the visitor knows the invite is active
+  var badge = document.createElement('div');
+  badge.textContent = '✦ DEMO INVITE ACTIVE · GROWTH PLAN · 30 DAYS';
+  badge.style.cssText = 'position:fixed;top:14px;right:14px;z-index:9999;background:rgba(255,107,53,.12);border:1px solid rgba(255,107,53,.4);color:#FF6B35;padding:8px 14px;border-radius:6px;font-size:11px;font-weight:700;letter-spacing:.5px;font-family:JetBrains Mono,monospace;box-shadow:0 4px 12px rgba(255,107,53,.15);';
+  document.body.appendChild(badge);
+})();
+</script>
+
 </body>
 </html>

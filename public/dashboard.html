@@ -215,11 +215,20 @@ function AuthModal({ onSave }) {
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
   const [err, setErr] = useState('');
+  // Read invite code from URL on first render, persist in sessionStorage
+  // so a refresh or magic-link bounce doesn't lose it.
+  const [inviteCode] = useState(() => {
+    const p = new URLSearchParams(location.search);
+    const fromUrl = p.get('invite');
+    if (fromUrl) sessionStorage.setItem('ebi_invite', fromUrl);
+    return sessionStorage.getItem('ebi_invite') || '';
+  });
 
   const submit = async () => {
     if (!email.includes('@')) return;
     setErr(''); setLoading(true);
-    const r = await fetch('/v1/auth/signup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email})});
+    const body = inviteCode ? { email, inviteCode } : { email };
+    const r = await fetch('/v1/auth/signup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     const d = await r.json();
     setLoading(false);
     if (d.success) setSent(true);
@@ -239,6 +248,11 @@ function AuthModal({ onSave }) {
             <>
               <div className="term-eyebrow">SECURE SIGN-IN // MAGIC LINK</div>
               <h2 className="term-h" id="term-h">Open the <em>terminal.</em></h2>
+              {inviteCode && (
+                <div style={{background:'rgba(255,107,53,.08)',border:'1px solid rgba(255,107,53,.3)',color:'#FF6B35',padding:'10px 14px',borderRadius:6,fontSize:12,fontWeight:600,letterSpacing:'.5px',marginBottom:14,fontFamily:"'JetBrains Mono',monospace"}}>
+                  ✦ DEMO INVITE ACTIVE · GROWTH PLAN · 30 DAYS
+                </div>
+              )}
               <p className="term-sub">Enter your email — we send you a magic link. No password, no setup, no credit card. You're inside the live feed in under a minute.</p>
               <input
                 className="term-input"
