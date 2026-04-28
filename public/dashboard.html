@@ -409,7 +409,7 @@ function MatchCard({ match, monitorId, apiKey, onAction }) {
     setDrafting(true);
     const r = await apiFetch('/v1/matches/draft',{method:'POST',body:JSON.stringify({monitor_id:monitorId,match_id:match.id})},apiKey);
     setDrafting(false);
-    if (r.ok) onAction('draft', match.id, r.data.draft);
+    if (r.ok) onAction('draft', match.id, r.data.draft, r.data.draftedBy);
   };
 
   const feedback = async (fb) => {
@@ -439,7 +439,10 @@ function MatchCard({ match, monitorId, apiKey, onAction }) {
       </div>
       {match.draft && (
         <div className="draft-box">
-          <div className="draft-header"><i className="ph-bold ph-pencil-line"></i> Suggested reply</div>
+          <div className="draft-header" style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+            <span><i className="ph-bold ph-pencil-line"></i> Suggested reply</span>
+            {match.draftedBy && <span style={{fontSize:9,fontWeight:600,opacity:.55,letterSpacing:'.5px'}}>[{match.draftedBy}]</span>}
+          </div>
           <div className="draft-text">{match.draft}</div>
         </div>
       )}
@@ -589,8 +592,8 @@ function MatchesFeed({ apiKey, monitors }) {
 
   useEffect(()=>{ if (selId) load(selId); },[selId,load]);
 
-  const handleAction = (type, mid, newDraft) => {
-    if (type==='draft') setMatches(ms=>ms.map(m=>m.id===mid?{...m,draft:newDraft}:m));
+  const handleAction = (type, mid, newDraft, newDraftedBy) => {
+    if (type==='draft') setMatches(ms=>ms.map(m=>m.id===mid?{...m,draft:newDraft,draftedBy:newDraftedBy}:m));
   };
 
   const selMonitor = monitors.find(m=>m.id===selId);
