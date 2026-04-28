@@ -561,7 +561,26 @@ async function runMonitor(monitor) {
 // ── Main poll cycle ───────────────────────────────────────────────────────────
 // Loads all active monitor IDs from Redis, fetches each monitor's config,
 // then runs them with a concurrency limit so we don't hammer Reddit.
+//
+// F9: isPolling guard prevents cron from stacking cycles on top of each other.
+// If a previous poll() is still running when the cron tick fires, skip — don't
+// double Reddit's load and risk rate-bans.
+let isPolling = false
+
 async function poll() {
+  if (isPolling) {
+    console.log('[v2] previous cycle still running, skipping this tick')
+    return
+  }
+  isPolling = true
+  try {
+    return await pollInner()
+  } finally {
+    isPolling = false
+  }
+}
+
+async function pollInner() {
   const cycleStart = Date.now()
   console.log(`\n[v2] ===== POLL START: ${new Date().toISOString()} =====`)
 
