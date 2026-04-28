@@ -17,6 +17,7 @@ import { fileURLToPath } from 'url'
 import { dirname } from 'path'
 import stripeRoutes, { webhookHandler } from './routes/stripe.js'
 import { loadEnv } from './lib/env.js'
+import { makeCorsMiddleware } from './lib/cors.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname  = dirname(__filename)
@@ -95,13 +96,11 @@ app.use(express.json())
 app.use(express.static(join(__dirname, 'public')))
 app.get('/', (req, res) => res.sendFile(join(__dirname, 'public', 'index.html')))
 app.get('/dashboard', (req, res) => res.sendFile(join(__dirname, 'public', 'dashboard.html')))
-app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS, PATCH')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
-  if (req.method === 'OPTIONS') return res.status(200).end()
-  next()
-})
+
+// CORS allowlist (replaces wildcard). Set ALLOWED_ORIGINS env to override.
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://ebenova.dev,https://ebenova-insights-production.up.railway.app')
+  .split(',').map(s => s.trim()).filter(Boolean)
+app.use(makeCorsMiddleware(ALLOWED_ORIGINS))
 
 // ── Stripe billing (checkout + portal) ─────────────────────────────────────
 // Note: /v1/billing/webhook is mounted above, before express.json().
