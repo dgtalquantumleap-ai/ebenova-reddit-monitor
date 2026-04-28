@@ -282,9 +282,8 @@ function Sidebar({ tab, setTab, userEmail, plan, monitorCount, onSignOut }) {
   const initial = (userEmail||'?')[0].toUpperCase();
 
   const items = [
-    { id:'search', icon:'ph-magnifying-glass', label:'Search' },
-    { id:'feed',   icon:'ph-newspaper',        label:'Monitor Feed', count: monitorCount > 0 ? monitorCount : null },
-    { id:'create', icon:'ph-plus-circle',      label:'New Monitor' },
+    { id:'find', icon:'ph-magnifying-glass-plus', label:'Find Customers' },
+    { id:'feed', icon:'ph-newspaper',             label:'Monitor Feed', count: monitorCount > 0 ? monitorCount : null },
   ];
 
   return (
@@ -708,6 +707,328 @@ function MatchesFeed({ apiKey, monitors }) {
 }
 
 // ΓöÇΓöÇ Create Monitor ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+// ── Find Customers (unified flow) ────────────────────────────────────────────
+function FindCustomers({ apiKey, onMonitorCreated }) {
+  const [step, setStep] = useState(1) // 1=input, 2=generating, 3=review, 4=confirm, 5=confirmed
+  const [description, setDescription] = useState('')
+  const [suggestion, setSuggestion] = useState(null)
+  const [counts, setCounts] = useState({})
+  const [picked, setPicked] = useState(new Set())
+  const [customKw, setCustomKw] = useState('')
+  const [monitorName, setMonitorName] = useState('')
+  const [savedMonitorId, setSavedMonitorId] = useState('')
+  const [sampleMatches, setSampleMatches] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [err, setErr] = useState('')
+
+  const intentMeta = {
+    buying:     { icon: '🎯', label: 'BUYING INTENT' },
+    pain:       { icon: '💢', label: 'PAIN POINT' },
+    comparison: { icon: '⚖️', label: 'COMPARISON' },
+    question:   { icon: '❓', label: 'QUESTION' },
+  };
+
+  const generateSuggestions = async () => {
+    if (description.trim().length < 20) { setErr('Tell me a bit more — at least 20 characters.'); return; }
+    setErr(''); setLoading(true); setStep(2);
+    const r = await apiFetch('/v1/find/suggest', { method:'POST', body: JSON.stringify({ description }) }, apiKey);
+    if (!r.ok) { setErr(r.data?.error?.message || 'Could not generate suggestions.'); setLoading(false); setStep(1); return; }
+    setSuggestion(r.data);
+    setMonitorName(r.data.suggestedName || 'My Monitor');
+    const preChecked = new Set((r.data.keywords || []).filter(k => k.confidence === 'high').map(k => k.keyword));
+    setPicked(preChecked);
+    // Fire preview-counts in background (non-blocking)
+    const allKws = (r.data.keywords || []).map(k => k.keyword);
+    apiFetch('/v1/find/preview-counts', { method:'POST', body: JSON.stringify({ keywords: allKws }) }, apiKey)
+      .then(c => { if (c.ok) setCounts(c.data.counts || {}); });
+    setLoading(false);
+    setStep(3);
+  };
+
+  const togglePick = (kw) => {
+    const next = new Set(picked);
+    if (next.has(kw)) next.delete(kw); else next.add(kw);
+    setPicked(next);
+  };
+
+  const addCustom = () => {
+    if (!customKw.trim()) return;
+    setPicked(new Set([...picked, customKw.trim()]));
+    setCustomKw('');
+  };
+
+  const totalMatches = () => {
+    let total = 0;
+    for (const kw of picked) {
+      const c = counts[kw];
+      if (c?.count) total += c.count;
+    }
+    return total;
+  };
+
+  const saveAsMonitor = () => {
+    if (picked.size === 0) { setErr('Pick at least one keyword.'); return; }
+    setErr('');
+    setStep(4);
+  };
+
+  const confirmMonitor = async () => {
+    setLoading(true); setErr('');
+    const allKws = [...picked];
+    const body = {
+      name: monitorName.trim() || 'My Monitor',
+      keywords: allKws.map(k => ({ keyword: k, productContext: suggestion?.productContext || description })),
+      productContext: suggestion?.productContext || description,
+    };
+    const m = await apiFetch('/v1/monitors', { method:'POST', body: JSON.stringify(body) }, apiKey);
+    if (!m.ok) { setErr(m.data?.error?.message || 'Could not create monitor.'); setLoading(false); setStep(3); return; }
+    setSavedMonitorId(m.data.monitor_id);
+    // Pull sample matches from already-cached counts
+    const samples = [];
+    for (const kw of allKws.slice(0, 5)) {
+      const c = counts[kw];
+      if (c?.samples) samples.push(...c.samples.slice(0, 1));
+      if (samples.length >= 5) break;
+    }
+    setSampleMatches(samples);
+    setLoading(false);
+    setStep(5);
+    onMonitorCreated();
+    setTimeout(() => onMonitorCreated('feed'), 4000);
+  };
+
+  // ── State 1: Input ──────────────────────────────────────────────────────
+  if (step === 1) {
+    return (
+      <>
+        <div className="page-header">
+          <div>
+            <h1 className="page-title">Find <em style={{fontStyle:'italic',color:'#FF6B35',fontWeight:400}}>customers</em></h1>
+            <p className="page-subtitle">Describe what you sell. The AI suggests keywords, runs them live, and shows you what's worth replying to.</p>
+          </div>
+          <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:'#9A3412',background:'#FFF7F2',border:'1px solid #FED7AA',padding:'5px 10px',borderRadius:999,letterSpacing:1.5,display:'inline-flex',alignItems:'center',gap:6}}>
+            <span style={{width:5,height:5,borderRadius:'50%',background:'#FF6B35'}}></span> STEP 1 OF 3 · INPUT
+          </span>
+        </div>
+        <div className="page-body" style={{maxWidth:780}}>
+          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:'#FF6B35',letterSpacing:3,marginBottom:18}}>// PROMPT · WHAT YOU SELL</div>
+          <h2 style={{fontFamily:"'Crimson Pro',Georgia,serif",fontSize:36,fontWeight:700,letterSpacing:-1,lineHeight:1.05,marginBottom:14}}>
+            Tell me what you sell.<br/>I'll find your <em style={{fontStyle:'italic',color:'#FF6B35',fontWeight:400}}>next customer</em> in 4 seconds.
+          </h2>
+          <p style={{color:'#475569',fontSize:15,lineHeight:1.65,maxWidth:620,marginBottom:30}}>
+            2–3 sentences. Mention what you sell, who buys, and what frustrates them about existing options.
+          </p>
+          <textarea className="inp" rows={5} value={description} onChange={e=>setDescription(e.target.value)}
+            style={{padding:'18px 20px',fontSize:15,lineHeight:1.65,fontFamily:'inherit'}}
+            placeholder="e.g. I run a small SEO agency. We help SaaS startups get their first 10k organic visitors. Most clients come to us frustrated with content agencies that didn't move the needle."
+          />
+          {err && <div className="alert alert-error" style={{marginTop:12}}><i className="ph ph-warning-circle"></i>{err}</div>}
+          <div style={{display:'flex',gap:12,alignItems:'center',marginTop:18,flexWrap:'wrap'}}>
+            <button className="btn btn-primary" onClick={generateSuggestions} disabled={loading||description.trim().length < 20} style={{padding:'14px 24px',fontSize:14}}>
+              <i className="ph-bold ph-magnifying-glass"></i> Find what's out there <span style={{fontSize:16}}>→</span>
+            </button>
+          </div>
+          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:'#94A3B8',letterSpacing:1,marginTop:24,display:'flex',gap:18,flexWrap:'wrap'}}>
+            <span><b style={{color:'#16A34A'}}>●</b> 4-SECOND ANALYSIS</span><span>9 PLATFORMS</span><span>NO COMMITMENT — REVIEW BEFORE SAVING</span>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  // ── State 2: Generating ─────────────────────────────────────────────────
+  if (step === 2) {
+    return (
+      <>
+        <div className="page-header">
+          <div>
+            <h1 className="page-title">Find <em style={{fontStyle:'italic',color:'#FF6B35',fontWeight:400}}>customers</em></h1>
+            <p className="page-subtitle">Generating signal — keywords stream in.</p>
+          </div>
+          <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:'#9A3412',background:'#FFF7F2',border:'1px solid #FED7AA',padding:'5px 10px',borderRadius:999,letterSpacing:1.5,display:'inline-flex',alignItems:'center',gap:6}}>
+            <span style={{width:5,height:5,borderRadius:'50%',background:'#16A34A'}}></span> GENERATING
+          </span>
+        </div>
+        <div className="page-body" style={{maxWidth:880}}>
+          <div style={{background:'#0a0907',color:'#F5EFE0',border:'1px solid #1E293B',borderRadius:10,overflow:'hidden',fontFamily:"'JetBrains Mono',monospace",fontSize:12.5}}>
+            <div style={{background:'linear-gradient(to bottom,#1f1a13,#14110d)',borderBottom:'1px solid #2a2419',padding:'11px 16px',display:'flex',alignItems:'center',gap:12,color:'#6f6757',fontSize:11,letterSpacing:1.5}}>
+              <div style={{display:'flex',gap:6}}>
+                <span style={{width:10,height:10,borderRadius:'50%',background:'#3a3328'}}></span>
+                <span style={{width:10,height:10,borderRadius:'50%',background:'#3a3328'}}></span>
+                <span style={{width:10,height:10,borderRadius:'50%',background:'#3a3328'}}></span>
+              </div>
+              <span>EBNV-1 // KEYWORD GENERATOR</span>
+              <span style={{marginLeft:'auto',color:'#34d058',display:'inline-flex',alignItems:'center',gap:6}}>
+                <span style={{width:6,height:6,borderRadius:'50%',background:'#34d058',boxShadow:'0 0 6px #34d058'}}></span>
+                ANALYZING
+              </span>
+            </div>
+            <div style={{padding:'18px 20px',lineHeight:1.85}}>
+              <div style={{marginBottom:4}}><span style={{color:'#FF6B35'}}>$</span> analyze --input "{description.slice(0, 50)}…"</div>
+              <div style={{marginBottom:4,color:'#6f6757'}}># model: anthropic-haiku-4-5 · streaming</div>
+              <div style={{marginBottom:4}}><span style={{color:'#34d058'}}>✓</span> parsed product context</div>
+              <div style={{marginBottom:4}}><span style={{color:'#34d058'}}>✓</span> categorizing intent…</div>
+              <div style={{marginBottom:4}}><span style={{color:'#FF6B35'}}>$</span> render --output review-screen</div>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  // ── State 3: Self-review ────────────────────────────────────────────────
+  if (step === 3) {
+    const groups = ['buying', 'pain', 'comparison', 'question'];
+    return (
+      <>
+        <div className="page-header">
+          <div>
+            <h1 className="page-title">Self review · <em style={{fontStyle:'italic',color:'#FF6B35',fontWeight:400}}>verify before you commit</em></h1>
+            <p className="page-subtitle">The AI suggests. The data confirms. Toggle keywords, edit, then save.</p>
+          </div>
+          <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:'#9A3412',background:'#FFF7F2',border:'1px solid #FED7AA',padding:'5px 10px',borderRadius:999,letterSpacing:1.5,display:'inline-flex',alignItems:'center',gap:6}}>
+            <span style={{width:5,height:5,borderRadius:'50%',background:'#FF6B35'}}></span> STEP 3 OF 3 · REVIEW
+          </span>
+        </div>
+        <div className="page-body" style={{maxWidth:1100}}>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 320px',gap:24}}>
+            <div>
+              {groups.map(intent => {
+                const items = (suggestion?.keywords || []).filter(k => k.intentType === intent);
+                if (items.length === 0) return null;
+                const meta = intentMeta[intent];
+                return (
+                  <div key={intent} className="card" style={{padding:'20px 22px',marginBottom:14}}>
+                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,letterSpacing:2.5,color:'#9A3412',display:'flex',alignItems:'center',gap:10,marginBottom:14}}>
+                      <span style={{fontSize:16}}>{meta.icon}</span>{meta.label}
+                    </div>
+                    <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                      {items.map(k => {
+                        const on = picked.has(k.keyword);
+                        const c = counts[k.keyword];
+                        return (
+                          <div key={k.keyword} onClick={()=>togglePick(k.keyword)}
+                            style={{display:'flex',alignItems:'center',gap:14,padding:'11px 14px',borderRadius:8,cursor:'pointer',
+                              background:on?'#FFF7F2':'transparent',border:on?'1px solid #FED7AA':'1px solid transparent',opacity:on?1:0.7}}>
+                            <div style={{width:18,height:18,borderRadius:4,border:on?'1.5px solid #FF6B35':'1.5px solid #CBD5E1',background:on?'#FF6B35':'transparent',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,color:'#fff',flexShrink:0}}>
+                              {on?'✓':''}
+                            </div>
+                            <div style={{flex:1,fontSize:14,color:'#0F172A',fontWeight:500}}>{k.keyword}</div>
+                            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:c?(c.count > 5 ? '#16A34A' : c.count > 0 ? '#D97706' : '#94A3B8'):'#94A3B8',fontWeight:600,flexShrink:0}}>
+                              {c ? `${c.count} matches/wk` : '…'}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+              <div className="card" style={{padding:14,background:'#F8FAFC',border:'1px dashed #CBD5E1'}}>
+                <div style={{display:'flex',gap:8,alignItems:'center'}}>
+                  <input type="text" placeholder="Add your own keyword…" value={customKw} onChange={e=>setCustomKw(e.target.value)}
+                    onKeyDown={e=>e.key==='Enter'&&addCustom()}
+                    style={{flex:1,background:'#fff',border:'1px solid #D1D5DB',color:'#0F172A',borderRadius:6,padding:'8px 12px',fontSize:13,outline:'none'}} />
+                  <button className="btn btn-white btn-sm" onClick={addCustom}><i className="ph ph-plus"></i> Add</button>
+                </div>
+              </div>
+              {err && <div className="alert alert-error" style={{marginTop:14}}><i className="ph ph-warning-circle"></i>{err}</div>}
+            </div>
+
+            <div style={{position:'sticky',top:20,alignSelf:'start'}}>
+              <div style={{background:'#0a0907',color:'#F5EFE0',borderRadius:10,border:'1px solid #1E293B',overflow:'hidden',boxShadow:'0 20px 40px rgba(0,0,0,0.3)'}}>
+                <div style={{background:'linear-gradient(to bottom,#1f1a13,#14110d)',borderBottom:'1px solid #2a2419',padding:'11px 16px',fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:'#6f6757',letterSpacing:2,display:'flex',alignItems:'center',gap:10}}>
+                  <span style={{width:6,height:6,borderRadius:'50%',background:'#34d058',boxShadow:'0 0 6px #34d058'}}></span> LIVE TALLY
+                </div>
+                <div style={{padding:'22px 22px 18px'}}>
+                  <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:48,fontWeight:700,color:'#FF6B35',letterSpacing:-2,lineHeight:1,marginBottom:6}}>
+                    {totalMatches()}<small style={{fontSize:14,color:'#6f6757',fontWeight:500,letterSpacing:1,marginLeft:6}}>matches/wk</small>
+                  </div>
+                  <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:'#b9b09f',letterSpacing:1}}>{picked.size} KEYWORDS SELECTED</div>
+                </div>
+                <div style={{padding:'18px 22px',borderTop:'1px solid #2a2419',background:'rgba(255,107,53,0.04)'}}>
+                  <button className="btn btn-primary" onClick={saveAsMonitor} disabled={picked.size===0}
+                    style={{width:'100%',padding:'13px 16px',fontSize:13,background:'#FF6B35'}}>
+                    <i className="ph-bold ph-floppy-disk"></i> Save as monitor →
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  // ── State 4: Confirm ────────────────────────────────────────────────────
+  if (step === 4) {
+    return (
+      <>
+        <div className="page-header">
+          <div>
+            <h1 className="page-title">Confirm <em style={{fontStyle:'italic',color:'#FF6B35',fontWeight:400}}>your monitor</em></h1>
+            <p className="page-subtitle">Last chance to edit before we start scanning.</p>
+          </div>
+        </div>
+        <div className="page-body" style={{maxWidth:560}}>
+          <div className="card card-p">
+            <div className="field" style={{marginBottom:14}}>
+              <label className="label">Monitor name</label>
+              <input className="inp" value={monitorName} onChange={e=>setMonitorName(e.target.value)} />
+            </div>
+            <div style={{padding:'12px 0',borderBottom:'1px solid #F1F5F9',display:'flex',justifyContent:'space-between'}}>
+              <span style={{fontSize:12,color:'#94A3B8',fontFamily:"'JetBrains Mono',monospace",letterSpacing:1}}>KEYWORDS</span>
+              <span style={{fontSize:13.5,fontWeight:500,color:'#0F172A'}}>{picked.size} selected</span>
+            </div>
+            <div style={{padding:'12px 0',borderBottom:'1px solid #F1F5F9',display:'flex',justifyContent:'space-between'}}>
+              <span style={{fontSize:12,color:'#94A3B8',fontFamily:"'JetBrains Mono',monospace",letterSpacing:1}}>EXPECTED VOLUME</span>
+              <span style={{fontSize:13.5,fontWeight:500,color:'#16A34A'}}>~{totalMatches()} matches/week</span>
+            </div>
+            {err && <div className="alert alert-error" style={{marginTop:14}}><i className="ph ph-warning-circle"></i>{err}</div>}
+            <div style={{display:'flex',gap:12,marginTop:18}}>
+              <button className="btn btn-ghost" onClick={()=>setStep(3)}>← Back</button>
+              <button className="btn btn-primary" onClick={confirmMonitor} disabled={loading} style={{flex:1}}>
+                {loading?'Creating…':<><i className="ph-bold ph-broadcast"></i> Confirm and start monitoring</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  // ── State 5: Confirmed ──────────────────────────────────────────────────
+  return (
+    <>
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Monitor <em style={{fontStyle:'italic',color:'#16A34A',fontWeight:400}}>active</em></h1>
+          <p className="page-subtitle">First matches loaded. Taking you to the feed in 4 seconds.</p>
+        </div>
+      </div>
+      <div className="page-body" style={{maxWidth:780}}>
+        <div className="alert alert-success" style={{marginBottom:18,padding:'14px 18px'}}>
+          <i className="ph-bold ph-check-circle" style={{fontSize:20}}></i>
+          <span style={{fontWeight:600}}>Monitor active. {sampleMatches.length} match{sampleMatches.length===1?'':'es'} already loaded.</span>
+        </div>
+        {sampleMatches.length > 0 && (
+          <>
+            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:'#94A3B8',letterSpacing:2,marginBottom:10}}>// RECENT MATCHES</div>
+            {sampleMatches.slice(0, 5).map((m, i) => (
+              <div key={i} className="card" style={{padding:'14px 18px',marginBottom:8}}>
+                <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:6,flexWrap:'wrap'}}>
+                  <span className={`badge badge-${m.source||'reddit'}`}>{m.source}</span>
+                </div>
+                <a href={m.url} target="_blank" rel="noreferrer" style={{fontSize:14,fontWeight:500,color:'#0F172A',textDecoration:'none',display:'block'}}>{m.title}</a>
+              </div>
+            ))}
+          </>
+        )}
+      </div>
+    </>
+  );
+}
+
 function CreateMonitor({ apiKey, onCreated }) {
   const [form, setForm] = useState({
     name:'', keywords:'', subreddits:'', productContext:'', alertEmail:'', slackWebhookUrl:'',
@@ -928,7 +1249,7 @@ function App() {
     if (k) { localStorage.setItem('ebi_key', k); history.replaceState({},'',' /dashboard'); return k; }
     return localStorage.getItem('ebi_key') || '';
   });
-  const [tab, setTab] = useState('search');
+  const [tab, setTab] = useState('find');
   const [monitors, setMonitors] = useState([]);
   const [userEmail, setUserEmail] = useState('');
   const [plan, setPlan] = useState('starter');
@@ -962,9 +1283,8 @@ function App() {
     <div className="layout">
       <Sidebar tab={tab} setTab={setTab} userEmail={userEmail} plan={plan} monitorCount={monitors.length} onSignOut={signOut} />
       <div className="main">
-        {tab==='search'   && <SearchNow apiKey={apiKey} />}
+        {tab==='find'     && <FindCustomers apiKey={apiKey} onMonitorCreated={()=>{ loadMonitors(); setTab('feed'); }} />}
         {tab==='feed'     && <MatchesFeed apiKey={apiKey} monitors={monitors} />}
-        {tab==='create'   && <CreateMonitor apiKey={apiKey} onCreated={()=>{ loadMonitors(); setTab('feed'); }} />}
         {tab==='settings' && <Settings apiKey={apiKey} userEmail={userEmail} plan={plan} onSignOut={signOut} monitors={monitors} onRefresh={loadMonitors} />}
       </div>
     </div>
