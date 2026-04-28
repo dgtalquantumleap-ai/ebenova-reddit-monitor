@@ -18,6 +18,7 @@ import { dirname } from 'path'
 import stripeRoutes, { webhookHandler } from './routes/stripe.js'
 import { loadEnv } from './lib/env.js'
 import { makeCorsMiddleware } from './lib/cors.js'
+import helmet from 'helmet'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname  = dirname(__filename)
@@ -91,6 +92,21 @@ app.post('/v1/billing/webhook',
   express.raw({ type: 'application/json' }),
   webhookHandler
 )
+
+// Security headers — X-Content-Type-Options, X-Frame-Options, HSTS,
+// Referrer-Policy, basic CSP. Loosened CSP to allow the dashboard's
+// React/Tailwind CDN scripts (Branch 3 will bundle them locally).
+app.use(helmet({
+  contentSecurityPolicy: {
+    useDefaults: true,
+    directives: {
+      'script-src': ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com", "https://unpkg.com", "'unsafe-eval'"],
+      'connect-src': ["'self'", "https://hooks.slack.com"],
+      'img-src': ["'self'", 'data:'],
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+}))
 
 app.use(express.json())
 app.use(express.static(join(__dirname, 'public')))
