@@ -32,6 +32,14 @@ const POLL_MINUTES     = parseInt(process.env.POLL_INTERVAL_MINUTES || '15')
 const MAX_SEEN         = 50_000
 const SEMANTIC_ENABLED = !!(OPENAI_API_KEY || VOYAGE_API_KEY)
 
+// F11: max age for Reddit semantic-search posts. Was hardcoded 60 min.
+// Defaults to 3h (matches monitor.js default). Tune via POST_MAX_AGE_HOURS env.
+const POST_MAX_AGE_HOURS = (() => {
+  const h = parseInt(process.env.POST_MAX_AGE_HOURS || '3')
+  return Number.isFinite(h) && h > 0 ? h : 3
+})()
+const POST_MAX_AGE_MS = POST_MAX_AGE_HOURS * 60 * 60 * 1000
+
 // ── Redis client ──────────────────────────────────────────────────────────────
 // Upstash REST only (same as Signova's lib/redis.js).
 // Set UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN in Railway vars.
@@ -175,7 +183,7 @@ async function semanticSearchSubreddit(monitorId, subreddit, keywordEntry, query
     for (const post of posts) {
       const p = post.data
       if (await hasSeenWithRedis(monitorId, p.id)) continue
-      if (Date.now() - p.created_utc * 1000 > 60 * 60 * 1000) continue
+      if (Date.now() - p.created_utc * 1000 > POST_MAX_AGE_MS) continue
 
       const postText = `${p.title} ${(p.selftext || '').slice(0, 400)}`
       const postEmbedding = await getEmbedding(postText)
@@ -230,7 +238,7 @@ async function searchReddit(monitorId, keywordEntry) {
       for (const post of posts) {
         const p = post.data
         if (await hasSeenWithRedis(monitorId, p.id)) continue
-        if (Date.now() - p.created_utc * 1000 > 60 * 60 * 1000) continue
+        if (Date.now() - p.created_utc * 1000 > POST_MAX_AGE_MS) continue
         markSeen(monitorId, p.id)
         results.push({
           id:        p.id,
