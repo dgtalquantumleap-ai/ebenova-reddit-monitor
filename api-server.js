@@ -45,6 +45,7 @@ import { randomBytes } from 'crypto'
 import { makeRateLimiter } from './lib/rate-limit.js'
 import { makeCostCap } from './lib/cost-cap.js'
 import { verifyCaptcha } from './lib/captcha.js'
+import { applyInviteToUser } from './lib/invite.js'
 
 const PORT = parseInt(process.env.API_PORT || process.env.PORT || '3001')
 const ADMIN_KEY = process.env.MONITOR_ADMIN_KEY
@@ -429,7 +430,7 @@ app.post('/v1/auth/signup', async (req, res) => {
     console.error('[signup] rate limiter error:', err.message)
   }
 
-  const { email, name: userName } = req.body || {}
+  const { email, name: userName, inviteCode } = req.body || {}
 
   // F5: strict email validation
   if (!email || typeof email !== 'string' || !EMAIL_RE.test(email)) {
@@ -463,6 +464,18 @@ app.post('/v1/auth/signup', async (req, res) => {
     const existing = await redis.get(`insights:signup:${norm}`)
     if (existing) {
       const d = typeof existing === 'string' ? JSON.parse(existing) : existing
+      // Apply invite to existing user record if a valid invite was provided
+      if (inviteCode && d.key) {
+        const apiKeyData = await redis.get(`apikey:${d.key}`)
+        if (apiKeyData) {
+          const parsed = typeof apiKeyData === 'string' ? JSON.parse(apiKeyData) : apiKeyData
+          const upgraded = applyInviteToUser(parsed, inviteCode)
+          if (upgraded !== parsed) {
+            await redis.set(`apikey:${d.key}`, JSON.stringify(upgraded))
+            console.log(`[signup] Existing user ${norm} upgraded to ${upgraded.insightsPlan} via invite`)
+          }
+        }
+      }
       const resendKey = process.env.RESEND_API_KEY
       if (resendKey && d.key) {
         const { Resend } = await import('resend')
@@ -474,11 +487,11 @@ app.post('/v1/auth/signup', async (req, res) => {
           subject: 'Your Ebenova Insights login link',
           html: `<!DOCTYPE html><html><body style="font-family:system-ui,sans-serif;max-width:560px;margin:0 auto;padding:32px 24px;background:#f5f5f5;">
             <div style="padding:24px;background:#0e0e0e;border-radius:8px;margin-bottom:24px;">
-              <div style="font-size:18px;font-weight:700;color:#c9a84c;">📡 Ebenova Insights</div>
+              <div style="font-size:18px;font-weight:700;color:#FF6B35;">📡 Ebenova Insights</div>
             </div>
             <div style="padding:24px;background:#fff;border-radius:8px;border:1px solid #eee;">
               <p style="margin:0 0 16px;font-size:15px;">Here's your magic login link:</p>
-              <a href="${appUrl}/dashboard?key=${d.key}" style="display:inline-block;background:#c9a84c;color:#000;font-weight:700;padding:14px 28px;border-radius:6px;text-decoration:none;font-size:15px;">Open Dashboard →</a>
+              <a href="${appUrl}/dashboard?key=${d.key}" style="display:inline-block;background:#FF6B35;color:#fff;font-weight:700;padding:14px 28px;border-radius:6px;text-decoration:none;font-size:15px;">Open Dashboard →</a>
               <p style="margin:16px 0 0;font-size:12px;color:#aaa;">Link expires in 7 days. If you didn't request this, ignore it.</p>
             </div>
           </body></html>`,
@@ -493,7 +506,7 @@ app.post('/v1/auth/signup', async (req, res) => {
     // New email — provision key
     const key = `ins_${randomBytes(16).toString('hex')}`
     const now = new Date().toISOString()
-    const keyData = {
+    let keyData = {
       owner: norm,
       email: norm,
       name: (userName || '').slice(0, 100),
@@ -501,6 +514,12 @@ app.post('/v1/auth/signup', async (req, res) => {
       insightsPlan: 'starter',
       createdAt: now,
       source: 'self-signup',
+    }
+    if (inviteCode) {
+      keyData = applyInviteToUser(keyData, inviteCode)
+      if (keyData.source === 'demo-invite') {
+        console.log(`[signup] New user ${norm} provisioned with invite → ${keyData.insightsPlan}`)
+      }
     }
     await redis.set(`apikey:${key}`, JSON.stringify(keyData))
     await redis.set(`insights:signup:${norm}`, JSON.stringify({ key, email: norm, createdAt: now }))
@@ -511,23 +530,28 @@ app.post('/v1/auth/signup', async (req, res) => {
       const resend = new Resend(resendKey)
       const from = process.env.FROM_EMAIL || 'insights@ebenova.dev'
       const appUrl = process.env.APP_URL || 'https://ebenova-insights-production.up.railway.app'
-      const limits = PLAN_LIMITS.starter
+      const limits = PLAN_LIMITS[keyData.insightsPlan] || PLAN_LIMITS.starter
+      const isDemo = keyData.source === 'demo-invite'
+      const planLabel = isDemo ? 'Growth plan (30-day demo)' : keyData.insightsPlan === 'starter' ? 'Starter plan' : `${keyData.insightsPlan.charAt(0).toUpperCase()}${keyData.insightsPlan.slice(1)} plan`
+      const monitorWord = limits.monitors === 1 ? 'monitor' : 'monitors'
+      const planFooter = isDemo
+        ? `Tap the feedback button anytime to share what works and what doesn't.`
+        : keyData.insightsPlan === 'starter' ? 'Free forever.' : ''
       await resend.emails.send({
         from:    `Ebenova Insights <${from}>`,
         to:      norm,
         subject: 'Welcome to Ebenova Insights — your magic login link',
         html:    `<!DOCTYPE html><html><body style="font-family:system-ui,sans-serif;max-width:560px;margin:0 auto;padding:32px 24px;background:#f5f5f5;">
           <div style="padding:24px;background:#0e0e0e;border-radius:8px;margin-bottom:24px;">
-            <div style="font-size:18px;font-weight:700;color:#c9a84c;">📡 Ebenova Insights</div>
+            <div style="font-size:18px;font-weight:700;color:#FF6B35;">📡 Ebenova Insights</div>
           </div>
           <div style="padding:24px;background:#fff;border-radius:8px;border:1px solid #eee;">
             <p style="margin:0 0 16px;font-size:15px;">Hi${userName ? ' '+userName : ''},</p>
             <p style="margin:0 0 16px;font-size:15px;color:#333;">Welcome aboard. Click below to open your dashboard — no password needed.</p>
-            <a href="${appUrl}/dashboard?key=${key}" style="display:inline-block;background:#c9a84c;color:#000;font-weight:700;padding:14px 28px;border-radius:6px;text-decoration:none;font-size:15px;margin-bottom:20px;">Open Dashboard →</a>
-            <p style="margin:0 0 4px;font-size:14px;color:#666;">You're on the <strong>Starter plan</strong> — ${limits.monitors} monitor, ${limits.keywords} keywords, email alerts. Free forever.</p>
+            <a href="${appUrl}/dashboard?key=${key}" style="display:inline-block;background:#FF6B35;color:#fff;font-weight:700;padding:14px 28px;border-radius:6px;text-decoration:none;font-size:15px;margin-bottom:20px;">Open Dashboard →</a>
+            <p style="margin:0 0 4px;font-size:14px;color:#666;">You're on the <strong>${planLabel}</strong> — ${limits.monitors} ${monitorWord}, ${limits.keywords} keywords, email alerts. ${planFooter}</p>
             <p style="margin:16px 0 0;font-size:12px;color:#aaa;">Save this email — the link logs you back in any time.</p>
           </div>
-          <p style="margin-top:20px;font-size:12px;color:#aaa;text-align:center;">Ebenova Insights · <a href="https://ebenova.dev" style="color:#c9a84c;">ebenova.dev</a></p>
         </body></html>`,
       }).catch(err => console.error('[signup] Email send failed:', err.message))
     }
