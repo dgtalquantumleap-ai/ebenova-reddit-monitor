@@ -36,3 +36,22 @@ test('separate resources counted independently', async () => {
   assert.equal(ra.allowed, false)
   assert.equal(rb.allowed, true)
 })
+
+test('windowSeconds creates a different bucket key than daily', async () => {
+  // Daily and per-hour caps for the same resource use different bucket keys
+  // so they don't share state.
+  const redis = createMockRedis()
+  const daily  = makeCostCap(redis, { resource: 'shared', dailyMax: 1 })
+  const hourly = makeCostCap(redis, { resource: 'shared', dailyMax: 1, windowSeconds: 3600 })
+  await daily()  // burns daily bucket
+  const r = await hourly()  // hourly bucket fresh
+  assert.equal(r.allowed, true, 'hourly should be untouched by daily call')
+})
+
+test('per-hour cap enforces within window', async () => {
+  const redis = createMockRedis()
+  const cap = makeCostCap(redis, { resource: 'find-preview', dailyMax: 3, windowSeconds: 3600 })
+  await cap(); await cap(); await cap()
+  const r4 = await cap()
+  assert.equal(r4.allowed, false)
+})

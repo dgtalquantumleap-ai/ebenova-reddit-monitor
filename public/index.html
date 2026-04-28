@@ -1,240 +1,770 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Ebenova Insights ΓÇö Find customers before your competitors do</title>
-<meta name="description" content="Monitor Reddit, Hacker News, Upwork, Fiverr forums, and more for buying-intent posts. Get AI-drafted replies ready to copy and post.">
-<script src="https://cdn.tailwindcss.com"></script>
+<title>EBENOVA INSIGHTS // INTEL TERMINAL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Crimson+Pro:ital,wght@0,600;0,700;1,400&family=Inter:wght@500;600&display=swap" rel="stylesheet">
 <style>
-  * { box-sizing: border-box; }
-  body { background: #0a0a0a; color: #f0ece4; font-family: system-ui, -apple-system, sans-serif; margin: 0; }
-  .gold { color: #c9a84c; }
-  .btn-primary { background: #c9a84c; color: #000; font-weight: 700; padding: 14px 28px; border-radius: 8px; text-decoration: none; display: inline-block; transition: opacity 0.15s; border: none; cursor: pointer; font-size: 15px; }
-  .btn-primary:hover { opacity: 0.85; }
-  .btn-secondary { background: transparent; color: #c9a84c; border: 2px solid #c9a84c; font-weight: 600; padding: 13px 28px; border-radius: 8px; text-decoration: none; display: inline-block; transition: background 0.15s; font-size: 15px; cursor: pointer; }
-  .btn-secondary:hover { background: rgba(201,168,76,0.1); }
-  .card { background: #111; border: 1px solid #1e1e1e; border-radius: 12px; }
-  .section { padding: 80px 24px; max-width: 1000px; margin: 0 auto; }
-  .divider { border: none; border-top: 1px solid #1e1e1e; margin: 0; }
-  h1 { font-size: clamp(32px, 5vw, 52px); font-weight: 800; line-height: 1.1; letter-spacing: -1px; }
-  h2 { font-size: clamp(24px, 3.5vw, 36px); font-weight: 700; letter-spacing: -0.5px; }
-  input[type="email"] { background: #111; border: 1px solid #333; color: #f0ece4; border-radius: 8px; padding: 14px 16px; font-size: 15px; outline: none; transition: border-color 0.15s; width: 100%; }
-  input[type="email"]:focus { border-color: #c9a84c; }
-  .step-num { width: 40px; height: 40px; border-radius: 50%; background: #c9a84c; color: #000; font-weight: 800; font-size: 18px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-  .pricing-card { position: relative; }
-  .pricing-card.featured { border-color: #c9a84c; }
-  .pricing-card.featured::before { content: 'MOST POPULAR'; position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: #c9a84c; color: #000; font-size: 10px; font-weight: 800; letter-spacing: 1.5px; padding: 3px 10px; border-radius: 20px; }
-  @media (max-width: 640px) {
-    .section { padding: 48px 20px; }
-    .hero-section { padding-top: 56px !important; padding-bottom: 56px !important; }
-    .hero-btns { flex-direction: column; align-items: stretch; }
-    .hero-btns a { text-align: center !important; box-sizing: border-box; }
-    .cmp-grid { grid-template-columns: 1fr !important; }
-    .hide-sm { display: none !important; }
-    nav { padding: 0 16px !important; }
-    h1 { letter-spacing: -0.5px; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0a0907;
+    --bg-2: #14110d;
+    --bg-3: #1d1812;
+    --ink: #f5efe0;
+    --ink-2: #b9b09f;
+    --ink-3: #6f6757;
+    --gold: #FF6B35;
+    --gold-2: #FF8C42;
+    --green: #34d058;
+    --red: #ff5959;
+    --line: #2a2419;
+    --serif: 'Crimson Pro', 'Georgia', serif;
+    --sans: 'Inter', system-ui, sans-serif;
+    --mono: 'JetBrains Mono', 'Menlo', monospace;
+  }
+  html, body { background: var(--bg); color: var(--ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+  body {
+    background-image:
+      radial-gradient(circle at 12% 8%, rgba(255,107,53,0.04), transparent 50%),
+      radial-gradient(circle at 88% 92%, rgba(255,107,53,0.03), transparent 60%);
+    min-height: 100vh;
+  }
+  a { color: inherit; text-decoration: none; }
+  .mono { font-family: var(--mono); font-feature-settings: 'ss01' on; }
+  .serif { font-family: var(--serif); }
+
+  /* Ticker */
+  .ticker-bar {
+    border-bottom: 1px solid var(--line);
+    background: rgba(10,9,7,0.85);
+    backdrop-filter: blur(12px);
+    position: sticky; top: 0; z-index: 50;
+  }
+  .ticker {
+    display: flex; align-items: center; gap: 36px;
+    padding: 8px 24px;
+    font-family: var(--mono); font-size: 11px; color: var(--ink-3);
+    overflow: hidden; white-space: nowrap;
+  }
+  .ticker-item { display: inline-flex; align-items: center; gap: 8px; }
+  .ticker-dot {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--green);
+    box-shadow: 0 0 8px rgba(52, 208, 88, 0.6);
+    animation: pulse-dot 1.6s infinite;
+  }
+  @keyframes pulse-dot { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+  .ticker-arrow-up { color: var(--green); }
+  .ticker-arrow-down { color: var(--red); }
+  .ticker .num { color: var(--ink); }
+
+  /* Nav */
+  .nav {
+    border-bottom: 1px solid var(--line);
+    padding: 18px 24px;
+    display: flex; align-items: center; justify-content: space-between;
+    max-width: 1280px; margin: 0 auto;
+  }
+  .logo {
+    display: flex; align-items: center; gap: 12px;
+  }
+  .logo-mark {
+    width: 32px; height: 32px;
+    background: linear-gradient(135deg, var(--gold), var(--gold-2));
+    border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--mono); font-size: 11px; font-weight: 700; color: #000;
+    letter-spacing: -0.5px;
+  }
+  .logo-text { font-family: var(--mono); font-size: 13px; letter-spacing: 1px; font-weight: 500; }
+  .logo-text b { color: var(--gold); font-weight: 700; }
+  .nav-links { display: flex; gap: 28px; align-items: center; font-family: var(--mono); font-size: 12px; }
+  .nav-links a { color: var(--ink-2); }
+  .nav-cta {
+    background: var(--gold); color: #000; font-weight: 600;
+    padding: 9px 18px; border-radius: 4px; font-size: 12px;
+    font-family: var(--mono); letter-spacing: 0.5px;
+  }
+  .nav-cta:hover { background: var(--gold-2); }
+
+  /* Hero */
+  .hero {
+    max-width: 1280px; margin: 0 auto;
+    padding: 80px 24px 48px;
+    display: grid; grid-template-columns: 1.1fr 1fr; gap: 80px; align-items: start;
+  }
+  .hero-eyebrow {
+    display: inline-flex; align-items: center; gap: 10px;
+    font-family: var(--mono); font-size: 11px; color: var(--gold);
+    letter-spacing: 2.5px; text-transform: uppercase; margin-bottom: 28px;
+    border: 1px solid rgba(255,107,53,0.3); padding: 6px 12px; border-radius: 999px;
+  }
+  .hero-eyebrow::before {
+    content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--gold);
+    animation: pulse-dot 1.6s infinite;
+  }
+  .hero-title {
+    font-family: var(--serif);
+    font-size: clamp(48px, 6.4vw, 86px);
+    font-weight: 700; line-height: 0.96; letter-spacing: -2px;
+    margin-bottom: 32px;
+  }
+  .hero-title em {
+    font-style: italic; font-weight: 400;
+    background: linear-gradient(135deg, var(--gold), var(--gold-2));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .hero-title small {
+    display: block; font-family: var(--mono); font-size: 14px;
+    font-weight: 400; color: var(--ink-3); letter-spacing: 4px;
+    text-transform: uppercase; margin-top: 24px;
+  }
+  .hero-sub {
+    font-size: 18px; color: var(--ink-2); line-height: 1.65;
+    max-width: 560px; margin-bottom: 40px;
+  }
+  .hero-cta-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 36px; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 16px 26px; border-radius: 6px;
+    font-family: var(--mono); font-size: 13px; font-weight: 600;
+    letter-spacing: 0.5px; cursor: pointer; border: none;
+    transition: all 0.18s ease;
+  }
+  .btn-primary { background: var(--gold); color: #000; }
+  .btn-primary:hover { background: var(--gold-2); transform: translateY(-1px); box-shadow: 0 8px 30px rgba(255,107,53,0.25); }
+  .btn-ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+  .btn-ghost:hover { border-color: var(--ink-2); background: var(--bg-2); }
+  .btn-arrow { font-size: 16px; }
+  .hero-meta {
+    font-family: var(--mono); font-size: 11px; color: var(--ink-3);
+    letter-spacing: 1px; display: flex; gap: 20px; flex-wrap: wrap;
+  }
+  .hero-meta b { color: var(--green); }
+
+  /* Hero terminal */
+  .terminal {
+    background: var(--bg-2); border: 1px solid var(--line);
+    border-radius: 8px; overflow: hidden;
+    font-family: var(--mono); font-size: 12px;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,107,53,0.05);
+  }
+  .terminal-header {
+    background: linear-gradient(to bottom, #1f1a13, #14110d);
+    border-bottom: 1px solid var(--line);
+    padding: 10px 14px;
+    display: flex; align-items: center; gap: 12px; font-size: 11px; color: var(--ink-3);
+  }
+  .terminal-dots { display: flex; gap: 6px; }
+  .terminal-dots span { width: 10px; height: 10px; border-radius: 50%; background: #3a3328; }
+  .terminal-title { letter-spacing: 1.5px; }
+  .terminal-status { margin-left: auto; color: var(--green); display: inline-flex; align-items: center; gap: 6px; }
+  .terminal-status::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 6px var(--green); animation: pulse-dot 1.6s infinite; }
+  .feed { padding: 8px 0; max-height: 480px; overflow: hidden; position: relative; }
+  .feed::after {
+    content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 80px;
+    background: linear-gradient(to bottom, transparent, var(--bg-2));
+    pointer-events: none;
+  }
+  .feed-row {
+    padding: 11px 14px; border-bottom: 1px dotted #2a2419;
+    display: grid; grid-template-columns: 70px 60px 1fr auto; gap: 12px;
+    align-items: baseline; font-size: 11.5px; line-height: 1.4;
+    animation: slide-in 0.6s ease;
+  }
+  @keyframes slide-in { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: translateX(0); } }
+  .feed-time { color: var(--ink-3); letter-spacing: 0.5px; }
+  .feed-source {
+    font-size: 10px; padding: 2px 6px; border-radius: 3px; font-weight: 600;
+    letter-spacing: 0.5px; text-align: center; color: #000;
+  }
+  .src-reddit { background: #ff7c47; }
+  .src-hn { background: #ff9d4d; }
+  .src-substack { background: #ff8a3d; color: #000; }
+  .src-upwork { background: #6fda44; }
+  .src-quora { background: #d63938; color: #fff; }
+  .src-fiverr { background: #1dbf73; }
+  .src-medium { background: #00ab6c; color: #fff; }
+  .src-github { background: #d8d4cc; }
+  .src-ph { background: #ff5852; color: #fff; }
+  .feed-title { color: var(--ink); }
+  .feed-score { color: var(--gold); font-weight: 700; }
+  .feed-title-low { color: var(--ink-2); }
+  .feed-summary {
+    grid-column: 2 / -1;
+    color: var(--ink-3); font-size: 10.5px; margin-top: 2px;
+    font-family: var(--sans);
+  }
+  .feed-cta {
+    padding: 12px 14px;
+    background: rgba(255,107,53,0.06);
+    border-top: 1px solid var(--line);
+    font-size: 11px; color: var(--gold); display: flex; justify-content: space-between; align-items: center;
+  }
+  .feed-cta a { font-weight: 600; }
+  .feed-cta-blink::after { content: '_'; animation: blink 1s infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* Section frame */
+  section { max-width: 1280px; margin: 0 auto; padding: 80px 24px; }
+  .label {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 3px;
+    color: var(--gold); text-transform: uppercase;
+    display: inline-flex; align-items: center; gap: 12px; margin-bottom: 18px;
+  }
+  .label::before { content: ''; width: 24px; height: 1px; background: var(--gold); }
+  .h-display {
+    font-family: var(--serif); font-size: clamp(36px, 4vw, 56px); font-weight: 700;
+    line-height: 1.05; letter-spacing: -1px; max-width: 800px;
+  }
+  .h-display em { font-style: italic; color: var(--gold); font-weight: 400; }
+
+  /* Platforms strip */
+  .platforms {
+    border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+    padding: 32px 24px; background: var(--bg-2);
+  }
+  .platforms-inner {
+    max-width: 1280px; margin: 0 auto;
+    display: flex; gap: 14px; align-items: center; flex-wrap: wrap; justify-content: center;
+  }
+  .platform-pill {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 8px 16px; border-radius: 999px;
+    font-family: var(--mono); font-size: 12px; letter-spacing: 0.5px;
+    border: 1px solid var(--line); background: var(--bg);
+    color: var(--ink-2);
+  }
+  .platform-pill .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    box-shadow: 0 0 6px currentColor;
+  }
+  .platform-pill .dot.live { background: var(--green); color: var(--green); animation: pulse-dot 1.8s infinite; }
+  .platforms-meta {
+    text-align: center; margin-top: 18px;
+    font-family: var(--mono); font-size: 11px; color: var(--ink-3); letter-spacing: 2px; text-transform: uppercase;
+  }
+
+  /* Anatomy */
+  .anatomy { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 56px; align-items: center; }
+  .anatomy-card {
+    background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px;
+    padding: 24px; position: relative;
+    box-shadow: 0 30px 60px rgba(0,0,0,0.4);
+  }
+  .anatomy-card .src-reddit { font-size: 10px; padding: 2px 8px; border-radius: 3px; }
+  .anatomy-meta { font-family: var(--mono); font-size: 11px; color: var(--ink-3); margin-bottom: 12px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .anatomy-title { font-size: 17px; font-weight: 600; line-height: 1.45; margin-bottom: 10px; }
+  .anatomy-body { color: var(--ink-2); font-size: 14px; line-height: 1.7; margin-bottom: 16px; }
+  .anatomy-draft {
+    background: rgba(255,107,53,0.06); border: 1px solid rgba(255,107,53,0.25);
+    border-radius: 6px; padding: 14px;
+  }
+  .anatomy-draft-label {
+    font-family: var(--mono); font-size: 10px; color: var(--gold);
+    letter-spacing: 2px; text-transform: uppercase; margin-bottom: 8px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .anatomy-draft-label::before { content: '◢'; }
+  .anatomy-draft-text { font-size: 13.5px; line-height: 1.7; color: var(--ink); font-family: var(--serif); }
+  .anatomy-marker {
+    position: absolute; padding: 4px 8px; border-radius: 3px;
+    background: var(--bg); border: 1px solid var(--gold);
+    font-family: var(--mono); font-size: 10px; letter-spacing: 1px;
+    color: var(--gold); white-space: nowrap;
+  }
+  .marker-1 { top: 18px; right: -88px; }
+  .marker-2 { top: 70px; right: -100px; }
+  .marker-3 { bottom: 70px; right: -120px; }
+  @media (max-width: 900px) { .anatomy-marker { display: none; } }
+
+  .anatomy-list { display: flex; flex-direction: column; gap: 26px; }
+  .anatomy-item { display: flex; gap: 18px; align-items: flex-start; }
+  .anatomy-num {
+    font-family: var(--mono); font-size: 11px; color: var(--gold);
+    letter-spacing: 2px; flex-shrink: 0; min-width: 32px;
+    border-right: 1px solid var(--gold); padding-right: 12px;
+  }
+  .anatomy-item h4 { font-family: var(--serif); font-size: 19px; font-weight: 600; margin-bottom: 6px; }
+  .anatomy-item p { color: var(--ink-2); font-size: 14px; line-height: 1.65; }
+
+  /* Comparison */
+  .compare {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 0;
+    border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
+    background: var(--bg-2);
+  }
+  .compare-col { padding: 36px 32px; }
+  .compare-col + .compare-col { border-left: 1px solid var(--line); background: linear-gradient(135deg, rgba(255,107,53,0.06), transparent); }
+  .compare-tag {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
+    color: var(--ink-3); margin-bottom: 8px;
+  }
+  .compare-col + .compare-col .compare-tag { color: var(--gold); }
+  .compare-name { font-family: var(--serif); font-size: 22px; font-weight: 700; margin-bottom: 24px; letter-spacing: -0.5px; }
+  .compare-list { list-style: none; display: flex; flex-direction: column; gap: 14px; }
+  .compare-list li { display: flex; gap: 12px; align-items: flex-start; font-size: 14px; line-height: 1.55; color: var(--ink-2); }
+  .compare-list li::before { content: '×'; color: var(--red); font-weight: 700; flex-shrink: 0; width: 16px; font-size: 18px; line-height: 1.1; }
+  .compare-col + .compare-col .compare-list li { color: var(--ink); }
+  .compare-col + .compare-col .compare-list li::before { content: '✓'; color: var(--gold); font-size: 14px; }
+
+  /* Manifesto */
+  .manifesto {
+    text-align: center; padding: 100px 24px; max-width: 880px; margin: 0 auto;
+  }
+  .manifesto-quote {
+    font-family: var(--serif); font-style: italic;
+    font-size: clamp(28px, 3.4vw, 42px); font-weight: 400; line-height: 1.35; letter-spacing: -0.5px;
+    color: var(--ink);
+  }
+  .manifesto-quote em { color: var(--gold); }
+  .manifesto-attr {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 3px;
+    color: var(--ink-3); text-transform: uppercase; margin-top: 36px;
+  }
+
+  /* Pricing */
+  .pricing-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-top: 48px; }
+  .price-card {
+    background: var(--bg-2); border: 1px solid var(--line); border-radius: 12px;
+    padding: 32px 28px; position: relative; transition: border-color 0.2s, transform 0.2s;
+  }
+  .price-card:hover { border-color: rgba(255,107,53,0.4); }
+  .price-card.featured {
+    border-color: var(--gold);
+    background: linear-gradient(180deg, rgba(255,107,53,0.06), var(--bg-2));
+  }
+  .price-card.featured::before {
+    content: '★ MOST POPULAR'; position: absolute; top: -10px; left: 28px;
+    background: var(--gold); color: #000; font-family: var(--mono);
+    font-size: 10px; letter-spacing: 2px; padding: 4px 10px; border-radius: 3px;
+  }
+  .price-cmd {
+    font-family: var(--mono); font-size: 11px; color: var(--ink-3);
+    margin-bottom: 18px; padding: 8px 10px; background: var(--bg); border-radius: 4px;
+    border: 1px solid var(--line);
+  }
+  .price-cmd::before { content: '$ '; color: var(--gold); }
+  .price-name { font-family: var(--serif); font-size: 26px; font-weight: 700; margin-bottom: 4px; }
+  .price-amount { font-family: var(--mono); font-size: 38px; font-weight: 700; color: var(--gold); margin-bottom: 4px; letter-spacing: -1px; }
+  .price-amount small { font-size: 14px; color: var(--ink-3); margin-left: 4px; }
+  .price-bill { font-family: var(--mono); font-size: 11px; color: var(--ink-3); letter-spacing: 1px; margin-bottom: 24px; text-transform: uppercase; }
+  .price-list { list-style: none; display: flex; flex-direction: column; gap: 11px; margin-bottom: 28px; }
+  .price-list li { font-size: 13.5px; color: var(--ink-2); display: flex; align-items: flex-start; gap: 10px; }
+  .price-list li::before { content: '→'; color: var(--gold); flex-shrink: 0; }
+  .price-cta {
+    width: 100%; text-align: center; padding: 13px 16px; border-radius: 6px;
+    font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: 1px;
+    border: 1px solid var(--line); background: transparent; color: var(--ink); cursor: pointer; display: block;
+  }
+  .price-card.featured .price-cta { background: var(--gold); color: #000; border-color: var(--gold); }
+  .price-card.featured .price-cta:hover { background: var(--gold-2); }
+  .price-cta:hover { border-color: var(--gold); }
+
+  /* CTA banner */
+  .cta-banner {
+    border: 1px solid var(--gold); border-radius: 12px;
+    padding: 56px 48px; max-width: 1280px; margin: 0 auto 80px; text-align: center;
+    background:
+      radial-gradient(circle at 20% 50%, rgba(255,107,53,0.15), transparent 50%),
+      radial-gradient(circle at 80% 50%, rgba(255,107,53,0.10), transparent 50%),
+      var(--bg-2);
+  }
+  .cta-h { font-family: var(--serif); font-size: clamp(32px, 4vw, 48px); font-weight: 700; letter-spacing: -1px; margin-bottom: 16px; line-height: 1.1; }
+  .cta-h em { font-style: italic; color: var(--gold); font-weight: 400; }
+  .cta-sub { color: var(--ink-2); font-size: 16px; margin-bottom: 28px; }
+
+  /* Footer */
+  footer {
+    border-top: 1px solid var(--line); padding: 32px 24px;
+    max-width: 1280px; margin: 0 auto;
+    display: flex; justify-content: space-between; align-items: center;
+    font-family: var(--mono); font-size: 11px; color: var(--ink-3); letter-spacing: 1px;
+  }
+  footer .right { display: flex; gap: 24px; }
+  .cursor { display: inline-block; width: 8px; height: 14px; background: var(--gold); margin-left: 4px; vertical-align: -2px; animation: blink 1s infinite; }
+
+  /* Skip-to-content for keyboard users */
+  .skip-link {
+    position: absolute; top: -40px; left: 0;
+    background: var(--gold); color: #000; padding: 10px 16px;
+    font-family: var(--mono); font-size: 12px; font-weight: 700;
+    z-index: 999; border-radius: 0 0 6px 0;
+  }
+  .skip-link:focus { top: 0; }
+
+  /* Responsive */
+  @media (max-width: 900px) {
+    .hero { grid-template-columns: 1fr; gap: 40px; padding: 40px 24px; }
+    .anatomy { grid-template-columns: 1fr; gap: 40px; }
+    .compare { grid-template-columns: 1fr; }
+    .compare-col + .compare-col { border-left: none; border-top: 1px solid var(--line); }
+    .pricing-grid { grid-template-columns: 1fr; }
+    .nav-links a { display: none; }
+    .nav-links .nav-cta { display: inline-flex; }
+    .ticker { font-size: 10px; gap: 24px; }
+    section { padding: 56px 24px; }
+
+    /* Hide the dense per-platform ticker counts on mobile, keep just LIVE + total */
+    .ticker .ticker-item:nth-child(n+4) { display: none; }
+    .ticker .ticker-item { font-size: 11px; }
+
+    /* Bigger tap targets on mobile (minimum 48px height per WCAG/Apple HIG) */
+    .btn { padding: 16px 24px; min-height: 50px; font-size: 14px; }
+    .hero-cta-row { flex-direction: column; align-items: stretch; }
+    .hero-cta-row .btn { width: 100%; justify-content: center; }
+    .price-cta { padding: 16px; min-height: 50px; }
+    .nav-cta { min-height: 40px; padding: 11px 16px; }
   }
 </style>
 </head>
 <body>
 
+<a href="#main" class="skip-link">Skip to content</a>
+
+<!-- TICKER -->
+<div class="ticker-bar" role="status" aria-label="Live monitoring stats">
+  <div class="ticker">
+    <span class="ticker-item"><span class="ticker-dot"></span> LIVE</span>
+    <span class="ticker-item">SCANNED <span class="num">2,847</span> POSTS · 1H</span>
+    <span class="ticker-item">MATCHED <span class="num">142</span> <span class="ticker-arrow-up">▲</span></span>
+    <span class="ticker-item">REDDIT <span class="num">38</span></span>
+    <span class="ticker-item">HN <span class="num">11</span></span>
+    <span class="ticker-item">UPWORK <span class="num">22</span></span>
+    <span class="ticker-item">QUORA <span class="num">9</span></span>
+    <span class="ticker-item">FIVERR <span class="num">14</span></span>
+    <span class="ticker-item">GITHUB <span class="num">19</span></span>
+    <span class="ticker-item">PH <span class="num">8</span></span>
+    <span class="ticker-item">SUBSTACK <span class="num">7</span></span>
+    <span class="ticker-item">MEDIUM <span class="num">14</span></span>
+  </div>
+</div>
+
 <!-- NAV -->
-<nav style="border-bottom: 1px solid #1a1a1a; padding: 0 24px;">
-  <div style="max-width: 1000px; margin: 0 auto; height: 60px; display: flex; align-items: center; justify-content: space-between;">
-    <div style="font-weight: 800; font-size: 17px; color: #c9a84c; letter-spacing: -0.5px;">≡ƒôí Ebenova Insights</div>
-    <div style="display: flex; align-items: center; gap: 20px;">
-      <a href="#pricing" class="hide-sm" style="color: #888; text-decoration: none; font-size: 14px;">Pricing</a>
-      <a href="/dashboard" class="btn-primary" style="padding: 8px 20px; font-size: 14px;">Open Dashboard</a>
-    </div>
+<nav class="nav">
+  <div class="logo">
+    <div class="logo-mark">EI</div>
+    <div class="logo-text">EBENOVA <b>// INSIGHTS</b></div>
+  </div>
+  <div class="nav-links">
+    <a href="#how">How it works</a>
+    <a href="#anatomy">Anatomy</a>
+    <a href="#pricing">Pricing</a>
+    <a href="/dashboard" class="nav-cta">OPEN TERMINAL →</a>
   </div>
 </nav>
 
 <!-- HERO -->
-<section class="section hero-section" style="padding-top: 96px; padding-bottom: 96px; text-align: center;">
-  <div style="display: inline-block; background: #1a1a00; border: 1px solid #4a3800; color: #c9a84c; padding: 4px 14px; border-radius: 20px; font-size: 12px; font-weight: 700; letter-spacing: 1px; margin-bottom: 24px; text-transform: uppercase;">Now monitoring 8 platforms</div>
-  <h1 style="max-width: 720px; margin: 0 auto 24px;">Find customers on Reddit <span class="gold">before your competitors do</span></h1>
-  <p style="font-size: 18px; color: #888; max-width: 580px; margin: 0 auto 40px; line-height: 1.6;">Monitor Reddit, Hacker News, Upwork forums, Fiverr forums, and more for buying-intent posts. Get AI-drafted replies ready to copy and paste.</p>
-  <div class="hero-btns" style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
-    <a href="/dashboard" class="btn-primary">Start free ΓÇö no credit card</a>
-    <a href="#how-it-works" class="btn-secondary">See how it works</a>
+<section class="hero" id="main">
+  <div>
+    <div class="hero-eyebrow">SIGNAL // 9 PLATFORMS</div>
+    <h1 class="hero-title">
+      Your next customer<br>
+      is <em>already typing.</em>
+      <small>// REDDIT · HN · UPWORK · QUORA · 5 MORE</small>
+    </h1>
+    <p class="hero-sub">
+      <b style="color:var(--ink);font-weight:600;">A live feed of buying-intent posts across 9 platforms, with AI-drafted replies you can post in seconds.</b><br>
+      Built for solo founders, indie makers, and lean agencies who don't have time to scroll Reddit all day.
+    </p>
+    <div class="hero-cta-row">
+      <a href="/dashboard" class="btn btn-primary" aria-label="Open the dashboard and start monitoring for free">OPEN TERMINAL <span class="btn-arrow">→</span></a>
+      <a href="#how" class="btn btn-ghost" aria-label="Scroll to how it works">HOW IT WORKS</a>
+    </div>
+    <div class="hero-meta" role="list" aria-label="Built for these audiences">
+      <span role="listitem">→ Solo founders</span>
+      <span role="listitem">→ Indie makers</span>
+      <span role="listitem">→ Lean agencies</span>
+      <span role="listitem">→ Freelancers</span>
+    </div>
+    <div style="font-family:var(--mono);font-size:11px;color:var(--ink-3);letter-spacing:1px;margin-top:14px;display:flex;gap:18px;flex-wrap:wrap;">
+      <span><b style="color:var(--green)">●</b> FREE FOREVER · NO CREDIT CARD · 60-SEC SETUP</span>
+    </div>
+  </div>
+
+  <!-- Terminal preview -->
+  <div class="terminal">
+    <div class="terminal-header">
+      <div class="terminal-dots"><span></span><span></span><span></span></div>
+      <div class="terminal-title">EBNV-1 // LIVE FEED</div>
+      <div class="terminal-status">SCANNING</div>
+    </div>
+    <div class="feed">
+      <div class="feed-row" style="animation-delay: 0s;">
+        <span class="feed-time">04:42:18</span>
+        <span class="feed-source src-reddit">REDDIT</span>
+        <span class="feed-title">"Anyone using AI to draft sales emails? Looking for recommendations…"</span>
+        <span class="feed-score">9.2</span>
+        <span class="feed-summary">r/SaaS · 14 comments · author has shipped before</span>
+      </div>
+      <div class="feed-row" style="animation-delay: 0.1s;">
+        <span class="feed-time">04:41:55</span>
+        <span class="feed-source src-hn">HN</span>
+        <span class="feed-title">Show HN: I want to monitor Reddit for buying signals</span>
+        <span class="feed-score">8.7</span>
+        <span class="feed-summary">94 points · 22 comments</span>
+      </div>
+      <div class="feed-row" style="animation-delay: 0.2s;">
+        <span class="feed-time">04:41:39</span>
+        <span class="feed-source src-upwork">UPWORK</span>
+        <span class="feed-title-low">Need a Shopify dev — looking for ongoing relationship</span>
+        <span class="feed-score">7.4</span>
+      </div>
+      <div class="feed-row" style="animation-delay: 0.3s;">
+        <span class="feed-time">04:41:08</span>
+        <span class="feed-source src-quora">QUORA</span>
+        <span class="feed-title-low">What's the best alternative to Brand24 for monitoring mentions?</span>
+        <span class="feed-score">8.9</span>
+      </div>
+      <div class="feed-row" style="animation-delay: 0.4s;">
+        <span class="feed-time">04:40:51</span>
+        <span class="feed-source src-fiverr">FIVERR</span>
+        <span class="feed-title-low">Looking for a freelance copywriter who has worked with B2B SaaS</span>
+        <span class="feed-score">7.8</span>
+      </div>
+      <div class="feed-row" style="animation-delay: 0.5s;">
+        <span class="feed-time">04:40:33</span>
+        <span class="feed-source src-github">GITHUB</span>
+        <span class="feed-title-low">Issue: best library for AI prompt sanitization?</span>
+        <span class="feed-score">6.5</span>
+      </div>
+      <div class="feed-row" style="animation-delay: 0.6s;">
+        <span class="feed-time">04:40:09</span>
+        <span class="feed-source src-ph">PH</span>
+        <span class="feed-title-low">Frustrated by manual outreach — what's the modern stack?</span>
+        <span class="feed-score">8.1</span>
+      </div>
+      <div class="feed-row" style="animation-delay: 0.7s;">
+        <span class="feed-time">04:39:41</span>
+        <span class="feed-source src-substack">SUBSTACK</span>
+        <span class="feed-title-low">Comment on "AI tools that actually save me time" → asks recs</span>
+        <span class="feed-score">7.0</span>
+      </div>
+    </div>
+    <div class="feed-cta">
+      <span class="feed-cta-blink">FEED // DEMO_MODE</span>
+      <a href="/dashboard">OPEN LIVE FEED →</a>
+    </div>
   </div>
 </section>
-
-<hr class="divider">
 
 <!-- PLATFORMS STRIP -->
-<section style="padding: 32px 24px; text-align: center; background: #0d0d0d;">
-  <div style="max-width: 1000px; margin: 0 auto;">
-    <p style="font-size: 12px; color: #555; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 16px;">Monitors</p>
-    <div style="display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; align-items: center;">
-      <span style="color: #ff4500; font-weight: 700;">Reddit</span>
-      <span style="color: #666;">┬╖</span>
-      <span style="color: #ff6600; font-weight: 700;">Hacker News</span>
-      <span style="color: #666;">┬╖</span>
-      <span style="color: #00ab6c; font-weight: 700;">Medium</span>
-      <span style="color: #666;">┬╖</span>
-      <span style="color: #ff6719; font-weight: 700;">Substack</span>
-      <span style="color: #666;">┬╖</span>
-      <span style="color: #b92b27; font-weight: 700;">Quora</span>
-      <span style="color: #666;">┬╖</span>
-      <span style="color: #6fda44; font-weight: 700;">Upwork Community</span>
-      <span style="color: #666;">┬╖</span>
-      <span style="color: #1dbf73; font-weight: 700;">Fiverr Community</span>
-    </div>
+<div class="platforms">
+  <div class="platforms-inner">
+    <span class="platform-pill"><span class="dot live"></span>REDDIT</span>
+    <span class="platform-pill"><span class="dot live"></span>HACKER NEWS</span>
+    <span class="platform-pill"><span class="dot live"></span>UPWORK</span>
+    <span class="platform-pill"><span class="dot live"></span>FIVERR</span>
+    <span class="platform-pill"><span class="dot live"></span>QUORA</span>
+    <span class="platform-pill"><span class="dot live"></span>MEDIUM</span>
+    <span class="platform-pill"><span class="dot live"></span>SUBSTACK</span>
+    <span class="platform-pill"><span class="dot live"></span>GITHUB</span>
+    <span class="platform-pill"><span class="dot live"></span>PRODUCT HUNT</span>
   </div>
-</section>
-
-<hr class="divider">
+  <div class="platforms-meta">9 STREAMS // 1 INTERFACE</div>
+</div>
 
 <!-- HOW IT WORKS -->
-<section class="section" id="how-it-works">
-  <h2 style="text-align: center; margin-bottom: 56px;">How it works</h2>
-  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 32px;">
-    <div style="display: flex; flex-direction: column; gap: 16px;">
-      <div class="step-num">1</div>
-      <h3 style="font-size: 18px; font-weight: 700; margin: 0;">Add keywords and describe your product</h3>
-      <p style="color: #888; line-height: 1.6; margin: 0;">Enter the phrases your ideal customers use ΓÇö "client won't pay", "freelance contract", "scope creep". Paste a product description so the AI knows what to say.</p>
+<section id="how">
+  <span class="label">PROTOCOL</span>
+  <h2 class="h-display">Three signals. <em>Three minutes.</em><br>One unfair advantage.</h2>
+  <div style="margin-top: 64px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden;">
+    <div style="padding: 36px 32px; background: var(--bg-2);">
+      <div class="mono" style="font-size: 11px; color: var(--gold); letter-spacing: 3px; margin-bottom: 16px;">// 01</div>
+      <h3 style="font-family: var(--serif); font-size: 22px; font-weight: 600; margin-bottom: 10px;">Describe what you sell</h3>
+      <p style="color: var(--ink-2); font-size: 14px; line-height: 1.7;">A short paragraph. Who buys, what problem you solve, the kind of customer you want. The AI uses this to filter signal from noise — and to write replies that sound like you.</p>
     </div>
-    <div style="display: flex; flex-direction: column; gap: 16px;">
-      <div class="step-num">2</div>
-      <h3 style="font-size: 18px; font-weight: 700; margin: 0;">We scan 8 platforms every 15 minutes</h3>
-      <p style="color: #888; line-height: 1.6; margin: 0;">Reddit, Hacker News, Upwork forums, Fiverr forums, Medium, Substack, Quora ΓÇö all checked automatically. No manual searching required.</p>
+    <div style="padding: 36px 32px; background: var(--bg-2);">
+      <div class="mono" style="font-size: 11px; color: var(--gold); letter-spacing: 3px; margin-bottom: 16px;">// 02</div>
+      <h3 style="font-family: var(--serif); font-size: 22px; font-weight: 600; margin-bottom: 10px;">We watch the open web</h3>
+      <p style="color: var(--ink-2); font-size: 14px; line-height: 1.7;">Every 15 minutes, nine platforms. Buying-intent scoring — questions, comparison searches, frustration with competitors, hiring inquiries. We skip the noise.</p>
     </div>
-    <div style="display: flex; flex-direction: column; gap: 16px;">
-      <div class="step-num">3</div>
-      <h3 style="font-size: 18px; font-weight: 700; margin: 0;">Get AI-drafted replies for high-intent posts</h3>
-      <p style="color: #888; line-height: 1.6; margin: 0;">Each match comes with a suggested reply that sounds like a real community member ΓÇö not an ad. Copy, tweak, and post in seconds.</p>
+    <div style="padding: 36px 32px; background: var(--bg-2);">
+      <div class="mono" style="font-size: 11px; color: var(--gold); letter-spacing: 3px; margin-bottom: 16px;">// 03</div>
+      <h3 style="font-family: var(--serif); font-size: 22px; font-weight: 600; margin-bottom: 10px;">Reply ready in seconds</h3>
+      <p style="color: var(--ink-2); font-size: 14px; line-height: 1.7;">Each match arrives with a draft that sounds like a community member, not a salesperson. Tweak, copy, post. Your name in the right thread, fast.</p>
     </div>
   </div>
 </section>
 
-<hr class="divider">
+<!-- ANATOMY -->
+<section id="anatomy" style="border-top: 1px solid var(--line);">
+  <span class="label">DOSSIER</span>
+  <h2 class="h-display">Anatomy of a <em>signal.</em></h2>
+  <p style="color: var(--ink-2); font-size: 16px; line-height: 1.7; max-width: 640px; margin: 12px 0 56px;">Every match arrives like this — context, intent score, AI draft. No copy-paste from a dashboard, no "find me leads" wizard. Just the right thread, at the right moment.</p>
+
+  <div class="anatomy">
+    <div style="position: relative;">
+      <div class="anatomy-card">
+        <div class="anatomy-meta">
+          <span class="src-reddit" style="font-size: 10px; padding: 2px 8px; border-radius: 3px; font-family: var(--mono); font-weight: 600;">REDDIT</span>
+          <span>r/SaaS</span>
+          <span>·</span>
+          <span>2h ago</span>
+          <span>·</span>
+          <span style="color: var(--gold); font-weight: 600;">9.2 INTENT</span>
+        </div>
+        <h3 class="anatomy-title">Anyone using AI to monitor Reddit for buying signals? I keep losing leads to competitors who just happen to comment first.</h3>
+        <p class="anatomy-body">"…tried Brand24 last month and it was way too noisy. Looking for something that actually filters and ideally writes the first draft. Doesn't have to be Reddit-only — Quora, Upwork forums also fine. Budget under $50/mo if it works."</p>
+
+        <div class="anatomy-draft">
+          <div class="anatomy-draft-label">EBENOVA DRAFT // CONFIDENCE 0.88</div>
+          <p class="anatomy-draft-text">"Same boat 6 months ago. The thing that made the difference for me was switching to a tool that scores by intent rather than just keywords — way less noise, and it drafts a starting reply you can edit. Happy to share what I'm using if you want — DM me."</p>
+        </div>
+      </div>
+      <div class="anatomy-marker marker-1">SOURCE + SCORE →</div>
+      <div class="anatomy-marker marker-2">CONTEXT →</div>
+      <div class="anatomy-marker marker-3">AI DRAFT →</div>
+    </div>
+
+    <div class="anatomy-list">
+      <div class="anatomy-item">
+        <div class="anatomy-num">01</div>
+        <div>
+          <h4>Intent score, not just match</h4>
+          <p>9.2 of 10 = high buying intent. Below 7 = filtered out. You only see what's worth replying to.</p>
+        </div>
+      </div>
+      <div class="anatomy-item">
+        <div class="anatomy-num">02</div>
+        <div>
+          <h4>Context preserved</h4>
+          <p>The thread, the subreddit, the tone, the budget hint — kept intact. Reply with awareness, not a template.</p>
+        </div>
+      </div>
+      <div class="anatomy-item">
+        <div class="anatomy-num">03</div>
+        <div>
+          <h4>Draft that won't get you banned</h4>
+          <p>Trained to sound like a community member. Won't suggest you reply to posts where self-promotion gets you removed.</p>
+        </div>
+      </div>
+      <div class="anatomy-item">
+        <div class="anatomy-num">04</div>
+        <div>
+          <h4>Drop into Slack, email, or webhook</h4>
+          <p>Get pinged where you already work. We won't ask you to learn a new dashboard you'll never open.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
 
 <!-- COMPARISON -->
-<section class="section">
-  <h2 style="text-align: center; margin-bottom: 48px;">Why not Brand24 or Mention?</h2>
-  <div class="cmp-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
-    <div class="card" style="padding: 28px;">
-      <h3 style="font-size: 16px; font-weight: 700; color: #666; margin-bottom: 20px;">Generic brand monitoring tools</h3>
-      <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px;">
-        <li style="color: #555; font-size: 14px; line-height: 1.5; padding-left: 20px; position: relative;"><span style="position:absolute;left:0;color:#c0392b;">Γ£ù</span> Alert on every mention ΓÇö including unrelated noise</li>
-        <li style="color: #555; font-size: 14px; line-height: 1.5; padding-left: 20px; position: relative;"><span style="position:absolute;left:0;color:#c0392b;">Γ£ù</span> No buying-intent filter ΓÇö you decide what's relevant</li>
-        <li style="color: #555; font-size: 14px; line-height: 1.5; padding-left: 20px; position: relative;"><span style="position:absolute;left:0;color:#c0392b;">Γ£ù</span> No reply drafts ΓÇö you write from scratch</li>
-        <li style="color: #555; font-size: 14px; line-height: 1.5; padding-left: 20px; position: relative;"><span style="position:absolute;left:0;color:#c0392b;">Γ£ù</span> No Upwork or Fiverr forum coverage</li>
-        <li style="color: #555; font-size: 14px; line-height: 1.5; padding-left: 20px; position: relative;"><span style="position:absolute;left:0;color:#c0392b;">Γ£ù</span> $99ΓÇô$299/month for similar keyword volume</li>
+<section style="border-top: 1px solid var(--line);">
+  <span class="label">DELTA</span>
+  <h2 class="h-display">The <em>$300/mo</em> brand monitors<br>aren't built for this.</h2>
+  <p style="color: var(--ink-2); font-size: 16px; line-height: 1.7; max-width: 640px; margin: 12px 0 48px;">Most "social listening" tools tell you when someone says your name. We tell you when someone is shopping for what you make.</p>
+
+  <div class="compare">
+    <div class="compare-col">
+      <div class="compare-tag">// THEM</div>
+      <h3 class="compare-name">Brand24 / Mention / Sprout</h3>
+      <ul class="compare-list">
+        <li>Alerts on every keyword match — including unrelated noise</li>
+        <li>No buying-intent scoring — you triage by hand</li>
+        <li>No AI reply drafts — you write from a blank box</li>
+        <li>No Upwork or Fiverr forum coverage where freelancers post</li>
+        <li>$99–$299/month for less keyword volume</li>
       </ul>
     </div>
-    <div class="card" style="padding: 28px; border-color: #c9a84c;">
-      <h3 style="font-size: 16px; font-weight: 700; color: #c9a84c; margin-bottom: 20px;">Ebenova Insights</h3>
-      <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px;">
-        <li style="font-size: 14px; line-height: 1.5; padding-left: 20px; position: relative;"><span style="position:absolute;left:0;color:#4caf50;">Γ£ô</span> Buying-intent scoring ΓÇö only posts worth replying to</li>
-        <li style="font-size: 14px; line-height: 1.5; padding-left: 20px; position: relative;"><span style="position:absolute;left:0;color:#4caf50;">Γ£ô</span> SKIP filter ΓÇö won't draft replies that would get you banned</li>
-        <li style="font-size: 14px; line-height: 1.5; padding-left: 20px; position: relative;"><span style="position:absolute;left:0;color:#4caf50;">Γ£ô</span> AI reply drafts that sound like a real community member</li>
-        <li style="font-size: 14px; line-height: 1.5; padding-left: 20px; position: relative;"><span style="position:absolute;left:0;color:#4caf50;">Γ£ô</span> Upwork + Fiverr forums nobody else covers</li>
-        <li style="font-size: 14px; line-height: 1.5; padding-left: 20px; position: relative;"><span style="position:absolute;left:0;color:#4caf50;">Γ£ô</span> Free to start. Growth at $29/mo, Scale at $199/mo.</li>
+    <div class="compare-col">
+      <div class="compare-tag">// EBENOVA</div>
+      <h3 class="compare-name">Insights</h3>
+      <ul class="compare-list">
+        <li>Intent score per match — only posts worth replying to</li>
+        <li>SKIP filter — won't draft replies that would get you banned</li>
+        <li>AI drafts that sound like a community member, not an ad</li>
+        <li>Upwork + Fiverr + GitHub Issues + Product Hunt comments — all in</li>
+        <li>Free to start. $29/mo Growth. $199/mo Scale.</li>
       </ul>
     </div>
   </div>
 </section>
 
-<hr class="divider">
+<!-- MANIFESTO -->
+<section class="manifesto">
+  <p class="manifesto-quote">
+    "Most founders find their next customer<br>
+    <em>six months too late.</em><br>
+    The conversation already happened. The competitor<br>
+    already replied. We're trying to fix the timing problem."
+  </p>
+  <div class="manifesto-attr">— EBENOVA INSIGHTS // FOUNDING NOTE</div>
+</section>
 
 <!-- PRICING -->
-<section class="section" id="pricing">
-  <h2 style="text-align: center; margin-bottom: 48px;">Simple pricing</h2>
-  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 24px; align-items: start;">
+<section id="pricing" style="border-top: 1px solid var(--line);">
+  <span class="label">PROVISIONS</span>
+  <h2 class="h-display">Pricing in <em>plain English.</em></h2>
+  <p style="color: var(--ink-2); font-size: 16px; line-height: 1.7; max-width: 640px; margin: 12px 0;">No "contact sales." No annual lock-ins. Cancel anytime, your matches stay accessible for 30 days.</p>
 
-    <div class="card pricing-card" style="padding: 28px;">
-      <div style="font-weight: 800; font-size: 18px; margin-bottom: 4px;">Starter</div>
-      <div style="font-size: 36px; font-weight: 800; margin: 12px 0; color: #c9a84c;">Free</div>
-      <div style="color: #555; font-size: 13px; margin-bottom: 24px;">Forever</div>
-      <ul style="list-style: none; padding: 0; margin: 0 0 28px; display: flex; flex-direction: column; gap: 10px;">
-        <li style="font-size: 14px; color: #888;">Γ£ô 1 monitor</li>
-        <li style="font-size: 14px; color: #888;">Γ£ô 10 keywords</li>
-        <li style="font-size: 14px; color: #888;">Γ£ô Email digest</li>
-        <li style="font-size: 14px; color: #888;">Γ£ô Reddit + HN</li>
+  <div class="pricing-grid">
+    <div class="price-card">
+      <div class="price-cmd">ebnv start --plan starter</div>
+      <div class="price-name">Starter</div>
+      <div class="price-amount">$0<small>/mo</small></div>
+      <div class="price-bill">Free forever</div>
+      <ul class="price-list">
+        <li>1 active monitor</li>
+        <li>10 keywords</li>
+        <li>Email digest</li>
+        <li>All 9 platforms</li>
       </ul>
-      <a href="/dashboard" class="btn-secondary" style="width: 100%; text-align: center;">Start free</a>
+      <a href="/dashboard" class="price-cta" aria-label="Start the free Starter plan">START FREE</a>
     </div>
-
-    <div class="card pricing-card featured" style="padding: 28px;">
-      <div style="font-weight: 800; font-size: 18px; margin-bottom: 4px;">Growth</div>
-      <div style="font-size: 36px; font-weight: 800; margin: 12px 0; color: #c9a84c;">$29<span style="font-size: 16px; font-weight: 400; color: #666;">/mo</span></div>
-      <div style="color: #555; font-size: 13px; margin-bottom: 24px;">Billed monthly</div>
-      <ul style="list-style: none; padding: 0; margin: 0 0 28px; display: flex; flex-direction: column; gap: 10px;">
-        <li style="font-size: 14px; color: #888;">Γ£ô 20 monitors</li>
-        <li style="font-size: 14px; color: #888;">Γ£ô 100 keywords</li>
-        <li style="font-size: 14px; color: #888;">Γ£ô Slack delivery</li>
-        <li style="font-size: 14px; color: #888;">Γ£ô All 8 platforms</li>
-        <li style="font-size: 14px; color: #888;">Γ£ô AI reply drafts</li>
+    <div class="price-card featured">
+      <div class="price-cmd">ebnv subscribe --plan growth</div>
+      <div class="price-name">Growth</div>
+      <div class="price-amount">$29<small>/mo</small></div>
+      <div class="price-bill">Billed monthly</div>
+      <ul class="price-list">
+        <li>20 active monitors</li>
+        <li>100 keywords</li>
+        <li>Slack delivery</li>
+        <li>AI reply drafts</li>
+        <li>Cancel anytime</li>
       </ul>
-      <a href="mailto:info@ebenova.net?subject=Upgrade%20to%20Growth%20%E2%80%94%20Ebenova%20Insights" class="btn-primary" style="width: 100%; text-align: center;">Get Growth</a>
+      <a href="/dashboard?upgrade=growth" class="price-cta" aria-label="Upgrade to the Growth plan, $29 per month">UPGRADE TO GROWTH</a>
     </div>
-
-    <div class="card pricing-card" style="padding: 28px;">
-      <div style="font-weight: 800; font-size: 18px; margin-bottom: 4px;">Scale</div>
-      <div style="font-size: 36px; font-weight: 800; margin: 12px 0; color: #c9a84c;">$199<span style="font-size: 16px; font-weight: 400; color: #666;">/mo</span></div>
-      <div style="color: #555; font-size: 13px; margin-bottom: 24px;">Billed monthly</div>
-      <ul style="list-style: none; padding: 0; margin: 0 0 28px; display: flex; flex-direction: column; gap: 10px;">
-        <li style="font-size: 14px; color: #888;">Γ£ô 100 monitors</li>
-        <li style="font-size: 14px; color: #888;">Γ£ô 500 keywords</li>
-        <li style="font-size: 14px; color: #888;">Γ£ô Webhook delivery</li>
-        <li style="font-size: 14px; color: #888;">Γ£ô Priority support</li>
-        <li style="font-size: 14px; color: #888;">Γ£ô Everything in Growth</li>
+    <div class="price-card">
+      <div class="price-cmd">ebnv subscribe --plan scale</div>
+      <div class="price-name">Scale</div>
+      <div class="price-amount">$199<small>/mo</small></div>
+      <div class="price-bill">Billed monthly</div>
+      <ul class="price-list">
+        <li>100 active monitors</li>
+        <li>500 keywords</li>
+        <li>Webhook delivery</li>
+        <li>Priority support</li>
+        <li>Everything in Growth</li>
       </ul>
-      <a href="mailto:info@ebenova.net?subject=Upgrade%20to%20Scale%20%E2%80%94%20Ebenova%20Insights" class="btn-secondary" style="width: 100%; text-align: center;">Get Scale</a>
+      <a href="/dashboard?upgrade=scale" class="price-cta" aria-label="Upgrade to the Scale plan, $199 per month">GO SCALE</a>
     </div>
   </div>
 </section>
 
-<hr class="divider">
-
-<!-- EMAIL CAPTURE -->
-<section class="section" style="text-align: center;">
-  <h2 style="margin-bottom: 12px;">Get early access</h2>
-  <p style="color: #888; margin-bottom: 32px; font-size: 16px;">New features, platform expansions, and early-access spots.</p>
-  <form id="waitlist-form" style="display: flex; gap: 12px; max-width: 440px; margin: 0 auto; flex-wrap: wrap; justify-content: center;" onsubmit="submitWaitlist(event)">
-    <input type="email" id="waitlist-email" placeholder="your@email.com" required style="flex: 1; min-width: 220px;">
-    <button type="submit" class="btn-primary" style="flex-shrink:0;">Get early access</button>
-  </form>
-  <div id="waitlist-msg" style="margin-top: 16px; font-size: 14px; color: #4caf50; min-height: 20px;"></div>
-</section>
-
-<hr class="divider">
+<!-- CTA BANNER -->
+<div class="cta-banner">
+  <h2 class="cta-h">Open the terminal.<br>Watch the feed go <em>live.</em></h2>
+  <p class="cta-sub">Sixty seconds. No credit card. Your first match in fifteen minutes.</p>
+  <a href="/dashboard" class="btn btn-primary">OPEN TERMINAL <span class="btn-arrow">→</span></a>
+</div>
 
 <!-- FOOTER -->
-<footer style="padding: 32px 24px; text-align: center; color: #444; font-size: 13px;">
-  <p>An <strong style="color:#c9a84c;">Ebenova</strong> product &nbsp;┬╖&nbsp; <a href="https://ebenova.dev" style="color:#666;text-decoration:none;">ebenova.dev</a> &nbsp;┬╖&nbsp; Built for founders who talk to customers</p>
+<footer>
+  <div>
+    EBENOVA INSIGHTS // v2.0
+    <span class="cursor"></span>
+  </div>
+  <div class="right">
+    <a href="/dashboard">DASHBOARD</a>
+    <a href="#pricing">PRICING</a>
+    <a href="mailto:info@ebenova.net">CONTACT</a>
+  </div>
 </footer>
 
-<script>
-async function submitWaitlist(e) {
-  e.preventDefault();
-  const email = document.getElementById('waitlist-email').value;
-  const msg = document.getElementById('waitlist-msg');
-  msg.textContent = 'SubmittingΓÇª';
-  msg.style.color = '#888';
-  try {
-    const res = await fetch('/v1/subscribe', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email }),
-    });
-    const data = await res.json();
-    if (data.success) {
-      msg.textContent = data.already_on_waitlist ? "You're already on the list!" : "You're on the list. We'll be in touch.";
-      msg.style.color = '#4caf50';
-      document.getElementById('waitlist-email').value = '';
-    } else {
-      msg.textContent = data.error?.message || 'Something went wrong. Try again.';
-      msg.style.color = '#ff8080';
-    }
-  } catch {
-    msg.textContent = 'Network error. Try again.';
-    msg.style.color = '#ff8080';
-  }
-}
-</script>
 </body>
 </html>

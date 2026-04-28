@@ -6,7 +6,7 @@
 <title>Ebenova Insights</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&family=Crimson+Pro:ital,wght@0,700;1,400&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/@phosphor-icons/web@2.1.1" defer></script>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -23,7 +23,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:#F1F5F9;color:#0F172A;-
 
 /* Sidebar */
 .sb-logo{padding:18px 16px 14px;border-bottom:1px solid #1E293B;display:flex;align-items:center;gap:10px}
-.sb-logo-icon{width:34px;height:34px;background:linear-gradient(135deg,#C9A84C,#E8C96A);border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.sb-logo-icon{width:34px;height:34px;background:linear-gradient(135deg,#FF6B35,#FF8C42);border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .sb-logo-icon i{color:#000;font-size:18px}
 .sb-logo-text{line-height:1.2}
 .sb-logo-name{font-size:14px;font-weight:700;color:#F8FAFC;letter-spacing:-0.3px}
@@ -33,16 +33,16 @@ body{font-family:'Inter',system-ui,sans-serif;background:#F1F5F9;color:#0F172A;-
 .sb-item{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;cursor:pointer;border:none;background:transparent;color:#64748B;font-size:13px;font-weight:500;width:100%;text-align:left;transition:all .15s;font-family:inherit}
 .sb-item i{font-size:17px;flex-shrink:0;width:20px;text-align:center}
 .sb-item:hover{background:#1E293B;color:#CBD5E1}
-.sb-item.active{background:rgba(201,168,76,.12);color:#C9A84C}
+.sb-item.active{background:rgba(255,107,53,.12);color:#FF6B35}
 .sb-item .badge-count{margin-left:auto;background:#1E293B;color:#64748B;font-size:10px;font-weight:600;padding:1px 6px;border-radius:10px}
-.sb-item.active .badge-count{background:rgba(201,168,76,.15);color:#C9A84C}
+.sb-item.active .badge-count{background:rgba(255,107,53,.15);color:#FF6B35}
 .sb-footer{padding:12px;border-top:1px solid #1E293B}
 .sb-user{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:8px;cursor:pointer;transition:background .15s}
 .sb-user:hover{background:#1E293B}
 .sb-avatar{width:28px;height:28px;border-radius:50%;background:rgba(201,168,76,.12);border:1px solid rgba(201,168,76,.25);color:#C9A84C;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .sb-user-info{flex:1;min-width:0}
 .sb-user-email{font-size:11.5px;color:#94A3B8;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.sb-plan{font-size:9px;font-weight:700;color:#C9A84C;background:rgba(201,168,76,.1);border:1px solid rgba(201,168,76,.2);padding:1px 5px;border-radius:4px;text-transform:uppercase;letter-spacing:0.5px}
+.sb-plan{font-size:9px;font-weight:700;color:#FF6B35;background:rgba(255,107,53,.1);border:1px solid rgba(255,107,53,.2);padding:1px 5px;border-radius:4px;text-transform:uppercase;letter-spacing:0.5px}
 
 /* Page */
 .page-header{background:#fff;border-bottom:1px solid #E2E8F0;padding:22px 32px 18px;display:flex;align-items:flex-start;justify-content:space-between;gap:12;flex-wrap:wrap}
@@ -60,7 +60,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:#F1F5F9;color:#0F172A;-
 .label{font-size:12px;font-weight:600;color:#374151;letter-spacing:.1px}
 .hint{font-size:11.5px;color:#94A3B8;line-height:1.5}
 input.inp,textarea.inp,select.inp{background:#fff;border:1px solid #D1D5DB;color:#0F172A;border-radius:8px;padding:9px 12px;width:100%;outline:none;font-size:13.5px;font-family:inherit;transition:border-color .15s,box-shadow .15s;line-height:1.5}
-input.inp:focus,textarea.inp:focus,select.inp:focus{border-color:#C9A84C;box-shadow:0 0 0 3px rgba(201,168,76,.1)}
+input.inp:focus,textarea.inp:focus,select.inp:focus{border-color:#FF6B35;box-shadow:0 0 0 3px rgba(255,107,53,.1)}
 input.inp::placeholder,textarea.inp::placeholder{color:#9CA3AF}
 textarea.inp{resize:vertical}
 select.inp{cursor:pointer}
@@ -72,8 +72,8 @@ select.inp{cursor:pointer}
 .btn-sm i{font-size:14px}
 .btn-lg{font-size:15px;padding:12px 22px;border-radius:9px}
 .btn-lg i{font-size:18px}
-.btn-primary{background:#C9A84C;color:#000;box-shadow:0 1px 3px rgba(201,168,76,.3)}
-.btn-primary:hover{background:#D4B560;box-shadow:0 2px 6px rgba(201,168,76,.35)}
+.btn-primary{background:#FF6B35;color:#000;box-shadow:0 1px 3px rgba(255,107,53,.3)}
+.btn-primary:hover{background:#FF7E47;box-shadow:0 2px 6px rgba(255,107,53,.35)}
 .btn-primary:disabled{opacity:.5;cursor:not-allowed}
 .btn-white{background:#fff;color:#374151;border:1px solid #D1D5DB;box-shadow:0 1px 2px rgba(0,0,0,.04)}
 .btn-white:hover{background:#F9FAFB;border-color:#9CA3AF}
@@ -87,21 +87,21 @@ select.inp{cursor:pointer}
 .pill{display:inline-flex;align-items:center;gap:4px;padding:5px 12px;border-radius:20px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid #E2E8F0;background:#fff;color:#64748B;transition:all .15s;user-select:none;font-family:inherit}
 .pill i{font-size:13px}
 .pill:hover{border-color:#CBD5E1;color:#374151;background:#F8FAFC}
-.pill.on{background:#FFFBEB;border-color:#FCD34D;color:#92400E;font-weight:600}
+.pill.on{background:#FFF7F2;border-color:#FCD34D;color:#9A3412;font-weight:600}
 
 /* Source badges */
 .badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:5px;font-size:11px;font-weight:600;letter-spacing:.1px}
 .badge-reddit{background:#FEE2E2;color:#991B1B}
-.badge-hn{background:#FEF3C7;color:#92400E}
+.badge-hn{background:#FFEDD5;color:#9A3412}
 .badge-medium{background:#D1FAE5;color:#065F46}
-.badge-substack{background:#FEF3C7;color:#92400E}
+.badge-substack{background:#FFEDD5;color:#9A3412}
 .badge-quora{background:#FEE2E2;color:#991B1B}
 .badge-upwork{background:#D1FAE5;color:#065F46}
 .badge-fiverr{background:#D1FAE5;color:#065F46}
 .badge-github{background:#F3F4F6;color:#1F2937;border:1px solid #E5E7EB}
 .badge-producthunt{background:#FEE2E2;color:#991B1B}
 .badge-other{background:#F3F4F6;color:#6B7280}
-.badge-hot{background:#FEF3C7;color:#92400E}
+.badge-hot{background:#FFEDD5;color:#9A3412}
 
 /* Alerts */
 .alert{padding:10px 14px;border-radius:8px;font-size:13px;line-height:1.5;display:flex;align-items:flex-start;gap:8px}
@@ -111,8 +111,8 @@ select.inp{cursor:pointer}
 .alert-info{background:#EFF6FF;border:1px solid #BFDBFE;color:#1E40AF}
 
 /* Draft box */
-.draft-box{background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;padding:14px 16px;margin-top:12px}
-.draft-header{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#92400E;margin-bottom:8px;display:flex;align-items:center;gap:5px}
+.draft-box{background:#FFF7F2;border:1px solid #FED7AA;border-radius:8px;padding:14px 16px;margin-top:12px}
+.draft-header{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#9A3412;margin-bottom:8px;display:flex;align-items:center;gap:5px}
 .draft-header i{font-size:13px}
 .draft-text{font-size:13px;color:#451A03;line-height:1.75;white-space:pre-wrap}
 
@@ -136,6 +136,40 @@ select.inp{cursor:pointer}
 /* Modal */
 .modal-bg{position:fixed;inset:0;background:rgba(15,23,42,.65);backdrop-filter:blur(5px);display:flex;align-items:center;justify-content:center;z-index:999;padding:16px}
 
+/* Terminal-themed Auth modal — extends the landing page intel-terminal aesthetic
+   to first sign-in. Once authenticated, dashboard returns to its light/Inter UI. */
+.term-bg{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:999;padding:16px;background:#0a0907;background-image:radial-gradient(circle at 18% 12%,rgba(255,107,53,.06),transparent 50%),radial-gradient(circle at 82% 88%,rgba(255,107,53,.04),transparent 60%)}
+.term-card{width:100%;max-width:440px;background:#14110d;border:1px solid #2a2419;border-radius:8px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.5),0 0 0 1px rgba(255,107,53,.05);font-family:'Inter',system-ui,sans-serif;color:#f5efe0}
+.term-head{background:linear-gradient(to bottom,#1f1a13,#14110d);border-bottom:1px solid #2a2419;padding:11px 14px;display:flex;align-items:center;gap:12px}
+.term-dots{display:flex;gap:6px}
+.term-dots span{width:10px;height:10px;border-radius:50%;background:#3a3328}
+.term-title{font-family:'JetBrains Mono',monospace;font-size:11px;color:#6f6757;letter-spacing:1.5px}
+.term-status{margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11px;color:#34d058;display:inline-flex;align-items:center;gap:6px}
+.term-status::before{content:'';width:6px;height:6px;border-radius:50%;background:#34d058;box-shadow:0 0 6px #34d058;animation:term-pulse 1.6s infinite}
+@keyframes term-pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.term-body{padding:36px 32px}
+.term-eyebrow{font-family:'JetBrains Mono',monospace;font-size:10px;color:#FF6B35;letter-spacing:3px;margin-bottom:14px;display:inline-flex;align-items:center;gap:10px}
+.term-eyebrow::before{content:'';width:6px;height:6px;border-radius:50%;background:#FF6B35;animation:term-pulse 1.6s infinite}
+.term-h{font-family:'Crimson Pro',Georgia,serif;font-size:32px;font-weight:700;line-height:1.05;letter-spacing:-1px;margin-bottom:14px}
+.term-h em{font-style:italic;font-weight:400;background:linear-gradient(135deg,#FF6B35,#FF8C42);-webkit-background-clip:text;background-clip:text;color:transparent}
+.term-sub{font-size:13.5px;color:#b9b09f;line-height:1.6;margin-bottom:24px}
+.term-input{width:100%;background:#0a0907;border:1px solid #2a2419;color:#f5efe0;border-radius:6px;padding:14px 14px;font-size:14px;font-family:'JetBrains Mono',monospace;outline:none;transition:border-color .15s,box-shadow .15s}
+.term-input:focus{border-color:#FF6B35;box-shadow:0 0 0 3px rgba(255,107,53,.12)}
+.term-input::placeholder{color:#6f6757}
+.term-btn{width:100%;margin-top:10px;padding:14px 18px;border-radius:6px;font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;letter-spacing:.5px;background:#FF6B35;color:#000;border:none;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:50px;transition:all .18s}
+.term-btn:hover:not(:disabled){background:#FF8C42;transform:translateY(-1px);box-shadow:0 8px 24px rgba(255,107,53,.25)}
+.term-btn:disabled{opacity:.4;cursor:not-allowed}
+.term-meta{font-family:'JetBrains Mono',monospace;font-size:10px;color:#6f6757;letter-spacing:1.5px;text-align:center;margin-top:18px}
+.term-meta b{color:#34d058}
+.term-error{margin-top:10px;padding:10px 12px;background:rgba(255,89,89,.08);border:1px solid rgba(255,89,89,.25);border-radius:6px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#ff8e8e;letter-spacing:.5px}
+.term-success{padding:14px 16px;background:rgba(52,208,88,.06);border:1px solid rgba(52,208,88,.2);border-radius:6px;margin-bottom:18px}
+.term-success-row{font-family:'JetBrains Mono',monospace;font-size:10px;color:#34d058;letter-spacing:2px;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+.term-success-row::before{content:'▸'}
+.term-back{margin-top:18px;background:none;border:none;color:#6f6757;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:1px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;padding:0}
+.term-back:hover{color:#b9b09f}
+.term-spin{display:inline-block;animation:term-spin 1s linear infinite}
+@keyframes term-spin{to{transform:rotate(360deg)}}
+
 /* Result card */
 .result-card{background:#fff;border:1px solid #E2E8F0;border-radius:10px;padding:18px 20px;margin-bottom:10px;transition:border-color .15s,box-shadow .15s}
 .result-card:hover{border-color:#CBD5E1;box-shadow:0 2px 8px rgba(0,0,0,.06)}
@@ -151,7 +185,7 @@ hr.div{border:none;border-top:1px solid #F1F5F9;margin:18px 0}
 
 /* Plan card */
 .plan-card{border:1px solid #E2E8F0;border-radius:10px;padding:16px;flex:1 1 180px;transition:border-color .15s}
-.plan-card:hover{border-color:#C9A84C66}
+.plan-card:hover{border-color:#FF6B3566}
 .results-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:10px}
 .metric-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px}
 .metric-card{background:#fff;border:1px solid #E2E8F0;border-radius:10px;padding:14px 18px;flex:1 1 130px;min-width:120px}
@@ -193,50 +227,50 @@ function AuthModal({ onSave }) {
   };
 
   return (
-    <div className="modal-bg">
-      <div className="card fade-up" style={{maxWidth:400,width:'100%',padding:36}}>
-        {!sent ? (
-          <>
-            <div style={{textAlign:'center',marginBottom:28}}>
-              <div style={{width:48,height:48,background:'linear-gradient(135deg,#C9A84C,#E8C96A)',borderRadius:12,display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px'}}>
-                <i className="ph-bold ph-broadcast" style={{fontSize:22,color:'#000'}}></i>
-              </div>
-              <div style={{fontSize:20,fontWeight:800,color:'#0F172A',marginBottom:6,letterSpacing:'-.4px'}}>Ebenova Insights</div>
-              <div style={{fontSize:13,color:'#64748B',lineHeight:1.6}}>Monitor 8 platforms for people actively<br/>looking for what you build.</div>
-            </div>
-            <div style={{display:'flex',flexDirection:'column',gap:10}}>
-              <input className="inp" type="email" placeholder="Enter your work email" value={email}
+    <div className="term-bg" role="dialog" aria-modal="true" aria-labelledby="term-h">
+      <div className="term-card">
+        <div className="term-head">
+          <div className="term-dots"><span></span><span></span><span></span></div>
+          <div className="term-title">EBNV-1 // ACCESS REQUEST</div>
+          <div className="term-status">{sent ? 'TRANSMITTED' : 'STANDBY'}</div>
+        </div>
+        <div className="term-body">
+          {!sent ? (
+            <>
+              <div className="term-eyebrow">SECURE SIGN-IN // MAGIC LINK</div>
+              <h2 className="term-h" id="term-h">Open the <em>terminal.</em></h2>
+              <p className="term-sub">Enter your email — we send you a magic link. No password, no setup, no credit card. You're inside the live feed in under a minute.</p>
+              <input
+                className="term-input"
+                type="email"
+                placeholder="you@yourcompany.com"
+                value={email}
                 onChange={e=>setEmail(e.target.value)}
                 onKeyDown={e=>e.key==='Enter'&&email.includes('@')&&submit()}
-                style={{padding:'11px 14px',fontSize:14}} />
-              {err && <div className="alert alert-error"><i className="ph ph-warning-circle"></i>{err}</div>}
-              <button className="btn btn-primary" style={{width:'100%',padding:'11px',fontSize:14,marginTop:2}} onClick={submit} disabled={loading||!email.includes('@')}>
+                aria-label="Email address"
+                autoFocus
+              />
+              {err && <div className="term-error">// ERROR · {err}</div>}
+              <button className="term-btn" onClick={submit} disabled={loading||!email.includes('@')} aria-label="Request magic login link">
                 {loading
-                  ? <><i className="ph ph-circle-notch spin"></i> SendingΓÇª</>
-                  : <><i className="ph-bold ph-arrow-right"></i> Get started free</>}
+                  ? <><span className="term-spin">◐</span> TRANSMITTING…</>
+                  : <>REQUEST ACCESS <span style={{fontSize:16}}>→</span></>}
               </button>
-              <p style={{textAlign:'center',fontSize:12,color:'#94A3B8',marginTop:4}}>Free forever ┬╖ No credit card needed</p>
-            </div>
-          </>
-        ) : (
-          <div style={{textAlign:'center'}}>
-            <div style={{width:52,height:52,background:'#ECFDF5',border:'1px solid #A7F3D0',borderRadius:14,display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 18px'}}>
-              <i className="ph-bold ph-envelope-open" style={{fontSize:24,color:'#065F46'}}></i>
-            </div>
-            <div style={{fontSize:18,fontWeight:700,marginBottom:8}}>Check your inbox</div>
-            <div style={{fontSize:13,color:'#64748B',lineHeight:1.7,marginBottom:20}}>
-              We sent a magic link to<br/>
-              <strong style={{color:'#0F172A',fontWeight:600}}>{email}</strong>
-            </div>
-            <div className="alert alert-info" style={{textAlign:'left',marginBottom:16}}>
-              <i className="ph ph-info"></i>
-              Click the link in the email to open your dashboard ΓÇö no password needed.
-            </div>
-            <button onClick={()=>{setSent(false);setEmail('');}} style={{background:'none',border:'none',color:'#94A3B8',cursor:'pointer',fontSize:13,display:'inline-flex',alignItems:'center',gap:5}}>
-              <i className="ph ph-arrow-left"></i> Use a different email
-            </button>
-          </div>
-        )}
+              <div className="term-meta"><b>●</b> FREE FOREVER · NO CREDIT CARD · 60-SEC SETUP</div>
+            </>
+          ) : (
+            <>
+              <div className="term-eyebrow">TRANSMISSION COMPLETE</div>
+              <h2 className="term-h" id="term-h">Check your <em>inbox.</em></h2>
+              <div className="term-success">
+                <div className="term-success-row">MAGIC LINK SENT</div>
+                <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:'#f5efe0',wordBreak:'break-all'}}>{email}</div>
+              </div>
+              <p className="term-sub" style={{marginBottom:0}}>Click the link in the email to open your dashboard. No password needed. The link is valid for 7 days — save it for return logins.</p>
+              <button onClick={()=>{setSent(false);setEmail('');}} className="term-back" aria-label="Use a different email">← USE A DIFFERENT EMAIL</button>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -248,9 +282,8 @@ function Sidebar({ tab, setTab, userEmail, plan, monitorCount, onSignOut }) {
   const initial = (userEmail||'?')[0].toUpperCase();
 
   const items = [
-    { id:'search', icon:'ph-magnifying-glass', label:'Search' },
-    { id:'feed',   icon:'ph-newspaper',        label:'Monitor Feed', count: monitorCount > 0 ? monitorCount : null },
-    { id:'create', icon:'ph-plus-circle',      label:'New Monitor' },
+    { id:'find', icon:'ph-magnifying-glass-plus', label:'Find Customers' },
+    { id:'feed', icon:'ph-newspaper',             label:'Monitor Feed', count: monitorCount > 0 ? monitorCount : null },
   ];
 
   return (
@@ -284,7 +317,7 @@ function Sidebar({ tab, setTab, userEmail, plan, monitorCount, onSignOut }) {
         <div className="sb-user">
           <div className="sb-avatar">{initial}</div>
           <div className="sb-user-info">
-            <div className="sb-user-email">{userEmail||'ΓÇö'}</div>
+            <div className="sb-user-email">{userEmail||'—'}</div>
             <div style={{marginTop:3}}><span className="sb-plan">{planLabel}</span></div>
           </div>
           <button onClick={onSignOut} title="Sign out" style={{background:'none',border:'none',color:'#475569',cursor:'pointer',padding:4,borderRadius:5,flexShrink:0,display:'flex',alignItems:'center'}}>
@@ -349,11 +382,11 @@ function MatchCard({ match, monitorId, apiKey, onAction }) {
         style={{fontSize:14,fontWeight:600,color:'#0F172A',textDecoration:'none',display:'block',marginBottom:6,lineHeight:1.5}}>
         {match.title}
       </a>
-      {match.body && <p style={{fontSize:13,color:'#64748B',lineHeight:1.65,marginBottom:10}}>{match.body.slice(0,260)}{match.body.length>260?'ΓÇª':''}</p>}
+      {match.body && <p style={{fontSize:13,color:'#64748B',lineHeight:1.65,marginBottom:10}}>{match.body.slice(0,260)}{match.body.length>260?'…':''}</p>}
       <div style={{display:'flex',gap:8,alignItems:'center',fontSize:12,color:'#94A3B8',marginBottom:match.draft?0:10,flexWrap:'wrap'}}>
         {match.author && <span>u/{match.author}</span>}
-        {match.score!=null && <span>┬╖ {match.score} pts</span>}
-        {match.comments!=null && <span>┬╖ {match.comments} replies</span>}
+        {match.score!=null && <span>· {match.score} pts</span>}
+        {match.comments!=null && <span>· {match.comments} replies</span>}
         {match.keyword && <span style={{padding:'1px 7px',background:'#F8FAFC',border:'1px solid #E2E8F0',borderRadius:4,color:'#64748B',marginLeft:4}}>"{match.keyword}"</span>}
       </div>
       {match.draft && (
@@ -367,12 +400,12 @@ function MatchCard({ match, monitorId, apiKey, onAction }) {
           <i className="ph ph-check"></i> Replied
         </button>
         <button className="btn btn-ghost btn-sm" onClick={regenerate} disabled={drafting}>
-          <i className={`ph ph-arrow-clockwise${drafting?' spin':''}`}></i> {drafting?'DraftingΓÇª':'New draft'}
+          <i className={`ph ph-arrow-clockwise${drafting?' spin':''}`}></i> {drafting?'Drafting…':'New draft'}
         </button>
         <button className="btn btn-sm" style={{background:'transparent',border:'1px solid #F1F5F9',color:'#94A3B8',cursor:'pointer'}} onClick={()=>feedback('down')}>
           <i className="ph ph-x"></i> Skip
         </button>
-        <a href={match.url} target="_blank" rel="noreferrer" className="btn btn-sm" style={{marginLeft:'auto',background:'transparent',border:'none',color:'#C9A84C',fontWeight:600,padding:'6px 4px',gap:4}}>
+        <a href={match.url} target="_blank" rel="noreferrer" className="btn btn-sm" style={{marginLeft:'auto',background:'transparent',border:'none',color:'#FF6B35',fontWeight:600,padding:'6px 4px',gap:4}}>
           Open thread <i className="ph ph-arrow-square-out"></i>
         </a>
       </div>
@@ -407,11 +440,11 @@ function SearchResultCard({ result, productContext, apiKey }) {
         style={{fontSize:14,fontWeight:600,color:'#0F172A',textDecoration:'none',display:'block',marginBottom:6,lineHeight:1.5}}>
         {result.title}
       </a>
-      {result.body && <p style={{fontSize:13,color:'#64748B',lineHeight:1.65,marginBottom:10}}>{result.body.slice(0,260)}{result.body.length>260?'ΓÇª':''}</p>}
+      {result.body && <p style={{fontSize:13,color:'#64748B',lineHeight:1.65,marginBottom:10}}>{result.body.slice(0,260)}{result.body.length>260?'…':''}</p>}
       <div style={{display:'flex',gap:8,alignItems:'center',fontSize:12,color:'#94A3B8',flexWrap:'wrap'}}>
         {result.author&&result.author!=='medium'&&result.author!=='substack'&&<span>by {result.author}</span>}
-        {result.score>0 && <span>┬╖ {result.score} pts</span>}
-        {result.comments>0 && <span>┬╖ {result.comments} replies</span>}
+        {result.score>0 && <span>· {result.score} pts</span>}
+        {result.comments>0 && <span>· {result.comments} replies</span>}
         {result.keyword && <span style={{padding:'1px 7px',background:'#F8FAFC',border:'1px solid #E2E8F0',borderRadius:4,color:'#64748B',marginLeft:4}}>"{result.keyword}"</span>}
       </div>
       {draft && (
@@ -424,7 +457,7 @@ function SearchResultCard({ result, productContext, apiKey }) {
         {!draft && (
           <button className="btn btn-white btn-sm" onClick={getDraft} disabled={drafting}>
             <i className={`ph${drafting?'-bold':''} ph-${drafting?'circle-notch':'robot'}${drafting?' spin':''}`}></i>
-            {drafting ? 'DraftingΓÇª' : 'Draft reply'}
+            {drafting ? 'Drafting…' : 'Draft reply'}
           </button>
         )}
         {draft && (
@@ -438,7 +471,7 @@ function SearchResultCard({ result, productContext, apiKey }) {
             <i className={`ph ph-arrow-clockwise${drafting?' spin':''}`}></i> Regenerate
           </button>
         )}
-        <a href={result.url} target="_blank" rel="noreferrer" className="btn btn-sm" style={{marginLeft:'auto',background:'transparent',border:'none',color:'#C9A84C',fontWeight:600,padding:'6px 4px',gap:4}}>
+        <a href={result.url} target="_blank" rel="noreferrer" className="btn btn-sm" style={{marginLeft:'auto',background:'transparent',border:'none',color:'#FF6B35',fontWeight:600,padding:'6px 4px',gap:4}}>
           Open thread <i className="ph ph-arrow-square-out"></i>
         </a>
       </div>
@@ -487,108 +520,6 @@ function PlatformToggles({ value, onChange }) {
         );
       })}
     </div>
-  );
-}
-
-// ΓöÇΓöÇ Search Now ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
-function SearchNow({ apiKey }) {
-  const [keywords, setKeywords] = useState('');
-  const [productCtx, setProductCtx] = useState('');
-  const [platforms, setPlatforms] = useState(Object.fromEntries(PLATFORMS.map(([k])=>[k,true])));
-  const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState([]);
-  const [searched, setSearched] = useState(false);
-  const [err, setErr] = useState('');
-  const resultsRef = useRef(null);
-
-  const search = async () => {
-    setErr(''); setLoading(true); setResults([]); setSearched(false);
-    const kws = keywords.split('\n').map(k=>k.trim()).filter(Boolean).slice(0,5);
-    if (!kws.length) { setErr('Enter at least one keyword.'); setLoading(false); return; }
-    const sel = Object.entries(platforms).filter(([,v])=>v).map(([k])=>k);
-    if (!sel.length) { setErr('Select at least one platform.'); setLoading(false); return; }
-    const r = await apiFetch('/v1/search',{method:'POST',body:JSON.stringify({keywords:kws,platforms:sel})},apiKey);
-    setLoading(false); setSearched(true);
-    if (r.ok) {
-      setResults(r.data.results||[]);
-      setTimeout(()=>resultsRef.current?.scrollIntoView({behavior:'smooth',block:'start'}),100);
-    } else setErr(r.data?.error?.message||'Search failed.');
-  };
-
-  return (
-    <>
-      <div className="page-header">
-        <div className="page-header-text">
-          <h1 className="page-title">Search Now</h1>
-          <p className="page-subtitle">Find buying-intent conversations across 8 platforms in real time</p>
-        </div>
-      </div>
-      <div className="page-body">
-        <div className="card card-p" style={{marginBottom:20}}>
-          <div style={{display:'flex',flexDirection:'column',gap:18}}>
-            <div className="field">
-              <label className="label">Keywords <span style={{fontWeight:400,color:'#94A3B8'}}>ΓÇö one per line ┬╖ max 5</span></label>
-              <textarea className="inp" rows={4}
-                placeholder={"just launched my SaaS\nlooking for a freelancer\nclient won't pay\nneed a tool forΓÇª"}
-                value={keywords} onChange={e=>setKeywords(e.target.value)} />
-              <span className="hint">Use phrases people actually type, not product categories</span>
-            </div>
-            <div className="field">
-              <label className="label">Your product <span style={{fontWeight:400,color:'#94A3B8'}}>ΓÇö optional, helps AI write relevant replies</span></label>
-              <textarea className="inp" rows={2}
-                placeholder="e.g. Ebenova monitors Reddit for buying-intent posts and drafts outreach repliesΓÇª"
-                value={productCtx} onChange={e=>setProductCtx(e.target.value)} />
-            </div>
-            <div className="field">
-              <label className="label" style={{marginBottom:8}}>Platforms</label>
-              <PlatformToggles value={platforms} onChange={setPlatforms} />
-            </div>
-            {err && <div className="alert alert-error"><i className="ph ph-warning-circle"></i>{err}</div>}
-            <div>
-              <button className="btn btn-primary btn-lg" onClick={search} disabled={loading||!keywords.trim()}>
-                {loading
-                  ? <><i className="ph ph-circle-notch spin"></i> Scanning platformsΓÇª</>
-                  : <><i className="ph-bold ph-magnifying-glass"></i> Search Now</>}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {loading && (
-          <div style={{textAlign:'center',padding:'52px 0'}}>
-            <div style={{width:52,height:52,background:'#FFFBEB',border:'1px solid #FDE68A',borderRadius:14,display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px'}}>
-              <i className="ph-bold ph-magnifying-glass spin" style={{fontSize:24,color:'#92400E'}}></i>
-            </div>
-            <div style={{fontSize:15,fontWeight:600,color:'#0F172A',marginBottom:4}}>Scanning 8 platformsΓÇª</div>
-            <div style={{fontSize:13,color:'#64748B',marginBottom:24}}>Usually takes 10ΓÇô20 seconds</div>
-            <div style={{display:'flex',flexDirection:'column',gap:8,maxWidth:560,margin:'0 auto'}}>
-              {[100,88,72].map((w,i)=><div key={i} className="shimmer" style={{height:76,maxWidth:w+'%'}} />)}
-            </div>
-          </div>
-        )}
-
-        <div ref={resultsRef}>
-          {!loading && searched && (
-            <div style={{display:'flex',alignItems:'center',marginBottom:14,paddingBottom:12,borderBottom:'1px solid #E2E8F0'}}>
-              <span style={{fontSize:13,fontWeight:600,color:'#374151'}}>{results.length} result{results.length!==1?'s':''} found</span>
-              {results.length>0 && <span style={{fontSize:12,color:'#94A3B8',marginLeft:8}}>sorted by most recent</span>}
-            </div>
-          )}
-          <div className="results-grid">
-            {results.map(r=><SearchResultCard key={r.id} result={r} productContext={productCtx} apiKey={apiKey} />)}
-          </div>
-          {!loading && searched && !results.length && (
-            <div className="card">
-              <div className="empty">
-                <div className="empty-icon"><i className="ph ph-binoculars"></i></div>
-                <div className="empty-title">No results found</div>
-                <div className="empty-desc">Try broader keywords or select more platforms.</div>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </>
   );
 }
 
@@ -674,97 +605,327 @@ function MatchesFeed({ apiKey, monitors }) {
 }
 
 // ΓöÇΓöÇ Create Monitor ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
-function CreateMonitor({ apiKey, onCreated }) {
-  const [form, setForm] = useState({
-    name:'', keywords:'', subreddits:'', productContext:'', alertEmail:'', slackWebhookUrl:'',
-    platforms:Object.fromEntries(PLATFORMS.map(([k])=>[k,true])),
-  });
-  const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState('');
-  const [ok, setOk] = useState('');
+// ── Find Customers (unified flow) ────────────────────────────────────────────
+function FindCustomers({ apiKey, onMonitorCreated }) {
+  const [step, setStep] = useState(1) // 1=input, 2=generating, 3=review, 4=confirm, 5=confirmed
+  const [description, setDescription] = useState('')
+  const [suggestion, setSuggestion] = useState(null)
+  const [counts, setCounts] = useState({})
+  const [picked, setPicked] = useState(new Set())
+  const [customKw, setCustomKw] = useState('')
+  const [monitorName, setMonitorName] = useState('')
+  const [savedMonitorId, setSavedMonitorId] = useState('')
+  const [sampleMatches, setSampleMatches] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [err, setErr] = useState('')
 
-  const set = (k,v) => setForm(f=>({...f,[k]:v}));
-
-  const submit = async () => {
-    setErr(''); setOk('');
-    if (!form.name.trim()) return setErr('Monitor name is required.');
-    if (!form.keywords.trim()) return setErr('At least one keyword is required.');
-    const keywords = form.keywords.split('\n').map(k=>k.trim()).filter(Boolean);
-    const subreddits = form.subreddits.split(',').map(s=>s.trim()).filter(Boolean);
-    const body = {
-      name:form.name.trim(),
-      keywords:keywords.map(k=>({keyword:k,subreddits,productContext:form.productContext})),
-      productContext:form.productContext,
-      alertEmail:form.alertEmail||undefined,
-      slackWebhookUrl:form.slackWebhookUrl||undefined,
-      includeMedium:form.platforms.medium,
-      includeSubstack:form.platforms.substack,
-      includeQuora:form.platforms.quora,
-      includeUpworkForum:form.platforms.upwork,
-      includeFiverrForum:form.platforms.fiverr,
-    };
-    setLoading(true);
-    const r = await apiFetch('/v1/monitors',{method:'POST',body:JSON.stringify(body)},apiKey);
-    setLoading(false);
-    if (r.ok) { setOk(`Monitor "${r.data.name}" is live. First scan within 10 minutes.`); onCreated(); }
-    else setErr(r.data?.error?.message||'Failed to create monitor.');
+  const intentMeta = {
+    buying:     { icon: '🎯', label: 'BUYING INTENT' },
+    pain:       { icon: '💢', label: 'PAIN POINT' },
+    comparison: { icon: '⚖️', label: 'COMPARISON' },
+    question:   { icon: '❓', label: 'QUESTION' },
   };
 
-  return (
-    <>
-      <div className="page-header">
-        <div><h1 className="page-title">New Monitor</h1><p className="page-subtitle">Set up a continuous background scan with email alerts</p></div>
-      </div>
-      <div className="page-body" style={{maxWidth:660}}>
-        <div className="card card-p">
-          <div style={{display:'flex',flexDirection:'column',gap:20}}>
-            <div className="field">
-              <label className="label">Monitor name</label>
-              <input className="inp" placeholder="e.g. Freelance Leads, SaaS Mentions" value={form.name} onChange={e=>set('name',e.target.value)} />
+  const generateSuggestions = async () => {
+    if (description.trim().length < 20) { setErr('Tell me a bit more — at least 20 characters.'); return; }
+    setErr(''); setLoading(true); setStep(2);
+    const r = await apiFetch('/v1/find/suggest', { method:'POST', body: JSON.stringify({ description }) }, apiKey);
+    if (!r.ok) { setErr(r.data?.error?.message || 'Could not generate suggestions.'); setLoading(false); setStep(1); return; }
+    setSuggestion(r.data);
+    setMonitorName(r.data.suggestedName || 'My Monitor');
+    const preChecked = new Set((r.data.keywords || []).filter(k => k.confidence === 'high').map(k => k.keyword));
+    setPicked(preChecked);
+    // Fire preview-counts in background (non-blocking)
+    const allKws = (r.data.keywords || []).map(k => k.keyword);
+    apiFetch('/v1/find/preview-counts', { method:'POST', body: JSON.stringify({ keywords: allKws }) }, apiKey)
+      .then(c => { if (c.ok) setCounts(c.data.counts || {}); });
+    setLoading(false);
+    setStep(3);
+  };
+
+  const togglePick = (kw) => {
+    const next = new Set(picked);
+    if (next.has(kw)) next.delete(kw); else next.add(kw);
+    setPicked(next);
+  };
+
+  const addCustom = () => {
+    if (!customKw.trim()) return;
+    setPicked(new Set([...picked, customKw.trim()]));
+    setCustomKw('');
+  };
+
+  const totalMatches = () => {
+    let total = 0;
+    for (const kw of picked) {
+      const c = counts[kw];
+      if (c?.count) total += c.count;
+    }
+    return total;
+  };
+
+  const saveAsMonitor = () => {
+    if (picked.size === 0) { setErr('Pick at least one keyword.'); return; }
+    setErr('');
+    setStep(4);
+  };
+
+  const confirmMonitor = async () => {
+    setLoading(true); setErr('');
+    const allKws = [...picked];
+    const body = {
+      name: monitorName.trim() || 'My Monitor',
+      keywords: allKws.map(k => ({ keyword: k, productContext: suggestion?.productContext || description })),
+      productContext: suggestion?.productContext || description,
+    };
+    const m = await apiFetch('/v1/monitors', { method:'POST', body: JSON.stringify(body) }, apiKey);
+    if (!m.ok) { setErr(m.data?.error?.message || 'Could not create monitor.'); setLoading(false); setStep(3); return; }
+    setSavedMonitorId(m.data.monitor_id);
+    // Pull sample matches from already-cached counts
+    const samples = [];
+    for (const kw of allKws.slice(0, 5)) {
+      const c = counts[kw];
+      if (c?.samples) samples.push(...c.samples.slice(0, 1));
+      if (samples.length >= 5) break;
+    }
+    setSampleMatches(samples);
+    setLoading(false);
+    setStep(5);
+    onMonitorCreated();
+    setTimeout(() => onMonitorCreated('feed'), 4000);
+  };
+
+  // ── State 1: Input ──────────────────────────────────────────────────────
+  if (step === 1) {
+    return (
+      <>
+        <div className="page-header">
+          <div>
+            <h1 className="page-title">Find <em style={{fontStyle:'italic',color:'#FF6B35',fontWeight:400}}>customers</em></h1>
+            <p className="page-subtitle">Describe what you sell. The AI suggests keywords, runs them live, and shows you what's worth replying to.</p>
+          </div>
+          <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:'#9A3412',background:'#FFF7F2',border:'1px solid #FED7AA',padding:'5px 10px',borderRadius:999,letterSpacing:1.5,display:'inline-flex',alignItems:'center',gap:6}}>
+            <span style={{width:5,height:5,borderRadius:'50%',background:'#FF6B35'}}></span> STEP 1 OF 3 · INPUT
+          </span>
+        </div>
+        <div className="page-body" style={{maxWidth:780}}>
+          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:'#FF6B35',letterSpacing:3,marginBottom:18}}>// PROMPT · WHAT YOU SELL</div>
+          <h2 style={{fontFamily:"'Crimson Pro',Georgia,serif",fontSize:36,fontWeight:700,letterSpacing:-1,lineHeight:1.05,marginBottom:14}}>
+            Tell me what you sell.<br/>I'll find your <em style={{fontStyle:'italic',color:'#FF6B35',fontWeight:400}}>next customer</em> in 4 seconds.
+          </h2>
+          <p style={{color:'#475569',fontSize:15,lineHeight:1.65,maxWidth:620,marginBottom:30}}>
+            2–3 sentences. Mention what you sell, who buys, and what frustrates them about existing options.
+          </p>
+          <textarea className="inp" rows={5} value={description} onChange={e=>setDescription(e.target.value)}
+            style={{padding:'18px 20px',fontSize:15,lineHeight:1.65,fontFamily:'inherit'}}
+            placeholder="e.g. I run a small SEO agency. We help SaaS startups get their first 10k organic visitors. Most clients come to us frustrated with content agencies that didn't move the needle."
+          />
+          {err && <div className="alert alert-error" style={{marginTop:12}}><i className="ph ph-warning-circle"></i>{err}</div>}
+          <div style={{display:'flex',gap:12,alignItems:'center',marginTop:18,flexWrap:'wrap'}}>
+            <button className="btn btn-primary" onClick={generateSuggestions} disabled={loading||description.trim().length < 20} style={{padding:'14px 24px',fontSize:14}}>
+              <i className="ph-bold ph-magnifying-glass"></i> Find what's out there <span style={{fontSize:16}}>→</span>
+            </button>
+          </div>
+          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:'#94A3B8',letterSpacing:1,marginTop:24,display:'flex',gap:18,flexWrap:'wrap'}}>
+            <span><b style={{color:'#16A34A'}}>●</b> 4-SECOND ANALYSIS</span><span>9 PLATFORMS</span><span>NO COMMITMENT — REVIEW BEFORE SAVING</span>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  // ── State 2: Generating ─────────────────────────────────────────────────
+  if (step === 2) {
+    return (
+      <>
+        <div className="page-header">
+          <div>
+            <h1 className="page-title">Find <em style={{fontStyle:'italic',color:'#FF6B35',fontWeight:400}}>customers</em></h1>
+            <p className="page-subtitle">Generating signal — keywords stream in.</p>
+          </div>
+          <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:'#9A3412',background:'#FFF7F2',border:'1px solid #FED7AA',padding:'5px 10px',borderRadius:999,letterSpacing:1.5,display:'inline-flex',alignItems:'center',gap:6}}>
+            <span style={{width:5,height:5,borderRadius:'50%',background:'#16A34A'}}></span> GENERATING
+          </span>
+        </div>
+        <div className="page-body" style={{maxWidth:880}}>
+          <div style={{background:'#0a0907',color:'#F5EFE0',border:'1px solid #1E293B',borderRadius:10,overflow:'hidden',fontFamily:"'JetBrains Mono',monospace",fontSize:12.5}}>
+            <div style={{background:'linear-gradient(to bottom,#1f1a13,#14110d)',borderBottom:'1px solid #2a2419',padding:'11px 16px',display:'flex',alignItems:'center',gap:12,color:'#6f6757',fontSize:11,letterSpacing:1.5}}>
+              <div style={{display:'flex',gap:6}}>
+                <span style={{width:10,height:10,borderRadius:'50%',background:'#3a3328'}}></span>
+                <span style={{width:10,height:10,borderRadius:'50%',background:'#3a3328'}}></span>
+                <span style={{width:10,height:10,borderRadius:'50%',background:'#3a3328'}}></span>
+              </div>
+              <span>EBNV-1 // KEYWORD GENERATOR</span>
+              <span style={{marginLeft:'auto',color:'#34d058',display:'inline-flex',alignItems:'center',gap:6}}>
+                <span style={{width:6,height:6,borderRadius:'50%',background:'#34d058',boxShadow:'0 0 6px #34d058'}}></span>
+                ANALYZING
+              </span>
             </div>
-            <div className="field">
-              <label className="label">Keywords <span style={{fontWeight:400,color:'#94A3B8'}}>ΓÇö one per line</span></label>
-              <textarea className="inp" rows={5}
-                placeholder={"client won't pay\nscope creep\nunpaid invoice\nneed contract template"}
-                value={form.keywords} onChange={e=>set('keywords',e.target.value)} />
+            <div style={{padding:'18px 20px',lineHeight:1.85}}>
+              <div style={{marginBottom:4}}><span style={{color:'#FF6B35'}}>$</span> analyze --input "{description.slice(0, 50)}…"</div>
+              <div style={{marginBottom:4,color:'#6f6757'}}># model: anthropic-haiku-4-5 · streaming</div>
+              <div style={{marginBottom:4}}><span style={{color:'#34d058'}}>✓</span> parsed product context</div>
+              <div style={{marginBottom:4}}><span style={{color:'#34d058'}}>✓</span> categorizing intent…</div>
+              <div style={{marginBottom:4}}><span style={{color:'#FF6B35'}}>$</span> render --output review-screen</div>
             </div>
-            <div className="field">
-              <label className="label" style={{marginBottom:8}}>Platforms to monitor</label>
-              <PlatformToggles value={form.platforms} onChange={v=>set('platforms',v)} />
-            </div>
-            <div className="field">
-              <label className="label">Subreddits <span style={{fontWeight:400,color:'#94A3B8'}}>ΓÇö comma-separated, blank = all</span></label>
-              <input className="inp" placeholder="freelance, smallbusiness, Upwork" value={form.subreddits} onChange={e=>set('subreddits',e.target.value)} />
-            </div>
-            <div className="field">
-              <label className="label">Product description <span style={{fontWeight:400,color:'#94A3B8'}}>ΓÇö AI uses this to draft replies</span></label>
-              <textarea className="inp" rows={3}
-                placeholder="Describe your product so the AI can write relevant, natural-sounding repliesΓÇª"
-                value={form.productContext} onChange={e=>set('productContext',e.target.value)} />
-            </div>
-            <hr className="div" />
-            <div className="field">
-              <label className="label">Alert email <span style={{fontWeight:400,color:'#94A3B8'}}>ΓÇö defaults to your signup email</span></label>
-              <input className="inp" type="email" placeholder="you@example.com" value={form.alertEmail} onChange={e=>set('alertEmail',e.target.value)} />
-            </div>
-            <div className="field">
-              <label className="label">Slack webhook <span style={{fontWeight:400,color:'#94A3B8'}}>ΓÇö optional</span></label>
-              <input className="inp" placeholder="https://hooks.slack.com/services/ΓÇª" value={form.slackWebhookUrl} onChange={e=>set('slackWebhookUrl',e.target.value)} />
-            </div>
-            {err && <div className="alert alert-error"><i className="ph ph-warning-circle"></i>{err}</div>}
-            {ok  && <div className="alert alert-success"><i className="ph ph-check-circle"></i>{ok}</div>}
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  // ── State 3: Self-review ────────────────────────────────────────────────
+  if (step === 3) {
+    const groups = ['buying', 'pain', 'comparison', 'question'];
+    return (
+      <>
+        <div className="page-header">
+          <div>
+            <h1 className="page-title">Self review · <em style={{fontStyle:'italic',color:'#FF6B35',fontWeight:400}}>verify before you commit</em></h1>
+            <p className="page-subtitle">The AI suggests. The data confirms. Toggle keywords, edit, then save.</p>
+          </div>
+          <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:'#9A3412',background:'#FFF7F2',border:'1px solid #FED7AA',padding:'5px 10px',borderRadius:999,letterSpacing:1.5,display:'inline-flex',alignItems:'center',gap:6}}>
+            <span style={{width:5,height:5,borderRadius:'50%',background:'#FF6B35'}}></span> STEP 3 OF 3 · REVIEW
+          </span>
+        </div>
+        <div className="page-body" style={{maxWidth:1100}}>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 320px',gap:24}}>
             <div>
-              <button className="btn btn-primary" style={{minWidth:160}} onClick={submit} disabled={loading}>
-                {loading ? <><i className="ph ph-circle-notch spin"></i> CreatingΓÇª</> : <><i className="ph-bold ph-plus"></i> Create Monitor</>}
+              {groups.map(intent => {
+                const items = (suggestion?.keywords || []).filter(k => k.intentType === intent);
+                if (items.length === 0) return null;
+                const meta = intentMeta[intent];
+                return (
+                  <div key={intent} className="card" style={{padding:'20px 22px',marginBottom:14}}>
+                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,letterSpacing:2.5,color:'#9A3412',display:'flex',alignItems:'center',gap:10,marginBottom:14}}>
+                      <span style={{fontSize:16}}>{meta.icon}</span>{meta.label}
+                    </div>
+                    <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                      {items.map(k => {
+                        const on = picked.has(k.keyword);
+                        const c = counts[k.keyword];
+                        return (
+                          <div key={k.keyword} onClick={()=>togglePick(k.keyword)}
+                            style={{display:'flex',alignItems:'center',gap:14,padding:'11px 14px',borderRadius:8,cursor:'pointer',
+                              background:on?'#FFF7F2':'transparent',border:on?'1px solid #FED7AA':'1px solid transparent',opacity:on?1:0.7}}>
+                            <div style={{width:18,height:18,borderRadius:4,border:on?'1.5px solid #FF6B35':'1.5px solid #CBD5E1',background:on?'#FF6B35':'transparent',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,color:'#fff',flexShrink:0}}>
+                              {on?'✓':''}
+                            </div>
+                            <div style={{flex:1,fontSize:14,color:'#0F172A',fontWeight:500}}>{k.keyword}</div>
+                            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:c?(c.count > 5 ? '#16A34A' : c.count > 0 ? '#D97706' : '#94A3B8'):'#94A3B8',fontWeight:600,flexShrink:0}}>
+                              {c ? `${c.count} matches/wk` : '…'}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+              <div className="card" style={{padding:14,background:'#F8FAFC',border:'1px dashed #CBD5E1'}}>
+                <div style={{display:'flex',gap:8,alignItems:'center'}}>
+                  <input type="text" placeholder="Add your own keyword…" value={customKw} onChange={e=>setCustomKw(e.target.value)}
+                    onKeyDown={e=>e.key==='Enter'&&addCustom()}
+                    style={{flex:1,background:'#fff',border:'1px solid #D1D5DB',color:'#0F172A',borderRadius:6,padding:'8px 12px',fontSize:13,outline:'none'}} />
+                  <button className="btn btn-white btn-sm" onClick={addCustom}><i className="ph ph-plus"></i> Add</button>
+                </div>
+              </div>
+              {err && <div className="alert alert-error" style={{marginTop:14}}><i className="ph ph-warning-circle"></i>{err}</div>}
+            </div>
+
+            <div style={{position:'sticky',top:20,alignSelf:'start'}}>
+              <div style={{background:'#0a0907',color:'#F5EFE0',borderRadius:10,border:'1px solid #1E293B',overflow:'hidden',boxShadow:'0 20px 40px rgba(0,0,0,0.3)'}}>
+                <div style={{background:'linear-gradient(to bottom,#1f1a13,#14110d)',borderBottom:'1px solid #2a2419',padding:'11px 16px',fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:'#6f6757',letterSpacing:2,display:'flex',alignItems:'center',gap:10}}>
+                  <span style={{width:6,height:6,borderRadius:'50%',background:'#34d058',boxShadow:'0 0 6px #34d058'}}></span> LIVE TALLY
+                </div>
+                <div style={{padding:'22px 22px 18px'}}>
+                  <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:48,fontWeight:700,color:'#FF6B35',letterSpacing:-2,lineHeight:1,marginBottom:6}}>
+                    {totalMatches()}<small style={{fontSize:14,color:'#6f6757',fontWeight:500,letterSpacing:1,marginLeft:6}}>matches/wk</small>
+                  </div>
+                  <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:'#b9b09f',letterSpacing:1}}>{picked.size} KEYWORDS SELECTED</div>
+                </div>
+                <div style={{padding:'18px 22px',borderTop:'1px solid #2a2419',background:'rgba(255,107,53,0.04)'}}>
+                  <button className="btn btn-primary" onClick={saveAsMonitor} disabled={picked.size===0}
+                    style={{width:'100%',padding:'13px 16px',fontSize:13,background:'#FF6B35'}}>
+                    <i className="ph-bold ph-floppy-disk"></i> Save as monitor →
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  // ── State 4: Confirm ────────────────────────────────────────────────────
+  if (step === 4) {
+    return (
+      <>
+        <div className="page-header">
+          <div>
+            <h1 className="page-title">Confirm <em style={{fontStyle:'italic',color:'#FF6B35',fontWeight:400}}>your monitor</em></h1>
+            <p className="page-subtitle">Last chance to edit before we start scanning.</p>
+          </div>
+        </div>
+        <div className="page-body" style={{maxWidth:560}}>
+          <div className="card card-p">
+            <div className="field" style={{marginBottom:14}}>
+              <label className="label">Monitor name</label>
+              <input className="inp" value={monitorName} onChange={e=>setMonitorName(e.target.value)} />
+            </div>
+            <div style={{padding:'12px 0',borderBottom:'1px solid #F1F5F9',display:'flex',justifyContent:'space-between'}}>
+              <span style={{fontSize:12,color:'#94A3B8',fontFamily:"'JetBrains Mono',monospace",letterSpacing:1}}>KEYWORDS</span>
+              <span style={{fontSize:13.5,fontWeight:500,color:'#0F172A'}}>{picked.size} selected</span>
+            </div>
+            <div style={{padding:'12px 0',borderBottom:'1px solid #F1F5F9',display:'flex',justifyContent:'space-between'}}>
+              <span style={{fontSize:12,color:'#94A3B8',fontFamily:"'JetBrains Mono',monospace",letterSpacing:1}}>EXPECTED VOLUME</span>
+              <span style={{fontSize:13.5,fontWeight:500,color:'#16A34A'}}>~{totalMatches()} matches/week</span>
+            </div>
+            {err && <div className="alert alert-error" style={{marginTop:14}}><i className="ph ph-warning-circle"></i>{err}</div>}
+            <div style={{display:'flex',gap:12,marginTop:18}}>
+              <button className="btn btn-ghost" onClick={()=>setStep(3)}>← Back</button>
+              <button className="btn btn-primary" onClick={confirmMonitor} disabled={loading} style={{flex:1}}>
+                {loading?'Creating…':<><i className="ph-bold ph-broadcast"></i> Confirm and start monitoring</>}
               </button>
             </div>
           </div>
         </div>
+      </>
+    );
+  }
+
+  // ── State 5: Confirmed ──────────────────────────────────────────────────
+  return (
+    <>
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Monitor <em style={{fontStyle:'italic',color:'#16A34A',fontWeight:400}}>active</em></h1>
+          <p className="page-subtitle">First matches loaded. Taking you to the feed in 4 seconds.</p>
+        </div>
+      </div>
+      <div className="page-body" style={{maxWidth:780}}>
+        <div className="alert alert-success" style={{marginBottom:18,padding:'14px 18px'}}>
+          <i className="ph-bold ph-check-circle" style={{fontSize:20}}></i>
+          <span style={{fontWeight:600}}>Monitor active. {sampleMatches.length} match{sampleMatches.length===1?'':'es'} already loaded.</span>
+        </div>
+        {sampleMatches.length > 0 && (
+          <>
+            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:'#94A3B8',letterSpacing:2,marginBottom:10}}>// RECENT MATCHES</div>
+            {sampleMatches.slice(0, 5).map((m, i) => (
+              <div key={i} className="card" style={{padding:'14px 18px',marginBottom:8}}>
+                <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:6,flexWrap:'wrap'}}>
+                  <span className={`badge badge-${m.source||'reddit'}`}>{m.source}</span>
+                </div>
+                <a href={m.url} target="_blank" rel="noreferrer" style={{fontSize:14,fontWeight:500,color:'#0F172A',textDecoration:'none',display:'block'}}>{m.title}</a>
+              </div>
+            ))}
+          </>
+        )}
       </div>
     </>
   );
 }
-
 // ΓöÇΓöÇ Settings ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 function Settings({ apiKey, userEmail, plan, onSignOut, monitors, onRefresh }) {
   const [copied, setCopied] = useState(false);
@@ -793,18 +954,18 @@ function Settings({ apiKey, userEmail, plan, onSignOut, monitors, onRefresh }) {
         <div className="card settings-tile">
           <div className="tile-label">Account</div>
           <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:16}}>
-            <div style={{width:40,height:40,borderRadius:'50%',background:'#FFFBEB',border:'1px solid #FDE68A',display:'flex',alignItems:'center',justifyContent:'center',fontSize:15,fontWeight:700,color:'#92400E',flexShrink:0}}>
+            <div style={{width:40,height:40,borderRadius:'50%',background:'#FFF7F2',border:'1px solid #FED7AA',display:'flex',alignItems:'center',justifyContent:'center',fontSize:15,fontWeight:700,color:'#9A3412',flexShrink:0}}>
               {(userEmail||'?')[0].toUpperCase()}
             </div>
             <div style={{flex:1}}>
-              <div style={{fontSize:14,fontWeight:600,color:'#0F172A'}}>{userEmail||'ΓÇö'}</div>
+              <div style={{fontSize:14,fontWeight:600,color:'#0F172A'}}>{userEmail||'—'}</div>
               <div style={{fontSize:12,color:'#64748B',marginTop:2}}>{planLabel} plan</div>
             </div>
-            <span style={{fontSize:11,fontWeight:700,color:'#92400E',background:'#FFFBEB',border:'1px solid #FDE68A',padding:'3px 9px',borderRadius:5}}>{planLabel}</span>
+            <span style={{fontSize:11,fontWeight:700,color:'#9A3412',background:'#FFF7F2',border:'1px solid #FED7AA',padding:'3px 9px',borderRadius:5}}>{planLabel}</span>
           </div>
           {plan === 'starter' && (
             <div style={{fontSize:12,color:'#64748B',background:'#F8FAFC',border:'1px solid #E2E8F0',borderRadius:7,padding:'8px 12px',marginBottom:14,lineHeight:1.7}}>
-              <strong style={{color:'#374151'}}>Free tier includes:</strong> 1 monitor ┬╖ 10 keywords ┬╖ Email alerts only<br/>
+              <strong style={{color:'#374151'}}>Free tier includes:</strong> 1 monitor · 10 keywords · Email alerts only<br/>
               <span style={{color:'#94A3B8'}}>Upgrade for Slack alerts, more monitors, and unlimited keywords.</span>
             </div>
           )}
@@ -819,12 +980,12 @@ function Settings({ apiKey, userEmail, plan, onSignOut, monitors, onRefresh }) {
             <div className="tile-label">Upgrade plan</div>
             <div style={{display:'flex',gap:10,flexWrap:'wrap'}}>
               {[
-                {p:'growth',label:'Growth',price:'$29/mo',desc:'20 monitors ┬╖ 100 keywords ┬╖ Slack alerts'},
-                {p:'scale',label:'Scale',price:'$199/mo',desc:'100 monitors ┬╖ 500 keywords ┬╖ Webhooks + API'},
+                {p:'growth',label:'Growth',price:'$29/mo',desc:'20 monitors · 100 keywords · Slack alerts'},
+                {p:'scale',label:'Scale',price:'$199/mo',desc:'100 monitors · 500 keywords · Webhooks + API'},
               ].map(({p,label,price,desc})=>(
                 <div key={p} className="plan-card">
                   <div style={{fontWeight:700,fontSize:15,marginBottom:2}}>{label}</div>
-                  <div style={{fontSize:18,fontWeight:800,color:'#C9A84C',marginBottom:6}}>{price}</div>
+                  <div style={{fontSize:18,fontWeight:800,color:'#FF6B35',marginBottom:6}}>{price}</div>
                   <div style={{fontSize:12,color:'#64748B',marginBottom:14}}>{desc}</div>
                   {upgradeMsg === p
                     ? <div style={{fontSize:12,background:'#ECFDF5',border:'1px solid #A7F3D0',borderRadius:6,padding:'9px 10px',textAlign:'center',lineHeight:1.6,color:'#065F46'}}>
@@ -852,7 +1013,7 @@ function Settings({ apiKey, userEmail, plan, onSignOut, monitors, onRefresh }) {
               <div className={m.active?'active-dot':'paused-dot'}></div>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontSize:13,fontWeight:600,color:'#0F172A',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{m.name}</div>
-                <div style={{fontSize:12,color:'#94A3B8',marginTop:2}}>{m.keyword_count} keywords ┬╖ {m.total_matches_found||0} matches found</div>
+                <div style={{fontSize:12,color:'#94A3B8',marginTop:2}}>{m.keyword_count} keywords · {m.total_matches_found||0} matches found</div>
               </div>
               <button className="btn btn-danger btn-sm" onClick={()=>del(m.id,m.name)} disabled={deleting===m.id}>
                 {deleting===m.id ? <i className="ph ph-circle-notch spin"></i> : <i className="ph ph-trash"></i>}
@@ -894,7 +1055,7 @@ function App() {
     if (k) { localStorage.setItem('ebi_key', k); history.replaceState({},'',' /dashboard'); return k; }
     return localStorage.getItem('ebi_key') || '';
   });
-  const [tab, setTab] = useState('search');
+  const [tab, setTab] = useState('find');
   const [monitors, setMonitors] = useState([]);
   const [userEmail, setUserEmail] = useState('');
   const [plan, setPlan] = useState('starter');
@@ -928,9 +1089,8 @@ function App() {
     <div className="layout">
       <Sidebar tab={tab} setTab={setTab} userEmail={userEmail} plan={plan} monitorCount={monitors.length} onSignOut={signOut} />
       <div className="main">
-        {tab==='search'   && <SearchNow apiKey={apiKey} />}
+        {tab==='find'     && <FindCustomers apiKey={apiKey} onMonitorCreated={()=>{ loadMonitors(); setTab('feed'); }} />}
         {tab==='feed'     && <MatchesFeed apiKey={apiKey} monitors={monitors} />}
-        {tab==='create'   && <CreateMonitor apiKey={apiKey} onCreated={()=>{ loadMonitors(); setTab('feed'); }} />}
         {tab==='settings' && <Settings apiKey={apiKey} userEmail={userEmail} plan={plan} onSignOut={signOut} monitors={monitors} onRefresh={loadMonitors} />}
       </div>
     </div>

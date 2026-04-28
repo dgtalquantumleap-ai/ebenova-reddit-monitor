@@ -22,6 +22,7 @@ import { join } from 'path'
 import { fileURLToPath } from 'url'
 import { dirname } from 'path'
 import stripeRoutes, { webhookHandler } from './routes/stripe.js'
+import { createRouter as createFindRouter } from './routes/find.js'
 import searchMedium      from './lib/scrapers/medium.js'
 import searchSubstack    from './lib/scrapers/substack.js'
 import searchQuora       from './lib/scrapers/quora.js'
@@ -150,6 +151,16 @@ app.use(makeCorsMiddleware(ALLOWED_ORIGINS))
 // Note: /v1/billing/webhook is mounted above, before express.json().
 // stripeRoutes (the router) only contains /checkout and /portal now.
 app.use('/v1/billing', stripeRoutes)
+
+// Find Customers endpoints — lazy-mounted so missing Redis env doesn't crash boot.
+let _findRouter
+app.use('/v1/find', (req, res, next) => {
+  if (!_findRouter) {
+    try { _findRouter = createFindRouter({ redis: getRedis() }) }
+    catch (err) { return res.status(503).json({ success: false, error: { code: 'NOT_CONFIGURED', message: err.message } }) }
+  }
+  _findRouter(req, res, next)
+})
 
 // ── GET /health ────────────────────────────────────────────────────────────
 app.get('/health', async (req, res) => {
