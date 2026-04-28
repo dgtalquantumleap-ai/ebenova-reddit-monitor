@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ebenova Insights — Find customers before your competitors do</title>
+<meta name="description" content="Monitor Reddit, Hacker News, Upwork, Fiverr forums, and more for buying-intent posts. Get AI-drafted replies ready to copy and post.">
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { background: #0a0a0a; color: #f0ece4; font-family: system-ui, -apple-system, sans-serif; margin: 0; }
+  .gold { color: #c9a84c; }
+  .btn-primary { background: #c9a84c; color: #000; font-weight: 700; padding: 14px 28px; border-radius: 8px; text-decoration: none; display: inline-block; transition: opacity 0.15s; border: none; cursor: pointer; font-size: 15px; }
+  .btn-primary:hover { opacity: 0.85; }
+  .btn-secondary { background: transparent; color: #c9a84c; border: 2px solid #c9a84c; font-weight: 600; padding: 13px 28px; border-radius: 8px; text-decoration: none; display: inline-block; transition: background 0.15s; font-size: 15px; cursor: pointer; }
+  .btn-secondary:hover { background: rgba(201,168,76,0.1); }
+  .card { background: #111; border: 1px solid #1e1e1e; border-radius: 12px; }
+  .section { padding: 80px 24px; max-width: 1000px; margin: 0 auto; }
+  .divider { border: none; border-top: 1px solid #1e1e1e; margin: 0; }
+  h1 { font-size: clamp(32px, 5vw, 52px); font-weight: 800; line-height: 1.1; letter-spacing: -1px; }
+  h2 { font-size: clamp(24px, 3.5vw, 36px); font-weight: 700; letter-spacing: -0.5px; }
+  input[type="email"] { background: #111; border: 1px solid #333; color: #f0ece4; border-radius: 8px; padding: 14px 16px; font-size: 15px; outline: none; transition: border-color 0.15s; width: 100%; }
+  input[type="email"]:focus { border-color: #c9a84c; }
+  .step-num { width: 40px; height: 40px; border-radius: 50%; background: #c9a84c; color: #000; font-weight: 800; font-size: 18px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .pricing-card { position: relative; }
+  .pricing-card.featured { border-color: #c9a84c; }
+  .pricing-card.featured::before { content: 'MOST POPULAR'; position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: #c9a84c; color: #000; font-size: 10px; font-weight: 800; letter-spacing: 1.5px; padding: 3px 10px; border-radius: 20px; }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav style="border-bottom: 1px solid #1a1a1a; padding: 0 24px;">
+  <div style="max-width: 1000px; margin: 0 auto; height: 60px; display: flex; align-items: center; justify-content: space-between;">
+    <div style="font-weight: 800; font-size: 17px; color: #c9a84c; letter-spacing: -0.5px;">📡 Ebenova Insights</div>
+    <div style="display: flex; align-items: center; gap: 20px;">
+      <a href="#pricing" style="color: #888; text-decoration: none; font-size: 14px;">Pricing</a>
+      <a href="/dashboard" class="btn-primary" style="padding: 8px 20px; font-size: 14px;">Open Dashboard</a>
+    </div>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="section" style="padding-top: 96px; padding-bottom: 96px; text-align: center;">
+  <div style="display: inline-block; background: #1a1a00; border: 1px solid #4a3800; color: #c9a84c; padding: 4px 14px; border-radius: 20px; font-size: 12px; font-weight: 700; letter-spacing: 1px; margin-bottom: 24px; text-transform: uppercase;">Now monitoring 8 platforms</div>
+  <h1 style="max-width: 720px; margin: 0 auto 24px;">Find customers on Reddit <span class="gold">before your competitors do</span></h1>
+  <p style="font-size: 18px; color: #888; max-width: 580px; margin: 0 auto 40px; line-height: 1.6;">Monitor Reddit, Hacker News, Upwork forums, Fiverr forums, and more for buying-intent posts. Get AI-drafted replies ready to copy and paste.</p>
+  <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
+    <a href="/dashboard" class="btn-primary">Start free — no credit card</a>
+    <a href="#how-it-works" class="btn-secondary">See how it works</a>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- PLATFORMS STRIP -->
+<section style="padding: 32px 24px; text-align: center; background: #0d0d0d;">
+  <div style="max-width: 1000px; margin: 0 auto;">
+    <p style="font-size: 12px; color: #555; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 16px;">Monitors</p>
+    <div style="display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; align-items: center;">
+      <span style="color: #ff4500; font-weight: 700;">Reddit</span>
+      <span style="color: #666;">·</span>
+      <span style="color: #ff6600; font-weight: 700;">Hacker News</span>
+      <span style="color: #666;">·</span>
+      <span style="color: #00ab6c; font-weight: 700;">Medium</span>
+      <span style="color: #666;">·</span>
+      <span style="color: #ff6719; font-weight: 700;">Substack</span>
+      <span style="color: #666;">·</span>
+      <span style="color: #b92b27; font-weight: 700;">Quora</span>
+      <span style="color: #666;">·</span>
+      <span style="color: #6fda44; font-weight: 700;">Upwork Community</span>
+      <span style="color: #666;">·</span>
+      <span style="color: #1dbf73; font-weight: 700;">Fiverr Community</span>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- HOW IT WORKS -->
+<section class="section" id="how-it-works">
+  <h2 style="text-align: center; margin-bottom: 56px;">How it works</h2>
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 32px;">
+    <div style="display: flex; flex-direction: column; gap: 16px;">
+      <div class="step-num">1</div>
+      <h3 style="font-size: 18px; font-weight: 700; margin: 0;">Add keywords and describe your product</h3>
+      <p style="color: #888; line-height: 1.6; margin: 0;">Enter the phrases your ideal customers use — "client won't pay", "freelance contract", "scope creep". Paste a product description so the AI knows what to say.</p>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 16px;">
+      <div class="step-num">2</div>
+      <h3 style="font-size: 18px; font-weight: 700; margin: 0;">We scan 8 platforms every 15 minutes</h3>
+      <p style="color: #888; line-height: 1.6; margin: 0;">Reddit, Hacker News, Upwork forums, Fiverr forums, Medium, Substack, Quora — all checked automatically. No manual searching required.</p>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 16px;">
+      <div class="step-num">3</div>
+      <h3 style="font-size: 18px; font-weight: 700; margin: 0;">Get AI-drafted replies for high-intent posts</h3>
+      <p style="color: #888; line-height: 1.6; margin: 0;">Each match comes with a suggested reply that sounds like a real community member — not an ad. Copy, tweak, and post in seconds.</p>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- COMPARISON -->
+<section class="section">
+  <h2 style="text-align: center; margin-bottom: 48px;">Why not Brand24 or Mention?</h2>
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+    <div class="card" style="padding: 28px;">
+      <h3 style="font-size: 16px; font-weight: 700; color: #666; margin-bottom: 20px;">Generic brand monitoring tools</h3>
+      <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px;">
+        <li style="color: #555; font-size: 14px; line-height: 1.5; padding-left: 20px; position: relative;"><span style="position:absolute;left:0;color:#c0392b;">✗</span> Alert on every mention — including unrelated noise</li>
+        <li style="color: #555; font-size: 14px; line-height: 1.5; padding-left: 20px; position: relative;"><span style="position:absolute;left:0;color:#c0392b;">✗</span> No buying-intent filter — you decide what's relevant</li>
+        <li style="color: #555; font-size: 14px; line-height: 1.5; padding-left: 20px; position: relative;"><span style="position:absolute;left:0;color:#c0392b;">✗</span> No reply drafts — you write from scratch</li>
+        <li style="color: #555; font-size: 14px; line-height: 1.5; padding-left: 20px; position: relative;"><span style="position:absolute;left:0;color:#c0392b;">✗</span> No Upwork or Fiverr forum coverage</li>
+        <li style="color: #555; font-size: 14px; line-height: 1.5; padding-left: 20px; position: relative;"><span style="position:absolute;left:0;color:#c0392b;">✗</span> $99–$299/month for similar keyword volume</li>
+      </ul>
+    </div>
+    <div class="card" style="padding: 28px; border-color: #c9a84c;">
+      <h3 style="font-size: 16px; font-weight: 700; color: #c9a84c; margin-bottom: 20px;">Ebenova Insights</h3>
+      <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px;">
+        <li style="font-size: 14px; line-height: 1.5; padding-left: 20px; position: relative;"><span style="position:absolute;left:0;color:#4caf50;">✓</span> Buying-intent scoring — only posts worth replying to</li>
+        <li style="font-size: 14px; line-height: 1.5; padding-left: 20px; position: relative;"><span style="position:absolute;left:0;color:#4caf50;">✓</span> SKIP filter — won't draft replies that would get you banned</li>
+        <li style="font-size: 14px; line-height: 1.5; padding-left: 20px; position: relative;"><span style="position:absolute;left:0;color:#4caf50;">✓</span> AI reply drafts that sound like a real community member</li>
+        <li style="font-size: 14px; line-height: 1.5; padding-left: 20px; position: relative;"><span style="position:absolute;left:0;color:#4caf50;">✓</span> Upwork + Fiverr forums nobody else covers</li>
+        <li style="font-size: 14px; line-height: 1.5; padding-left: 20px; position: relative;"><span style="position:absolute;left:0;color:#4caf50;">✓</span> Free to start. Growth at $29/month.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- PRICING -->
+<section class="section" id="pricing">
+  <h2 style="text-align: center; margin-bottom: 48px;">Simple pricing</h2>
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 24px; align-items: start;">
+
+    <div class="card pricing-card" style="padding: 28px;">
+      <div style="font-weight: 800; font-size: 18px; margin-bottom: 4px;">Starter</div>
+      <div style="font-size: 36px; font-weight: 800; margin: 12px 0; color: #c9a84c;">Free</div>
+      <div style="color: #555; font-size: 13px; margin-bottom: 24px;">Forever</div>
+      <ul style="list-style: none; padding: 0; margin: 0 0 28px; display: flex; flex-direction: column; gap: 10px;">
+        <li style="font-size: 14px; color: #888;">✓ 3 monitors</li>
+        <li style="font-size: 14px; color: #888;">✓ 20 keywords</li>
+        <li style="font-size: 14px; color: #888;">✓ Email digest</li>
+        <li style="font-size: 14px; color: #888;">✓ Reddit + HN</li>
+      </ul>
+      <a href="/dashboard" class="btn-secondary" style="width: 100%; text-align: center;">Start free</a>
+    </div>
+
+    <div class="card pricing-card featured" style="padding: 28px;">
+      <div style="font-weight: 800; font-size: 18px; margin-bottom: 4px;">Growth</div>
+      <div style="font-size: 36px; font-weight: 800; margin: 12px 0; color: #c9a84c;">$29<span style="font-size: 16px; font-weight: 400; color: #666;">/mo</span></div>
+      <div style="color: #555; font-size: 13px; margin-bottom: 24px;">Billed monthly</div>
+      <ul style="list-style: none; padding: 0; margin: 0 0 28px; display: flex; flex-direction: column; gap: 10px;">
+        <li style="font-size: 14px; color: #888;">✓ 20 monitors</li>
+        <li style="font-size: 14px; color: #888;">✓ 100 keywords</li>
+        <li style="font-size: 14px; color: #888;">✓ Slack delivery</li>
+        <li style="font-size: 14px; color: #888;">✓ All 8 platforms</li>
+        <li style="font-size: 14px; color: #888;">✓ AI reply drafts</li>
+      </ul>
+      <a href="/dashboard" class="btn-primary" style="width: 100%; text-align: center;">Get Growth</a>
+    </div>
+
+    <div class="card pricing-card" style="padding: 28px;">
+      <div style="font-weight: 800; font-size: 18px; margin-bottom: 4px;">Scale</div>
+      <div style="font-size: 36px; font-weight: 800; margin: 12px 0; color: #c9a84c;">$99<span style="font-size: 16px; font-weight: 400; color: #666;">/mo</span></div>
+      <div style="color: #555; font-size: 13px; margin-bottom: 24px;">Billed monthly</div>
+      <ul style="list-style: none; padding: 0; margin: 0 0 28px; display: flex; flex-direction: column; gap: 10px;">
+        <li style="font-size: 14px; color: #888;">✓ 100 monitors</li>
+        <li style="font-size: 14px; color: #888;">✓ 500 keywords</li>
+        <li style="font-size: 14px; color: #888;">✓ Webhook delivery</li>
+        <li style="font-size: 14px; color: #888;">✓ Priority support</li>
+        <li style="font-size: 14px; color: #888;">✓ Everything in Growth</li>
+      </ul>
+      <a href="/dashboard" class="btn-secondary" style="width: 100%; text-align: center;">Get Scale</a>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- EMAIL CAPTURE -->
+<section class="section" style="text-align: center;">
+  <h2 style="margin-bottom: 12px;">Get early access</h2>
+  <p style="color: #888; margin-bottom: 32px; font-size: 16px;">New features, platform expansions, and early-access spots.</p>
+  <form id="waitlist-form" style="display: flex; gap: 12px; max-width: 440px; margin: 0 auto; flex-wrap: wrap; justify-content: center;" onsubmit="submitWaitlist(event)">
+    <input type="email" id="waitlist-email" placeholder="your@email.com" required style="flex: 1; min-width: 220px;">
+    <button type="submit" class="btn-primary" style="flex-shrink:0;">Get early access</button>
+  </form>
+  <div id="waitlist-msg" style="margin-top: 16px; font-size: 14px; color: #4caf50; min-height: 20px;"></div>
+</section>
+
+<hr class="divider">
+
+<!-- FOOTER -->
+<footer style="padding: 32px 24px; text-align: center; color: #444; font-size: 13px;">
+  <p>An <strong style="color:#c9a84c;">Ebenova</strong> product &nbsp;·&nbsp; <a href="https://ebenova.dev" style="color:#666;text-decoration:none;">ebenova.dev</a> &nbsp;·&nbsp; Built for founders who talk to customers</p>
+</footer>
+
+<script>
+async function submitWaitlist(e) {
+  e.preventDefault();
+  const email = document.getElementById('waitlist-email').value;
+  const msg = document.getElementById('waitlist-msg');
+  msg.textContent = 'Submitting…';
+  msg.style.color = '#888';
+  try {
+    const res = await fetch('/v1/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      msg.textContent = data.already_on_waitlist ? "You're already on the list!" : "You're on the list. We'll be in touch.";
+      msg.style.color = '#4caf50';
+      document.getElementById('waitlist-email').value = '';
+    } else {
+      msg.textContent = data.error?.message || 'Something went wrong. Try again.';
+      msg.style.color = '#ff8080';
+    }
+  } catch {
+    msg.textContent = 'Network error. Try again.';
+    msg.style.color = '#ff8080';
+  }
+}
+</script>
+</body>
+</html>

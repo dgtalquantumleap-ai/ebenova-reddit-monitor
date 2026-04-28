@@ -26,6 +26,14 @@ try {
 import { Resend }  from 'resend'
 import { Redis }   from '@upstash/redis'
 import cron        from 'node-cron'
+import { sendSlackAlert }  from './lib/slack.js'
+import searchMedium        from './lib/scrapers/medium.js'
+import searchSubstack      from './lib/scrapers/substack.js'
+import searchQuora         from './lib/scrapers/quora.js'
+import searchUpwork        from './lib/scrapers/upwork.js'
+import searchFiverr        from './lib/scrapers/fiverr.js'
+import { escapeHtml }      from './lib/html-escape.js'
+import { sanitizeForPrompt } from './lib/llm-safe-prompt.js'
 
 const RESEND_API_KEY   = process.env.RESEND_API_KEY
 const GROQ_API_KEY     = process.env.GROQ_API_KEY
@@ -60,8 +68,20 @@ function hasSeen(monitorId, postId) {
   return seenMap.has(`${monitorId}:${postId}`)
 }
 
+// Redis-backed seen check — backfills memory so restarts don't re-alert (3-day TTL)
+async function hasSeenWithRedis(monitorId, postId) {
+  if (hasSeen(monitorId, postId)) return true
+  if (!redis) return false
+  try {
+    const r = await redis.get(`seen:v2:${monitorId}:${postId}`)
+    if (r) { seenMap.set(`${monitorId}:${postId}`, true); return true }
+  } catch (_) {}
+  return false
+}
+
 function markSeen(monitorId, postId) {
   seenMap.set(`${monitorId}:${postId}`, true)
+  if (redis) redis.setex(`seen:v2:${monitorId}:${postId}`, 60 * 60 * 24 * 3, '1').catch(() => {})
   if (seenMap.size > MAX_SEEN) {
     // Prune oldest 10k entries
     const keys = [...seenMap.keys()].slice(0, 10000)
@@ -166,7 +186,7 @@ async function semanticSearchSubreddit(monitorId, subreddit, keywordEntry, query
 
     for (const post of posts) {
       const p = post.data
-      if (hasSeen(monitorId, p.id)) continue
+      if (await hasSeenWithRedis(monitorId, p.id)) continue
       if (Date.now() - p.created_utc * 1000 > 60 * 60 * 1000) continue
 
       const postText = `${p.title} ${(p.selftext || '').slice(0, 400)}`
@@ -221,7 +241,7 @@ async function searchReddit(monitorId, keywordEntry) {
 
       for (const post of posts) {
         const p = post.data
-        if (hasSeen(monitorId, p.id)) continue
+        if (await hasSeenWithRedis(monitorId, p.id)) continue
         if (Date.now() - p.created_utc * 1000 > 60 * 60 * 1000) continue
         markSeen(monitorId, p.id)
         results.push({
@@ -247,48 +267,6 @@ async function searchReddit(monitorId, keywordEntry) {
   return results
 }
 
-// ── Nairaland search ──────────────────────────────────────────────────────────
-async function searchNairaland(monitorId, keywordEntry) {
-  const { keyword, nairalandSection = 'business' } = keywordEntry
-  const results = []
-  const encoded = encodeURIComponent(keyword)
-  const url = `https://www.nairaland.com/search/posts/${encoded}/${nairalandSection}/0/0`
-  try {
-    const res = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; EbenovaInsights/2.0)', 'Accept': 'text/html' },
-    })
-    if (!res.ok) return results
-    const html = await res.text()
-    const pattern = /<td[^>]*>\s*<b>\s*<a href="(\/[^"]+)"[^>]*>([^<]+)<\/a>/gi
-    const seen = new Set()
-    let match
-    while ((match = pattern.exec(html)) !== null) {
-      const path  = match[1]
-      const title = match[2].trim()
-      if (!path || !title || path.length < 5) continue
-      const id = `nl_${path.replace(/\//g, '_')}`
-      if (hasSeen(monitorId, id) || seen.has(id)) continue
-      seen.add(id)
-      markSeen(monitorId, id)
-      const snippet = html.slice(pattern.lastIndex, pattern.lastIndex + 700)
-        .replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 500)
-      results.push({
-        id, title,
-        url:       `https://www.nairaland.com${path}`,
-        subreddit: `Nairaland/${nairalandSection}`,
-        author:    'nairaland',
-        score:     0, comments: 0,
-        body:      snippet,
-        createdAt: new Date().toISOString(),
-        keyword,   source: 'nairaland', approved: true,
-      })
-      if (results.length >= 5) break
-    }
-  } catch (err) {
-    console.error(`[v2] Nairaland fetch error "${keyword}":`, err.message)
-  }
-  return results
-}
 
 // ── AI reply draft ────────────────────────────────────────────────────────────
 // Uses monitor's productContext so each customer's drafts are tailored to them.
@@ -297,15 +275,25 @@ async function generateReplyDraft(post, productContext) {
   if (!productContext || !productContext.trim()) return null
   if (!post.approved) return null
 
+  // F8: Sanitize all untrusted inputs. In v2 BOTH the post fields AND the
+  // productContext are user-controlled (the latter from the tenant's monitor
+  // config) — a malicious tenant could otherwise inject instructions into
+  // their own draft generation. sanitizeForPrompt strips control chars and
+  // ChatML role tokens.
+  const safeContext = sanitizeForPrompt(productContext)
+  const safeTitle = sanitizeForPrompt(post.title)
+  const safeSubreddit = sanitizeForPrompt(post.subreddit)
+  const safeBody = sanitizeForPrompt(post.body || '(no body)')
+
   const prompt = `You are a Reddit community member helping people with real problems. You have genuine expertise described below. You are NOT a marketer.
 
 YOUR PRODUCT/EXPERTISE:
-${productContext.slice(0, 1500)}
+${safeContext}
 
 REDDIT POST:
-Title: ${post.title}
-Subreddit: r/${post.subreddit}
-Body: ${post.body || '(no body)'}
+Title: ${safeTitle}
+Subreddit: r/${safeSubreddit}
+Body: ${safeBody}
 
 ━━━ SKIP FILTER ━━━
 Respond ONLY with the word SKIP if ANY are true:
@@ -355,31 +343,31 @@ function buildAlertEmail(monitor, matches) {
     const items = posts.map(p => `
       <div style="margin-bottom:18px;padding:14px;background:#f9f9f9;border-left:4px solid #c9a84c;border-radius:4px;">
         <div style="font-size:12px;color:#888;margin-bottom:5px;">
-          ${p.source === 'nairaland' ? '🇳🇬' : '📌'} ${p.subreddit} · u/${p.author} · ${p.score} upvotes
+          ${p.source === 'hackernews' ? 'HN' : p.source === 'medium' ? '📰 Medium' : p.source === 'substack' ? '📧 Substack' : p.source === 'quora' ? '💬 Quora' : p.source === 'upwork' ? '💼 Upwork' : p.source === 'fiverr' ? '🟢 Fiverr' : `r/${escapeHtml(p.subreddit)}`} · u/${escapeHtml(p.author)} · ${escapeHtml(p.score)} upvotes
         </div>
-        <a href="${p.url}" style="font-size:15px;font-weight:600;color:#1a1a1a;text-decoration:none;">${p.title}</a>
-        ${p.body ? `<p style="font-size:13px;color:#555;margin:7px 0 0;line-height:1.5;">${p.body}${p.body.length >= 300 ? '…' : ''}</p>` : ''}
-        <a href="${p.url}" style="display:inline-block;margin-top:8px;font-size:12px;color:#c9a84c;font-weight:600;">Open thread →</a>
+        <a href="${escapeHtml(p.url)}" style="font-size:15px;font-weight:600;color:#1a1a1a;text-decoration:none;">${escapeHtml(p.title)}</a>
+        ${p.body ? `<p style="font-size:13px;color:#555;margin:7px 0 0;line-height:1.5;">${escapeHtml(p.body)}${p.body.length >= 300 ? '…' : ''}</p>` : ''}
+        <a href="${escapeHtml(p.url)}" style="display:inline-block;margin-top:8px;font-size:12px;color:#c9a84c;font-weight:600;">Open thread →</a>
         ${!p.approved ? `
         <div style="margin-top:8px;padding:6px 10px;background:#fdecea;border:1px solid #f5c6cb;border-radius:4px;font-size:12px;font-weight:700;color:#c0392b;">
-          ⚠️ DO NOT POST — ${p.subreddit} is not an approved subreddit
+          ⚠️ DO NOT POST — ${escapeHtml(p.subreddit)} is not an approved subreddit
         </div>` : ''}
         ${p.draft ? `
         <div style="margin-top:10px;padding:12px;background:#fffdf0;border:1px solid #e8d87a;border-radius:6px;">
           <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#a08c00;margin-bottom:6px;">✏️ Suggested reply</div>
-          <div style="font-size:13px;color:#333;line-height:1.6;white-space:pre-wrap;">${p.draft}</div>
+          <div style="font-size:13px;color:#333;line-height:1.6;white-space:pre-wrap;">${escapeHtml(p.draft)}</div>
         </div>` : ''}
       </div>`).join('')
     return `
       <div style="margin-bottom:28px;">
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:#aaa;margin-bottom:10px;">"${kw}" (${posts.length})</div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:#aaa;margin-bottom:10px;">"${escapeHtml(kw)}" (${posts.length})</div>
         ${items}
       </div>`
   }).join('')
 
   return `<!DOCTYPE html><html><body style="font-family:system-ui,sans-serif;max-width:680px;margin:0 auto;padding:32px 24px;background:#f5f5f5;color:#1a1a1a;">
     <div style="margin-bottom:24px;padding:20px;background:#0e0e0e;border-radius:8px;">
-      <div style="font-size:18px;font-weight:700;color:#f0ece4;">📡 Ebenova Insights — ${monitor.name}</div>
+      <div style="font-size:18px;font-weight:700;color:#f0ece4;">📡 Ebenova Insights — ${escapeHtml(monitor.name)}</div>
       <div style="font-size:13px;color:#9a9690;margin-top:6px;">${matches.length} new mention${matches.length !== 1 ? 's' : ''} · ${new Date().toUTCString()}</div>
     </div>
     ${keywordSections}
@@ -470,16 +458,58 @@ async function runMonitor(monitor) {
       }
     }
 
-    // Nairaland (only if keyword has a nairalandSection set)
-    if (kw.nairalandSection) {
-      const nlMatches = await searchNairaland(monitor.id, kw)
-      for (const m of nlMatches) {
-        m.productContext = ctx
-        allMatches.push(m)
-      }
-      if (nlMatches.length > 0) {
-        console.log(`${label} Nairaland "${kw.keyword}": ${nlMatches.length} new`)
-      }
+  }
+
+  // ── Extended platform scrapers (per-monitor, respects plan) ──────────────
+  const seenIds = { has: (id) => hasSeen(monitor.id, id), add: (id) => markSeen(monitor.id, id) }
+  const maxAgeMs = 24 * 60 * 60 * 1000 // 24h for v2 monitors
+
+  if (monitor.includeMedium !== false) {
+    for (const kw of monitor.keywords) {
+      const ctx = kw.productContext || monitor.productContext || ''
+      const matches = await searchMedium(kw, { seenIds, delay, MAX_AGE_MS: maxAgeMs })
+      matches.forEach(m => { m.productContext = ctx; allMatches.push(m) })
+      if (matches.length) console.log(`${label} Medium "${kw.keyword}": ${matches.length} new`)
+      await delay(1500)
+    }
+  }
+
+  if (monitor.includeSubstack !== false) {
+    for (const kw of monitor.keywords) {
+      const ctx = kw.productContext || monitor.productContext || ''
+      const matches = await searchSubstack(kw, { seenIds, delay, MAX_AGE_MS: maxAgeMs })
+      matches.forEach(m => { m.productContext = ctx; allMatches.push(m) })
+      if (matches.length) console.log(`${label} Substack "${kw.keyword}": ${matches.length} new`)
+      await delay(1500)
+    }
+  }
+
+  if (monitor.includeQuora !== false) {
+    for (const kw of monitor.keywords) {
+      const ctx = kw.productContext || monitor.productContext || ''
+      const matches = await searchQuora(kw, { seenIds, delay, MAX_AGE_MS: maxAgeMs })
+      matches.forEach(m => { m.productContext = ctx; allMatches.push(m) })
+      if (matches.length) console.log(`${label} Quora "${kw.keyword}": ${matches.length} new`)
+      await delay(2000)
+    }
+  }
+
+  if (monitor.includeUpworkForum !== false) {
+    for (const kw of monitor.keywords) {
+      const ctx = kw.productContext || monitor.productContext || ''
+      const matches = await searchUpwork(kw, { seenIds, delay, MAX_AGE_MS: maxAgeMs })
+      matches.forEach(m => { m.productContext = ctx; allMatches.push(m) })
+      if (matches.length) console.log(`${label} Upwork "${kw.keyword}": ${matches.length} new`)
+      await delay(3000)
+    }
+  }
+
+  if (monitor.includeFiverrForum !== false) {
+    for (const kw of monitor.keywords) {
+      const ctx = kw.productContext || monitor.productContext || ''
+      const matches = await searchFiverr(kw, { seenIds, delay, MAX_AGE_MS: maxAgeMs })
+      matches.forEach(m => { m.productContext = ctx; allMatches.push(m) })
+      if (matches.length) console.log(`${label} Fiverr "${kw.keyword}": ${matches.length} new`)
       await delay(3000)
     }
   }
@@ -519,12 +549,38 @@ async function runMonitor(monitor) {
   }
 
   await sendMonitorAlert(monitor, allMatches)
+
+  // Slack alert (uses per-monitor webhook if set, falls back to global env var)
+  const slackUrl = monitor.slackWebhookUrl || process.env.SLACK_WEBHOOK_URL
+  if (slackUrl && allMatches.length > 0) {
+    await sendSlackAlert(slackUrl, allMatches)
+    console.log(`${label} Slack alert sent — ${allMatches.length} matches`)
+  }
 }
 
 // ── Main poll cycle ───────────────────────────────────────────────────────────
 // Loads all active monitor IDs from Redis, fetches each monitor's config,
 // then runs them with a concurrency limit so we don't hammer Reddit.
+//
+// F9: isPolling guard prevents cron from stacking cycles on top of each other.
+// If a previous poll() is still running when the cron tick fires, skip — don't
+// double Reddit's load and risk rate-bans.
+let isPolling = false
+
 async function poll() {
+  if (isPolling) {
+    console.log('[v2] previous cycle still running, skipping this tick')
+    return
+  }
+  isPolling = true
+  try {
+    return await pollInner()
+  } finally {
+    isPolling = false
+  }
+}
+
+async function pollInner() {
   const cycleStart = Date.now()
   console.log(`\n[v2] ===== POLL START: ${new Date().toISOString()} =====`)
 

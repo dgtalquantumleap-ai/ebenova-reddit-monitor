@@ -11,7 +11,8 @@
     "start:v1": "node monitor.js",
     "start:v2": "node monitor-v2.js",
     "start:mcp": "node mcp-server.js",
-    "test": "node test-reddit-monitor.js",
+    "test": "node --test --test-reporter=spec test/",
+    "test:integration": "node test-reddit-monitor.js",
     "test:mcp": "node test-apify-actor.js",
     "provision": "node scripts/provision-client.js",
     "provision:dry": "node scripts/provision-client.js --dry-run"
@@ -24,6 +25,7 @@
     "https-proxy-agent": "^7.0.6",
     "node-cron": "^3.0.3",
     "resend": "^4.0.0",
+    "stripe": "^22.1.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {

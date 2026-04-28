@@ -23,7 +23,26 @@ try {
 } catch (_) {}
 
 import { Resend } from 'resend'
+import { Redis } from '@upstash/redis'
 import cron from 'node-cron'
+import searchMedium   from './lib/scrapers/medium.js'
+import searchSubstack from './lib/scrapers/substack.js'
+import searchQuora    from './lib/scrapers/quora.js'
+import searchUpwork   from './lib/scrapers/upwork.js'
+import searchFiverr   from './lib/scrapers/fiverr.js'
+import { sendSlackAlert } from './lib/slack.js'
+import { escapeHtml } from './lib/html-escape.js'
+import { sanitizeForPrompt } from './lib/llm-safe-prompt.js'
+
+// ── Redis client (optional — seenIds fallback when process restarts) ──────────
+function getRedis() {
+  const url   = process.env.UPSTASH_REDIS_REST_URL  || process.env.REDIS_URL
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.REDIS_TOKEN
+  if (!url) return null
+  try { return new Redis({ url, token }) } catch { return null }
+}
+const redis = getRedis()
+if (!redis) console.log('[monitor] ⚠️  Redis not configured — seenIds will reset on restart')
 
 // ── Memory monitoring — log every 5 minutes ──────────────────────────────────
 setInterval(() => {
@@ -378,14 +397,25 @@ async function generateReplyDraft(post) {
     return null
   }
 
+  // F8: Sanitize all untrusted inputs before they enter the prompt. Reddit
+  // post fields are user-controlled and could contain injection payloads
+  // ("Ignore previous instructions..."). Sanitization strips control chars
+  // and role tokens but preserves normal text. ctx.description is internal,
+  // also sanitized as defense-in-depth in case it's ever made tenant-editable.
+  const safeTitle = sanitizeForPrompt(post.title)
+  const safeSubreddit = sanitizeForPrompt(post.subreddit)
+  const safeBody = sanitizeForPrompt(post.body || '(no body text)')
+  const safeProduct = sanitizeForPrompt(post.product)
+  const safeContext = sanitizeForPrompt(ctx.description)
+
   const prompt = `You are a Reddit community member who helps people with real problems. You have genuine expertise in the topic area below. You are NOT a marketer — you are a helpful person who occasionally mentions tools when they directly solve someone's exact problem.
 
-YOUR EXPERTISE AREA: ${ctx.description}
+YOUR EXPERTISE AREA: ${safeContext}
 
 REDDIT POST:
-Title: ${post.title}
-Subreddit: r/${post.subreddit}
-Body: ${post.body || '(no body text)'}
+Title: ${safeTitle}
+Subreddit: r/${safeSubreddit}
+Body: ${safeBody}
 
 ━━━ STEP 1: SKIP FILTER (check ALL of these) ━━━
 Respond ONLY with the word SKIP if ANY are true:
@@ -402,24 +432,24 @@ If the post passes Step 1, choose ONE strategy based on the post type:
 
 STRATEGY A — "Genuine Advice First, Tool Optional"
 Use when: Person has a problem, not asking for a tool specifically.
-Structure: Give 2-3 sentences of real, actionable advice. Only mention ${post.product} if it's the single most natural solution — phrase it as "I've used [product] for this" not "check out [product]". If mentioning feels forced, don't mention it at all.
+Structure: Give 2-3 sentences of real, actionable advice. Only mention ${safeProduct} if it's the single most natural solution — phrase it as "I've used [product] for this" not "check out [product]". If mentioning feels forced, don't mention it at all.
 
 STRATEGY B — "Direct Answer to Tool Request"  
 Use when: Person explicitly asks "what app/tool/software" for this.
-Structure: Answer directly. Name ${post.product} as one option among others if relevant. Include one specific reason why it fits their situation. Keep it under 4 sentences.
+Structure: Answer directly. Name ${safeProduct} as one option among others if relevant. Include one specific reason why it fits their situation. Keep it under 4 sentences.
 
 STRATEGY C — "Helpful Comment, No Product Mention"
 Use when: Post is in a sensitive subreddit (Teachers, freelance) OR product mention would feel like an ad.
-Structure: Write a genuinely helpful 2-3 sentence reply with real advice. Do NOT mention ${post.product} at all. This builds account credibility and is sometimes the right call.
+Structure: Write a genuinely helpful 2-3 sentence reply with real advice. Do NOT mention ${safeProduct} at all. This builds account credibility and is sometimes the right call.
 
 STRATEGY D — "Empathy Then Practical Step"
 Use when: Person is frustrated (client won't pay, landlord problem, scope creep).
-Structure: One sentence acknowledging the frustration. Then one concrete next step they can take right now. Only mention ${post.product} if it directly enables that next step.
+Structure: One sentence acknowledging the frustration. Then one concrete next step they can take right now. Only mention ${safeProduct} if it directly enables that next step.
 
 ━━━ REPLY RULES (apply to all strategies) ━━━
 - Write like a real Reddit user: casual, direct, no corporate language
 - Never use phrases like "check out", "I recommend", "great tool", "you should try"
-- If mentioning ${post.product}: use "I use" or "there's a thing called" or "someone built"
+- If mentioning ${safeProduct}: use "I use" or "there's a thing called" or "someone built"
 - Never mention the URL unless the person asked for links
 - Never use bullet points, headers, or markdown formatting
 - Maximum 4 sentences total
@@ -450,36 +480,6 @@ Respond with SKIP or the reply text only. No labels, no strategy name, no explan
   }
 }
 
-// ── Nairaland keywords ──────────────────────────────────────────────────────
-// Nairaland sections: Business, Properties, Career, Computers, Nairaland
-const NAIRALAND_KEYWORDS = [
-  // — Signova: already-aware —
-  { keyword: 'contract template',       section: 'business',    product: 'Signova'  },
-  { keyword: 'tenancy agreement',       section: 'properties',  product: 'Signova'  },
-  { keyword: 'client refused to pay',   section: 'business',    product: 'Signova'  },
-  { keyword: 'deed of assignment',      section: 'properties',  product: 'Signova'  },
-  { keyword: 'freelance contract',      section: 'career',      product: 'Signova'  },
-  { keyword: 'NDA agreement',           section: 'business',    product: 'Signova'  },
-  { keyword: 'quit notice',             section: 'properties',  product: 'Signova'  },
-  { keyword: 'legal document',          section: 'business',    product: 'Signova'  },
-  // — Signova: Lagos Tenancy Bill 2025 — active legislation, high search volume —
-  { keyword: 'tenancy bill',            section: 'properties',  product: 'Signova'  },
-  { keyword: 'lagos tenancy law',       section: 'properties',  product: 'Signova'  },
-  { keyword: 'landlord tenant dispute', section: 'properties',  product: 'Signova'  },
-  { keyword: 'tenant refused to pay',   section: 'properties',  product: 'Signova'  },
-  { keyword: 'eviction notice',         section: 'properties',  product: 'Signova'  },
-  // — Signova: Nigerian freelancer trigger moments —
-  { keyword: 'how to get paid freelance',section: 'career',     product: 'Signova'  },
-  { keyword: 'client owes me money',    section: 'business',    product: 'Signova'  },
-  { keyword: 'partnership agreement',   section: 'business',    product: 'Signova'  },
-  // — Peekr —
-  { keyword: 'share to classroom',      section: 'education',   product: 'Peekr'    },
-  // — FieldOps —
-  { keyword: 'cleaning company lagos',  section: 'business',    product: 'FieldOps' },
-  { keyword: 'facility management',     section: 'business',    product: 'FieldOps' },
-  { keyword: 'cleaning business app',   section: 'business',    product: 'FieldOps' },
-]
-
 // ── Hacker News keywords ──────────────────────────────────────────────────────
 // HN audience: developers, technical founders, early adopters
 const HN_KEYWORDS = [
@@ -499,9 +499,8 @@ const HN_KEYWORDS = [
   { keyword: 'Stripe alternative',           product: 'PocketBridge' },
 ]
 
-// ── Seen post tracker — persists in memory, resets on restart ────────────────
+// ── Seen post tracker — persists in memory, backed by Redis on restart ───────
 const seenIds = new Set()
-const seenNairalandIds = new Set()
 const seenHnIds = new Set()
 
 // ── Reddit search — public JSON endpoint, no auth needed ─────────────────────
@@ -531,6 +530,13 @@ async function searchReddit(keyword, subreddits) {
 
       for (const post of posts) {
         const p = post.data
+        // Check memory first, then Redis fallback (handles restarts)
+        if (!seenIds.has(p.id) && redis) {
+          try {
+            const inRedis = await redis.get(`seen:v1:${p.id}`)
+            if (inRedis) seenIds.add(p.id) // backfill memory
+          } catch (_) {}
+        }
         if (seenIds.has(p.id)) {
           console.log(`[monitor] ⏭️ Already seen: "${p.title?.slice(0, 50)}" (${p.id})`)
           continue
@@ -545,6 +551,8 @@ async function searchReddit(keyword, subreddits) {
           continue
         }
         seenIds.add(p.id)
+        // Persist to Redis so restarts don't re-alert on the same post (3-day TTL)
+        if (redis) redis.setex(`seen:v1:${p.id}`, 60 * 60 * 24 * 3, '1').catch(() => {})
         console.log(`[monitor] 🎯 NEW MATCH FOUND: "${keyword}" → ${p.title}`)
         console.log(`[monitor] Post URL: https://reddit.com${p.permalink}`)
         console.log(`[monitor] Post age: ${ageHours} hours old`)
@@ -603,27 +611,27 @@ function buildEmailHtml(matches) {
       const items = posts.map(p => `
         <div style="margin-bottom:20px;padding:14px;background:#f9f9f9;border-left:4px solid #c9a84c;border-radius:4px;">
           <div style="font-size:12px;color:#888;margin-bottom:5px;">
-            ${p.source === 'hackernews' ? 'HN' : p.source === 'indiehackers' ? 'IndieHackers' : `r/${p.subreddit}`} · ${p.author} · ${p.score} points · ${p.comments} comments
+            ${p.source === 'hackernews' ? 'HN' : p.source === 'medium' ? '📰 Medium' : p.source === 'substack' ? '📧 Substack' : p.source === 'quora' ? '💬 Quora' : p.source === 'upwork' ? '💼 Upwork Community' : p.source === 'fiverr' ? '🟢 Fiverr Community' : p.source === 'indiehackers' ? 'IndieHackers' : `r/${escapeHtml(p.subreddit)}`} · ${escapeHtml(p.author)} · ${escapeHtml(p.score)} points · ${escapeHtml(p.comments)} comments
           </div>
           ${p.priority_score >= 8 ? `<div style="display:inline-block;margin-bottom:6px;background:#c9a84c;color:#000;padding:2px 8px;border-radius:3px;font-size:10px;font-weight:700;letter-spacing:0.5px;">🔥 HIGH PRIORITY</div>` : ''}
-          <a href="${p.url}" style="font-size:15px;font-weight:600;color:#1a1a1a;text-decoration:none;">${p.title}</a>
-          ${p.body ? `<p style="font-size:13px;color:#555;margin:7px 0 0;line-height:1.5;">${p.body}${p.body.length >= 300 ? '…' : ''}</p>` : ''}
-          <a href="${p.url}" style="display:inline-block;margin-top:8px;font-size:12px;color:#c9a84c;font-weight:600;">Open thread →</a>
+          <a href="${escapeHtml(p.url)}" style="font-size:15px;font-weight:600;color:#1a1a1a;text-decoration:none;">${escapeHtml(p.title)}</a>
+          ${p.body ? `<p style="font-size:13px;color:#555;margin:7px 0 0;line-height:1.5;">${escapeHtml(p.body)}${p.body.length >= 300 ? '…' : ''}</p>` : ''}
+          <a href="${escapeHtml(p.url)}" style="display:inline-block;margin-top:8px;font-size:12px;color:#c9a84c;font-weight:600;">Open thread →</a>
           ${!p.approved ? `
           <div style="margin-top:10px;padding:8px 12px;background:#fdecea;border:1px solid #f5c6cb;border-radius:6px;font-size:12px;font-weight:700;color:#c0392b;">
-            ⚠️ DO NOT POST — r/${p.subreddit} is not an approved subreddit
+            ⚠️ DO NOT POST — r/${escapeHtml(p.subreddit)} is not an approved subreddit
           </div>` : ''}
           ${p.draft ? `
           <div style="margin-top:12px;padding:12px;background:#fffdf0;border:1px solid #e8d87a;border-radius:6px;">
             <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#a08c00;margin-bottom:6px;">✏️ Suggested reply</div>
-            <div style="font-size:13px;color:#333;line-height:1.6;white-space:pre-wrap;">${p.draft}</div>
+            <div style="font-size:13px;color:#333;line-height:1.6;white-space:pre-wrap;">${escapeHtml(p.draft)}</div>
           </div>` : ''}
         </div>
       `).join('')
       return `
         <div style="margin-bottom:24px;">
           <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:#aaa;margin-bottom:10px;">
-            "${keyword}" (${posts.length})
+            "${escapeHtml(keyword)}" (${posts.length})
           </div>
           ${items}
         </div>
@@ -634,10 +642,10 @@ function buildEmailHtml(matches) {
       <div style="margin-bottom:40px;padding:20px;background:#fff;border:1px solid #eee;border-radius:8px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;padding-bottom:12px;border-bottom:2px solid #c9a84c;">
           <div>
-            <div style="font-size:18px;font-weight:700;color:#1a1a1a;">${product}</div>
+            <div style="font-size:18px;font-weight:700;color:#1a1a1a;">${escapeHtml(product)}</div>
             <div style="font-size:12px;color:#888;margin-top:2px;">${totalForProduct} new mention${totalForProduct !== 1 ? 's' : ''}</div>
           </div>
-          <a href="${PRODUCT_LINKS[product] || '#'}" style="font-size:12px;color:#c9a84c;font-weight:600;text-decoration:none;">Visit site →</a>
+          <a href="${escapeHtml(PRODUCT_LINKS[product] || '#')}" style="font-size:12px;color:#c9a84c;font-weight:600;text-decoration:none;">Visit site →</a>
         </div>
         ${keywordSections}
       </div>
@@ -661,49 +669,6 @@ function buildEmailHtml(matches) {
     </body>
     </html>
   `
-}
-
-// ── Nairaland search — scrapes public search HTML ──────────────────────────
-async function searchNairaland(keyword, section) {
-  const results = []
-  const encoded = encodeURIComponent(keyword)
-  const url = `https://www.nairaland.com/search/posts/${encoded}/${section}/0/0`
-  try {
-    const res = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; EbenovaMonitor/1.0)', 'Accept': 'text/html' }
-    })
-    if (!res.ok) return results
-    const html = await res.text()
-    const postPattern = /<td[^>]*>\s*<b>\s*<a href="(\/[^"]+)"[^>]*>([^<]+)<\/a>/gi
-    const seen = new Set()
-    let match
-    while ((match = postPattern.exec(html)) !== null) {
-      const path = match[1]
-      const title = match[2].trim()
-      if (!path || !title || path.length < 5) continue
-      const id = `nl_${path.replace(/\//g, '_')}`
-      if (seenNairalandIds.has(id) || seen.has(id)) continue
-      seen.add(id)
-      seenNairalandIds.add(id)
-      const matchIdx = postPattern.lastIndex
-      const snippet = html.slice(matchIdx, matchIdx + 700)
-        .replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 600)
-      results.push({
-        id, title,
-        url: `https://www.nairaland.com${path}`,
-        subreddit: `Nairaland / ${section}`,
-        author: 'nairaland',
-        score: 0, comments: 0,
-        body: snippet,
-        createdAt: new Date().toUTCString(),
-        keyword, source: 'nairaland', approved: true,
-      })
-      if (results.length >= 5) break
-    }
-  } catch (err) {
-    console.error(`[nairaland] fetch error for "${keyword}":`, err.message)
-  }
-  return results
 }
 
 // ── Hacker News search — Algolia API, free, no auth ──────────────────────────
@@ -756,7 +721,7 @@ async function sendAlert(matches) {
 
   const keywords = [...new Set(matches.map(m => m.keyword))]
   const sources = [...new Set(matches.map(m => m.source || 'reddit'))]
-  const platformMap = { reddit: 'Reddit', nairaland: 'Nairaland', hackernews: 'HN', indiehackers: 'IH' }
+  const platformMap = { reddit: 'Reddit', hackernews: 'HN', medium: 'Medium', substack: 'Substack', quora: 'Quora', upwork: 'Upwork', fiverr: 'Fiverr', indiehackers: 'IH' }
   const platform = sources.map(s => platformMap[s] || s).join(' + ')
   const subject  = `${platform}: ${matches.length} new mention${matches.length !== 1 ? 's' : ''} — ${keywords.slice(0, 3).join(', ')}${keywords.length > 3 ? '…' : ''}`
 
@@ -830,8 +795,7 @@ async function poll() {
   isPolling = true
   try {
     console.log(`\n[monitor] ========== POLLING CYCLE START: ${new Date().toISOString()} ==========`)
-    console.log(`[monitor] Searching ${KEYWORDS.length} keywords across Reddit`)
-    console.log(`[monitor] Nairaland: ${NAIRALAND_KEYWORDS.length} keywords\n`)
+    console.log(`[monitor] Searching ${KEYWORDS.length} keywords across Reddit + HN\n`)
     const allMatches = []
     let matchesFound = 0
 
@@ -848,18 +812,6 @@ async function poll() {
       await delay(2000)
     }
 
-    // Nairaland
-    for (const { keyword, section, product } of NAIRALAND_KEYWORDS) {
-      const matches = await searchNairaland(keyword, section)
-      if (matches.length > 0) {
-        matches.forEach(m => { m.product = product })
-        console.log(`[monitor] Nairaland "${keyword}": ${matches.length} new`)
-        matchesFound += matches.length
-        allMatches.push(...matches)
-      }
-      await delay(3000)
-    }
-
     // Hacker News
     for (const { keyword, product } of HN_KEYWORDS) {
       console.log(`[hn] Searching "${keyword}"`)
@@ -873,6 +825,75 @@ async function poll() {
       await delay(1500)
     }
 
+    // Medium
+    if (process.env.INCLUDE_MEDIUM !== 'false') {
+      for (const kw of KEYWORDS) {
+        const matches = await searchMedium(kw, { seenIds, delay, MAX_AGE_MS: POST_MAX_AGE_HOURS * 3600000 })
+        if (matches.length > 0) {
+          matches.forEach(m => { m.product = kw.product })
+          console.log(`[medium] "${kw.keyword}": ${matches.length} new`)
+          matchesFound += matches.length
+          allMatches.push(...matches)
+        }
+        await delay(1500)
+      }
+    }
+
+    // Substack
+    if (process.env.INCLUDE_SUBSTACK !== 'false') {
+      for (const kw of KEYWORDS) {
+        const matches = await searchSubstack(kw, { seenIds, delay, MAX_AGE_MS: POST_MAX_AGE_HOURS * 3600000 })
+        if (matches.length > 0) {
+          matches.forEach(m => { m.product = kw.product })
+          console.log(`[substack] "${kw.keyword}": ${matches.length} new`)
+          matchesFound += matches.length
+          allMatches.push(...matches)
+        }
+        await delay(1500)
+      }
+    }
+
+    // Quora
+    if (process.env.INCLUDE_QUORA !== 'false') {
+      for (const kw of KEYWORDS) {
+        const matches = await searchQuora(kw, { seenIds, delay, MAX_AGE_MS: POST_MAX_AGE_HOURS * 3600000 })
+        if (matches.length > 0) {
+          matches.forEach(m => { m.product = kw.product })
+          console.log(`[quora] "${kw.keyword}": ${matches.length} new`)
+          matchesFound += matches.length
+          allMatches.push(...matches)
+        }
+        await delay(2000)
+      }
+    }
+
+    // Upwork Community
+    if (process.env.INCLUDE_UPWORK_FORUM !== 'false') {
+      for (const kw of KEYWORDS) {
+        const matches = await searchUpwork(kw, { seenIds, delay, MAX_AGE_MS: POST_MAX_AGE_HOURS * 3600000 })
+        if (matches.length > 0) {
+          matches.forEach(m => { m.product = kw.product })
+          console.log(`[upwork] "${kw.keyword}": ${matches.length} new`)
+          matchesFound += matches.length
+          allMatches.push(...matches)
+        }
+        await delay(3000)
+      }
+    }
+
+    // Fiverr Community
+    if (process.env.INCLUDE_FIVERR_FORUM !== 'false') {
+      for (const kw of KEYWORDS) {
+        const matches = await searchFiverr(kw, { seenIds, delay, MAX_AGE_MS: POST_MAX_AGE_HOURS * 3600000 })
+        if (matches.length > 0) {
+          matches.forEach(m => { m.product = kw.product })
+          console.log(`[fiverr] "${kw.keyword}": ${matches.length} new`)
+          matchesFound += matches.length
+          allMatches.push(...matches)
+        }
+        await delay(3000)
+      }
+    }
 
     if (allMatches.length > 0) {
       console.log(`[monitor] Total new matches: ${allMatches.length} — generating reply drafts…`)
@@ -896,6 +917,11 @@ async function poll() {
 
       console.log(`[monitor] Sending alert email…`)
       await sendAlert(allMatches)
+      const slackUrl = process.env.SLACK_WEBHOOK_URL
+      if (slackUrl) {
+        await sendSlackAlert(slackUrl, allMatches)
+        console.log(`[monitor] Slack alert sent — ${allMatches.length} matches`)
+      }
     } else {
       console.log('[monitor] No new matches this cycle')
     }
@@ -914,8 +940,8 @@ async function poll() {
 
 // ── Startup ───────────────────────────────────────────────────────────────────
 console.log('━'.repeat(60))
-console.log('  Ebenova Social Monitor (Reddit + Nairaland + HN)')
-console.log(`  Reddit: ${KEYWORDS.length} · Nairaland: ${NAIRALAND_KEYWORDS.length} · HN: ${HN_KEYWORDS.length} keywords`)
+console.log('  Ebenova Social Monitor (Reddit + HN + Medium + Substack + Quora + Upwork + Fiverr)')
+console.log(`  Reddit: ${KEYWORDS.length} · HN: ${HN_KEYWORDS.length} keywords`)
 console.log(`  Polling every ${POLL_MINUTES} minutes`)
 console.log(`  Post max age: ${POST_MAX_AGE_HOURS} hours (adjust with POST_MAX_AGE_HOURS)`)
 console.log(`  Alerts → ${ALERT_EMAIL}`)

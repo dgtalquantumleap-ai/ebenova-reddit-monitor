@@ -13,7 +13,13 @@
 
 import express from 'express'
 import { readFileSync } from 'fs'
-import { resolve } from 'path'
+import { resolve, join } from 'path'
+import { fileURLToPath } from 'url'
+import { dirname } from 'path'
+import stripeRoutes, { webhookHandler } from './routes/stripe.js'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname  = dirname(__filename)
 
 // ── Load .env ──────────────────────────────────────────────────────────────
 try {
@@ -31,6 +37,20 @@ try {
 
 import { Redis } from '@upstash/redis'
 import { randomBytes } from 'crypto'
+import { makeRateLimiter } from './lib/rate-limit.js'
+
+// F5: Rate limit + email validation for signup abuse prevention.
+// Lazy-init the limiter so we don't call getRedis() before .env is loaded.
+let _signupLimiter
+function signupLimiter() {
+  if (!_signupLimiter) _signupLimiter = makeRateLimiter(getRedis(), { max: 3, windowSeconds: 3600 })
+  return _signupLimiter
+}
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const DISPOSABLE_DOMAINS = new Set([
+  'mailinator.com','guerrillamail.com','10minutemail.com','tempmail.com',
+  'sharklasers.com','trashmail.com','yopmail.com','throwawaymail.com',
+])
 
 const PORT = parseInt(process.env.API_PORT || process.env.PORT || '3001')
 const ADMIN_KEY = process.env.MONITOR_ADMIN_KEY   // for internal provisioning
@@ -72,7 +92,20 @@ const PLAN_LIMITS = {
 
 // ── App ────────────────────────────────────────────────────────────────────
 const app = express()
+
+// F1: Stripe webhook MUST be mounted before express.json() so the raw request
+// body (Buffer) reaches stripe.webhooks.constructEvent for signature
+// verification. If express.json() runs first, it consumes the body and the
+// SDK throws "No webhook payload was provided." All other routes use JSON.
+app.post('/v1/billing/webhook',
+  express.raw({ type: 'application/json' }),
+  webhookHandler
+)
+
 app.use(express.json())
+app.use(express.static(join(__dirname, 'public')))
+app.get('/', (req, res) => res.sendFile(join(__dirname, 'public', 'index.html')))
+app.get('/dashboard', (req, res) => res.sendFile(join(__dirname, 'public', 'dashboard.html')))
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS, PATCH')
@@ -80,6 +113,11 @@ app.use((req, res, next) => {
   if (req.method === 'OPTIONS') return res.status(200).end()
   next()
 })
+
+// ── Stripe billing (checkout + portal) ─────────────────────────────────────
+// Note: /v1/billing/webhook is mounted above, before express.json().
+// stripeRoutes (the router) only contains /checkout and /portal now.
+app.use('/v1/billing', stripeRoutes)
 
 // ── GET /health ────────────────────────────────────────────────────────────
 app.get('/health', async (req, res) => {
@@ -129,7 +167,8 @@ app.get('/v1/monitors', async (req, res) => {
 app.post('/v1/monitors', async (req, res) => {
   const auth = await authenticate(req)
   if (!auth.ok) return res.status(auth.status).json({ success: false, error: auth.error })
-  const { name, keywords = [], productContext, alertEmail } = req.body
+  const { name, keywords = [], productContext, alertEmail, slackWebhookUrl,
+    includeMedium, includeSubstack, includeQuora, includeUpworkForum, includeFiverrForum } = req.body
   const plan = auth.keyData.insightsPlan || 'starter'
   const limits = PLAN_LIMITS[plan] || PLAN_LIMITS.starter
   if (!name?.trim()) return res.status(400).json({ success: false, error: { code: 'MISSING_FIELD', message: '"name" is required' } })
@@ -150,6 +189,12 @@ app.post('/v1/monitors', async (req, res) => {
     const now = new Date().toISOString()
     const monitor = { id, owner: auth.owner, name: name.trim().slice(0, 100), keywords: cleanKws,
       productContext: (productContext || '').slice(0, 2000), alertEmail: alertEmail || auth.owner,
+      slackWebhookUrl: (slackWebhookUrl || '').slice(0, 500),
+      includeMedium:      includeMedium      !== false,
+      includeSubstack:    includeSubstack    !== false,
+      includeQuora:       includeQuora       !== false,
+      includeUpworkForum: includeUpworkForum !== false,
+      includeFiverrForum: includeFiverrForum !== false,
       active: true, plan, createdAt: now, lastPollAt: null, totalMatchesFound: 0 }
     await redis.set(`insights:monitor:${id}`, JSON.stringify(monitor))
     await redis.sadd(`insights:monitors:${auth.owner}`, id)
@@ -216,6 +261,18 @@ app.post('/v1/matches/feedback', async (req, res) => {
     return res.status(400).json({ success: false, error: { code: 'INVALID_INPUT', message: 'monitor_id, match_id, and feedback (up|down) required' } })
   try {
     const redis = getRedis()
+
+    // F6: Verify the caller owns this monitor before allowing a write to its
+    // matches. Without this, any authenticated user could write feedback into
+    // any other user's matches. Return 404 (not 403) to avoid leaking whether
+    // the monitor exists.
+    const monitorRaw = await redis.get(`insights:monitor:${monitor_id}`)
+    if (!monitorRaw) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Monitor not found' } })
+    const monitor = typeof monitorRaw === 'string' ? JSON.parse(monitorRaw) : monitorRaw
+    if (monitor.owner !== auth.owner) {
+      return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Monitor not found' } })
+    }
+
     const key = `insights:match:${monitor_id}:${match_id}`
     const raw = await redis.get(key)
     if (!raw) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Match not found' } })
@@ -275,6 +332,107 @@ app.post('/v1/subscribe', async (req, res) => {
     await redis.sadd('insights:waitlist', norm)
     await redis.set(`insights:waitlist:${norm}`, JSON.stringify({ email: norm, plan, joinedAt: new Date().toISOString() }))
     res.json({ success: true, message: "You're on the waitlist." })
+  } catch (err) {
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
+  }
+})
+
+// ── POST /v1/auth/signup — self-serve API key provisioning ───────────────
+// Creates an API key, stores it in Redis, and emails it to the user.
+// Starter plan is assigned automatically. Upgrade via /v1/billing/checkout.
+app.post('/v1/auth/signup', async (req, res) => {
+  // F5: per-IP rate limit (3/hour). Trust X-Forwarded-For from Railway's proxy.
+  const ip = req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress || 'unknown'
+  try {
+    const limited = await signupLimiter()(`signup:ip:${ip}`)
+    if (!limited.allowed) {
+      return res.status(429).json({
+        success: false,
+        error: { code: 'RATE_LIMITED', message: `Too many signup attempts. Try again in ${Math.ceil(limited.retryAfterSeconds/60)} minutes.` },
+      })
+    }
+  } catch (err) {
+    // If Redis is down, don't block signups — log and continue
+    console.error('[signup] rate limiter error:', err.message)
+  }
+
+  const { email, name: userName } = req.body || {}
+
+  // F5: strict email validation
+  if (!email || typeof email !== 'string' || !EMAIL_RE.test(email)) {
+    return res.status(400).json({ success: false, error: { code: 'INVALID_EMAIL', message: 'A valid email address is required.' } })
+  }
+  const norm = email.toLowerCase().trim()
+  const domain = norm.split('@')[1]
+  if (DISPOSABLE_DOMAINS.has(domain)) {
+    return res.status(400).json({ success: false, error: { code: 'INVALID_EMAIL', message: 'Please use a non-disposable email address.' } })
+  }
+
+  try {
+    const redis = getRedis()
+
+    // F5: Neutral response — don't leak whether email is already signed up.
+    // Existing users still receive their original key via the email already on file.
+    const existing = await redis.get(`insights:signup:${norm}`)
+    if (existing) {
+      console.log(`[signup] repeat signup attempt: ${norm}`)
+      return res.status(201).json({
+        success: true,
+        message: 'Account ready. Check your email for your API key.',
+        plan: 'starter',
+      })
+    }
+
+    // Generate key: ins_{32 random hex chars}
+    const key = `ins_${randomBytes(16).toString('hex')}`
+    const now = new Date().toISOString()
+
+    // Store the key in Redis (same shape as manual provisions)
+    const keyData = {
+      owner: norm,
+      email: norm,
+      name: (userName || '').slice(0, 100),
+      insights: true,
+      insightsPlan: 'starter',
+      createdAt: now,
+      source: 'self-signup',
+    }
+    await redis.set(`apikey:${key}`, JSON.stringify(keyData))
+    await redis.set(`insights:signup:${norm}`, JSON.stringify({ key, createdAt: now }))
+
+    // Send welcome email via Resend
+    const resendKey = process.env.RESEND_API_KEY
+    if (resendKey) {
+      const { Resend } = await import('resend')
+      const resend = new Resend(resendKey)
+      const from = process.env.FROM_EMAIL || 'insights@ebenova.dev'
+      const appUrl = process.env.APP_URL || 'https://ebenova-insights-production.up.railway.app'
+      await resend.emails.send({
+        from:    `Ebenova Insights <${from}>`,
+        to:      norm,
+        subject: 'Your Ebenova Insights API key',
+        html:    `<!DOCTYPE html><html><body style="font-family:system-ui,sans-serif;max-width:560px;margin:0 auto;padding:32px 24px;background:#f5f5f5;">
+          <div style="padding:24px;background:#0e0e0e;border-radius:8px;margin-bottom:24px;">
+            <div style="font-size:18px;font-weight:700;color:#c9a84c;">📡 Ebenova Insights</div>
+          </div>
+          <div style="padding:24px;background:#fff;border-radius:8px;border:1px solid #eee;">
+            <p style="margin:0 0 16px;font-size:15px;">Hi${userName ? ' '+userName : ''},</p>
+            <p style="margin:0 0 16px;font-size:15px;color:#333;">Here's your API key for Ebenova Insights:</p>
+            <div style="padding:14px 16px;background:#f5f5f5;border-radius:6px;font-family:monospace;font-size:15px;font-weight:700;letter-spacing:0.5px;margin-bottom:20px;word-break:break-all;">${key}</div>
+            <p style="margin:0 0 16px;font-size:14px;color:#666;">You're on the <strong>Starter plan</strong> — 3 monitors, 20 keywords, email digest. Free forever.</p>
+            <a href="${appUrl}/dashboard" style="display:inline-block;background:#c9a84c;color:#000;font-weight:700;padding:12px 24px;border-radius:6px;text-decoration:none;font-size:15px;">Open Dashboard →</a>
+          </div>
+          <p style="margin-top:20px;font-size:12px;color:#aaa;text-align:center;">Ebenova Insights · <a href="https://ebenova.dev" style="color:#c9a84c;">ebenova.dev</a></p>
+        </body></html>`,
+      }).catch(err => console.error('[signup] Email send failed:', err.message))
+    }
+
+    console.log(`[signup] New user: ${norm} → key ${key.slice(0, 12)}…`)
+    res.status(201).json({
+      success: true,
+      message: 'Account created. Check your email for your API key.',
+      plan: 'starter',
+    })
   } catch (err) {
     res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
   }
