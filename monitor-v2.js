@@ -24,6 +24,7 @@ import { escapeHtml }      from './lib/html-escape.js'
 import { sanitizeForPrompt } from './lib/llm-safe-prompt.js'
 import { embeddingCacheKey } from './lib/embedding-cache.js'
 import { makeCostCap } from './lib/cost-cap.js'
+import { draftCall }   from './lib/draft-call.js'
 
 // F14: lazy daily cost caps. Soft-fail so the worker degrades gracefully
 // (skip-draft / skip-email / skip-embedding) rather than crashing.
@@ -258,7 +259,12 @@ async function semanticSearchSubreddit(monitorId, subreddit, keywordEntry, query
 }
 
 // ── Reddit search ─────────────────────────────────────────────────────────────
-// Returns new posts (< 60 min old) not yet seen for this monitor.
+// Returns new posts (< POST_MAX_AGE_MS old) not yet seen for this monitor.
+//
+// Failure-mode logging: Reddit silently degrades scraping for generic bot UAs
+// and rate-limits to 60 req/min anonymous. When testers report "only Medium
+// matches" the cause is almost always Reddit returning 403/429. We log every
+// non-2xx with the status code + URL so the cycle log surfaces it.
 async function searchReddit(monitorId, keywordEntry) {
   const { keyword, subreddits = [] } = keywordEntry
   const results = []
@@ -270,20 +276,30 @@ async function searchReddit(monitorId, keywordEntry) {
       )
     : [`https://www.reddit.com/search.json?q=${encoded}&sort=new&limit=10&t=day`]
 
+  // Realistic browser UA — Reddit aggressively rate-limits identifiable bot UAs.
+  // Override via REDDIT_USER_AGENT if you have a registered API client.
+  const UA = process.env.REDDIT_USER_AGENT
+    || 'Mozilla/5.0 (compatible; EbenovaBot/2.0; +https://ebenova-insights-production.up.railway.app)'
+
   for (const url of urls) {
     try {
-      const res = await fetch(url, {
-        headers: { 'User-Agent': 'ebenova-insights/2.0 (multi-tenant monitor)' },
-      })
-      if (!res.ok) { await delay(3000); continue }
+      const res = await fetch(url, { headers: { 'User-Agent': UA } })
+      if (!res.ok) {
+        console.warn(`[v2][reddit] ${res.status} for "${keyword}" → ${url.slice(0, 80)}…`)
+        await delay(3000)
+        continue
+      }
       const data = await res.json()
       const posts = data?.data?.children || []
+      let newCount = 0
+      let agedOut = 0
 
       for (const post of posts) {
         const p = post.data
         if (await hasSeenWithRedis(monitorId, p.id)) continue
-        if (Date.now() - p.created_utc * 1000 > POST_MAX_AGE_MS) continue
+        if (Date.now() - p.created_utc * 1000 > POST_MAX_AGE_MS) { agedOut++; continue }
         markSeen(monitorId, p.id)
+        newCount++
         results.push({
           id:        p.id,
           title:     p.title || '(no title)',
@@ -299,8 +315,10 @@ async function searchReddit(monitorId, keywordEntry) {
           approved:  APPROVED_SUBREDDITS.has(p.subreddit),
         })
       }
+      // Always log per-URL so we can see whether Reddit is returning data
+      console.log(`[v2][reddit] "${keyword}" → ${posts.length} fetched, ${newCount} new, ${agedOut} stale${posts.length === 0 ? ' (empty response — likely rate-limited)' : ''}`)
     } catch (err) {
-      console.error(`[v2] Reddit fetch error "${keyword}":`, err.message)
+      console.error(`[v2][reddit] fetch error "${keyword}":`, err.message)
     }
     await delay(2000)
   }
@@ -309,11 +327,14 @@ async function searchReddit(monitorId, keywordEntry) {
 
 
 // ── AI reply draft ────────────────────────────────────────────────────────────
-// Uses monitor's productContext so each customer's drafts are tailored to them.
-async function generateReplyDraft(post, productContext) {
-  if (!GROQ_API_KEY) return null
-  if (!productContext || !productContext.trim()) return null
-  if (!post.approved) return null
+// Uses monitor's productContext + tone so each customer's drafts are tailored.
+// Delegates to lib/draft-call.js so behavior matches the on-demand /v1/matches/draft
+// endpoint and Olumide's own monitor.js — single source of truth for prompt,
+// validation, AI-tell ban list, and stripMarkdown post-processing.
+// Returns { draft, model } so the caller can attach `draftedBy` to the match.
+async function generateReplyDraft(post, productContext, tone) {
+  if (!productContext || !productContext.trim()) return { draft: null, model: null }
+  if (!post.approved) return { draft: null, model: null }
 
   // F14: daily Groq cost cap — skip draft (post still gets through)
   const gcap = getGroqCap()
@@ -321,64 +342,18 @@ async function generateReplyDraft(post, productContext) {
     const r = await gcap()
     if (!r.allowed) {
       console.warn(`[v2] Groq daily cap hit (${r.used}/${r.max}) — skipping draft`)
-      return null
+      return { draft: null, model: null }
     }
   }
 
-  // F8: Sanitize all untrusted inputs. In v2 BOTH the post fields AND the
-  // productContext are user-controlled (the latter from the tenant's monitor
-  // config) — a malicious tenant could otherwise inject instructions into
-  // their own draft generation. sanitizeForPrompt strips control chars and
-  // ChatML role tokens.
-  const safeContext = sanitizeForPrompt(productContext)
-  const safeTitle = sanitizeForPrompt(post.title)
-  const safeSubreddit = sanitizeForPrompt(post.subreddit)
-  const safeBody = sanitizeForPrompt(post.body || '(no body)')
-
-  const prompt = `You are a Reddit community member helping people with real problems. You have genuine expertise described below. You are NOT a marketer.
-
-YOUR PRODUCT/EXPERTISE:
-${safeContext}
-
-REDDIT POST:
-Title: ${safeTitle}
-Subreddit: r/${safeSubreddit}
-Body: ${safeBody}
-
-━━━ SKIP FILTER ━━━
-Respond ONLY with the word SKIP if ANY are true:
-- Post is emotional, relational, or venting — not a task/tool problem
-- Keyword matched incidentally (e.g. social meaning, not product-relevant)
-- The post is clearly from a bot or spam
-- Mentioning a product would feel like an ad in this context
-- Post is asking about something completely unrelated to your expertise
-
-━━━ REPLY (if not skipping) ━━━
-Write a helpful 2-4 sentence reply as a community member.
-- Casual, direct tone — not corporate
-- Give real advice first. Only mention your product if it's the single most natural fit.
-- Never use "check out", "I recommend", "great tool"
-- No bullet points, headers, or markdown
-- Do not start with "I"
-- If mentioning your product: phrase as "I use" or "there's a tool called"
-
-Respond with SKIP or the reply only. No labels or explanation.`
-
-  try {
-    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${GROQ_API_KEY}` },
-      body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
-        max_tokens: 300,
-        messages: [{ role: 'user', content: prompt }],
-      }),
-    })
-    if (!res.ok) return null
-    const data = await res.json()
-    const text = data.choices?.[0]?.message?.content?.trim() || null
-    return (!text || text === 'SKIP') ? null : text
-  } catch { return null }
+  return draftCall({
+    title:          post.title,
+    body:           post.body,
+    subreddit:      post.subreddit,
+    productContext,
+    productName:    post.productName, // optional; usually not present in v2
+    tone,
+  })
 }
 
 // ── Email builder — per-monitor, minimal ─────────────────────────────────────
@@ -391,13 +366,13 @@ function buildAlertEmail(monitor, matches) {
 
   const keywordSections = Object.entries(byKeyword).map(([kw, posts]) => {
     const items = posts.map(p => `
-      <div style="margin-bottom:18px;padding:14px;background:#f9f9f9;border-left:4px solid #c9a84c;border-radius:4px;">
+      <div style="margin-bottom:18px;padding:14px;background:#f9f9f9;border-left:4px solid #FF6B35;border-radius:4px;">
         <div style="font-size:12px;color:#888;margin-bottom:5px;">
           ${p.source === 'hackernews' ? 'HN' : p.source === 'medium' ? '📰 Medium' : p.source === 'substack' ? '📧 Substack' : p.source === 'quora' ? '💬 Quora' : p.source === 'upwork' ? '💼 Upwork' : p.source === 'fiverr' ? '🟢 Fiverr' : `r/${escapeHtml(p.subreddit)}`} · u/${escapeHtml(p.author)} · ${escapeHtml(p.score)} upvotes
         </div>
         <a href="${escapeHtml(p.url)}" style="font-size:15px;font-weight:600;color:#1a1a1a;text-decoration:none;">${escapeHtml(p.title)}</a>
         ${p.body ? `<p style="font-size:13px;color:#555;margin:7px 0 0;line-height:1.5;">${escapeHtml(p.body)}${p.body.length >= 300 ? '…' : ''}</p>` : ''}
-        <a href="${escapeHtml(p.url)}" style="display:inline-block;margin-top:8px;font-size:12px;color:#c9a84c;font-weight:600;">Open thread →</a>
+        <a href="${escapeHtml(p.url)}" style="display:inline-block;margin-top:8px;font-size:12px;color:#FF6B35;font-weight:600;">Open thread →</a>
         ${!p.approved ? `
         <div style="margin-top:8px;padding:6px 10px;background:#fdecea;border:1px solid #f5c6cb;border-radius:4px;font-size:12px;font-weight:700;color:#c0392b;">
           ⚠️ DO NOT POST — ${escapeHtml(p.subreddit)} is not an approved subreddit
@@ -415,13 +390,28 @@ function buildAlertEmail(monitor, matches) {
       </div>`
   }).join('')
 
+  // Platform badges — surfaces which platforms are scanning so testers don't
+  // wonder why they only see one source. Reads the monitor's include* flags.
+  const platforms = [
+    { on: true,                            label: 'Reddit',   emoji: '👽' },
+    { on: monitor.includeMedium      !== false, label: 'Medium',   emoji: '📰' },
+    { on: monitor.includeSubstack    !== false, label: 'Substack', emoji: '📧' },
+    { on: monitor.includeQuora       !== false, label: 'Quora',    emoji: '💬' },
+    { on: monitor.includeUpworkForum !== false, label: 'Upwork',   emoji: '💼' },
+    { on: monitor.includeFiverrForum !== false, label: 'Fiverr',   emoji: '🟢' },
+  ]
+  const platformBadges = platforms
+    .map(p => `<span style="display:inline-block;padding:3px 9px;margin:2px 3px 2px 0;background:${p.on ? 'rgba(255,107,53,.10)' : '#1f1f1f'};color:${p.on ? '#FF6B35' : '#666'};border:1px solid ${p.on ? 'rgba(255,107,53,.30)' : '#2a2a2a'};border-radius:11px;font-size:11px;font-weight:600;">${p.emoji} ${p.label}</span>`)
+    .join('')
+
   return `<!DOCTYPE html><html><body style="font-family:system-ui,sans-serif;max-width:680px;margin:0 auto;padding:32px 24px;background:#f5f5f5;color:#1a1a1a;">
     <div style="margin-bottom:24px;padding:20px;background:#0e0e0e;border-radius:8px;">
-      <div style="font-size:18px;font-weight:700;color:#f0ece4;">📡 Ebenova Insights — ${escapeHtml(monitor.name)}</div>
+      <div style="font-size:18px;font-weight:700;color:#FF6B35;">📡 Ebenova Insights — ${escapeHtml(monitor.name)}</div>
       <div style="font-size:13px;color:#9a9690;margin-top:6px;">${matches.length} new mention${matches.length !== 1 ? 's' : ''} · ${new Date().toUTCString()}</div>
+      <div style="margin-top:10px;">${platformBadges}</div>
     </div>
     ${keywordSections}
-    <div style="margin-top:24px;font-size:11px;color:#aaa;text-align:center;">Ebenova Insights · <a href="https://ebenova.dev/insights" style="color:#c9a84c;">ebenova.dev/insights</a></div>
+    <div style="margin-top:24px;font-size:11px;color:#aaa;text-align:center;">Ebenova Insights · monitor your buying signals</div>
   </body></html>`
 }
 
@@ -588,11 +578,24 @@ async function runMonitor(monitor) {
   for (let i = 0; i < allMatches.length; i += CONCURRENCY) {
     const batch = allMatches.slice(i, i + CONCURRENCY)
     await Promise.all(batch.map(async m => {
-      m.draft = await generateReplyDraft(m, m.productContext)
-      if (m.draft) console.log(`${label} Draft: "${m.title.slice(0, 50)}…"`)
+      const r = await generateReplyDraft(m, m.productContext, monitor.replyTone)
+      m.draft = r.draft
+      m.draftedBy = r.model
+      if (m.draft) console.log(`${label} Draft by ${r.model}: "${m.title.slice(0, 50)}…"`)
     }))
     if (i + CONCURRENCY < allMatches.length) await delay(1000)
   }
+
+  // Source priority — Reddit ranks first because it's the highest-traffic
+  // platform with the strongest buying-intent signal. Lower = higher priority.
+  const SOURCE_RANK = { reddit: 0, hackernews: 1, quora: 2, medium: 3, substack: 4, upwork: 5, fiverr: 6 }
+  allMatches.sort((a, b) => {
+    const ra = SOURCE_RANK[a.source] ?? 99
+    const rb = SOURCE_RANK[b.source] ?? 99
+    if (ra !== rb) return ra - rb
+    // Within the same source, newer first
+    return new Date(b.createdAt) - new Date(a.createdAt)
+  })
 
   // Store in Redis + send alert
   try {

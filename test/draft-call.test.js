@@ -76,7 +76,7 @@ test('falls through to peer when primary returns SKIP', async () => {
     if (url.includes('groq.com')) {
       return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: 'SKIP' } }] }) }
     }
-    return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: 'Solid reply that mentions a concrete tactic — saved me 2 hours per week.' } }] }) }
+    return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: 'Solid reply that mentions a concrete tactic. Saved me 2 hours per week on month-end work.' } }] }) }
   }
   try {
     const r = await draftCall(SAMPLE)
