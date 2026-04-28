@@ -16,7 +16,7 @@ import { readFileSync } from 'fs'
 import { resolve, join } from 'path'
 import { fileURLToPath } from 'url'
 import { dirname } from 'path'
-import stripeRoutes from './routes/stripe.js'
+import stripeRoutes, { webhookHandler } from './routes/stripe.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname  = dirname(__filename)
@@ -92,6 +92,16 @@ const PLAN_LIMITS = {
 
 // ── App ────────────────────────────────────────────────────────────────────
 const app = express()
+
+// F1: Stripe webhook MUST be mounted before express.json() so the raw request
+// body (Buffer) reaches stripe.webhooks.constructEvent for signature
+// verification. If express.json() runs first, it consumes the body and the
+// SDK throws "No webhook payload was provided." All other routes use JSON.
+app.post('/v1/billing/webhook',
+  express.raw({ type: 'application/json' }),
+  webhookHandler
+)
+
 app.use(express.json())
 app.use(express.static(join(__dirname, 'public')))
 app.get('/', (req, res) => res.sendFile(join(__dirname, 'public', 'index.html')))
@@ -104,8 +114,9 @@ app.use((req, res, next) => {
   next()
 })
 
-// ── Stripe billing ─────────────────────────────────────────────────────────
-// Webhook route uses express.raw() internally — must be mounted before express.json() would re-parse it
+// ── Stripe billing (checkout + portal) ─────────────────────────────────────
+// Note: /v1/billing/webhook is mounted above, before express.json().
+// stripeRoutes (the router) only contains /checkout and /portal now.
 app.use('/v1/billing', stripeRoutes)
 
 // ── GET /health ────────────────────────────────────────────────────────────
