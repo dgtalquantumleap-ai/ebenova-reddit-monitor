@@ -32,6 +32,7 @@ import searchUpwork   from './lib/scrapers/upwork.js'
 import searchFiverr   from './lib/scrapers/fiverr.js'
 import { sendSlackAlert } from './lib/slack.js'
 import { escapeHtml } from './lib/html-escape.js'
+import { sanitizeForPrompt } from './lib/llm-safe-prompt.js'
 
 // ── Redis client (optional — seenIds fallback when process restarts) ──────────
 function getRedis() {
@@ -396,14 +397,25 @@ async function generateReplyDraft(post) {
     return null
   }
 
+  // F8: Sanitize all untrusted inputs before they enter the prompt. Reddit
+  // post fields are user-controlled and could contain injection payloads
+  // ("Ignore previous instructions..."). Sanitization strips control chars
+  // and role tokens but preserves normal text. ctx.description is internal,
+  // also sanitized as defense-in-depth in case it's ever made tenant-editable.
+  const safeTitle = sanitizeForPrompt(post.title)
+  const safeSubreddit = sanitizeForPrompt(post.subreddit)
+  const safeBody = sanitizeForPrompt(post.body || '(no body text)')
+  const safeProduct = sanitizeForPrompt(post.product)
+  const safeContext = sanitizeForPrompt(ctx.description)
+
   const prompt = `You are a Reddit community member who helps people with real problems. You have genuine expertise in the topic area below. You are NOT a marketer — you are a helpful person who occasionally mentions tools when they directly solve someone's exact problem.
 
-YOUR EXPERTISE AREA: ${ctx.description}
+YOUR EXPERTISE AREA: ${safeContext}
 
 REDDIT POST:
-Title: ${post.title}
-Subreddit: r/${post.subreddit}
-Body: ${post.body || '(no body text)'}
+Title: ${safeTitle}
+Subreddit: r/${safeSubreddit}
+Body: ${safeBody}
 
 ━━━ STEP 1: SKIP FILTER (check ALL of these) ━━━
 Respond ONLY with the word SKIP if ANY are true:
@@ -420,24 +432,24 @@ If the post passes Step 1, choose ONE strategy based on the post type:
 
 STRATEGY A — "Genuine Advice First, Tool Optional"
 Use when: Person has a problem, not asking for a tool specifically.
-Structure: Give 2-3 sentences of real, actionable advice. Only mention ${post.product} if it's the single most natural solution — phrase it as "I've used [product] for this" not "check out [product]". If mentioning feels forced, don't mention it at all.
+Structure: Give 2-3 sentences of real, actionable advice. Only mention ${safeProduct} if it's the single most natural solution — phrase it as "I've used [product] for this" not "check out [product]". If mentioning feels forced, don't mention it at all.
 
 STRATEGY B — "Direct Answer to Tool Request"  
 Use when: Person explicitly asks "what app/tool/software" for this.
-Structure: Answer directly. Name ${post.product} as one option among others if relevant. Include one specific reason why it fits their situation. Keep it under 4 sentences.
+Structure: Answer directly. Name ${safeProduct} as one option among others if relevant. Include one specific reason why it fits their situation. Keep it under 4 sentences.
 
 STRATEGY C — "Helpful Comment, No Product Mention"
 Use when: Post is in a sensitive subreddit (Teachers, freelance) OR product mention would feel like an ad.
-Structure: Write a genuinely helpful 2-3 sentence reply with real advice. Do NOT mention ${post.product} at all. This builds account credibility and is sometimes the right call.
+Structure: Write a genuinely helpful 2-3 sentence reply with real advice. Do NOT mention ${safeProduct} at all. This builds account credibility and is sometimes the right call.
 
 STRATEGY D — "Empathy Then Practical Step"
 Use when: Person is frustrated (client won't pay, landlord problem, scope creep).
-Structure: One sentence acknowledging the frustration. Then one concrete next step they can take right now. Only mention ${post.product} if it directly enables that next step.
+Structure: One sentence acknowledging the frustration. Then one concrete next step they can take right now. Only mention ${safeProduct} if it directly enables that next step.
 
 ━━━ REPLY RULES (apply to all strategies) ━━━
 - Write like a real Reddit user: casual, direct, no corporate language
 - Never use phrases like "check out", "I recommend", "great tool", "you should try"
-- If mentioning ${post.product}: use "I use" or "there's a thing called" or "someone built"
+- If mentioning ${safeProduct}: use "I use" or "there's a thing called" or "someone built"
 - Never mention the URL unless the person asked for links
 - Never use bullet points, headers, or markdown formatting
 - Maximum 4 sentences total

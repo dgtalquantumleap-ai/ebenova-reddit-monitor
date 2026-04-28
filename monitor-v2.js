@@ -33,6 +33,7 @@ import searchQuora         from './lib/scrapers/quora.js'
 import searchUpwork        from './lib/scrapers/upwork.js'
 import searchFiverr        from './lib/scrapers/fiverr.js'
 import { escapeHtml }      from './lib/html-escape.js'
+import { sanitizeForPrompt } from './lib/llm-safe-prompt.js'
 
 const RESEND_API_KEY   = process.env.RESEND_API_KEY
 const GROQ_API_KEY     = process.env.GROQ_API_KEY
@@ -274,15 +275,25 @@ async function generateReplyDraft(post, productContext) {
   if (!productContext || !productContext.trim()) return null
   if (!post.approved) return null
 
+  // F8: Sanitize all untrusted inputs. In v2 BOTH the post fields AND the
+  // productContext are user-controlled (the latter from the tenant's monitor
+  // config) — a malicious tenant could otherwise inject instructions into
+  // their own draft generation. sanitizeForPrompt strips control chars and
+  // ChatML role tokens.
+  const safeContext = sanitizeForPrompt(productContext)
+  const safeTitle = sanitizeForPrompt(post.title)
+  const safeSubreddit = sanitizeForPrompt(post.subreddit)
+  const safeBody = sanitizeForPrompt(post.body || '(no body)')
+
   const prompt = `You are a Reddit community member helping people with real problems. You have genuine expertise described below. You are NOT a marketer.
 
 YOUR PRODUCT/EXPERTISE:
-${productContext.slice(0, 1500)}
+${safeContext}
 
 REDDIT POST:
-Title: ${post.title}
-Subreddit: r/${post.subreddit}
-Body: ${post.body || '(no body)'}
+Title: ${safeTitle}
+Subreddit: r/${safeSubreddit}
+Body: ${safeBody}
 
 ━━━ SKIP FILTER ━━━
 Respond ONLY with the word SKIP if ANY are true:
