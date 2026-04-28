@@ -4,23 +4,10 @@
 // No Reddit API key required — uses public JSON endpoints
 
 import { createRequire } from 'module'
-import { readFileSync } from 'fs'
-import { resolve } from 'path'
+import { loadEnv } from './lib/env.js'
 
-// Load .env manually (no dotenv dependency needed)
-try {
-  const envPath = resolve(process.cwd(), '.env')
-  const lines = readFileSync(envPath, 'utf8').split('\n')
-  for (const line of lines) {
-    const trimmed = line.trim()
-    if (!trimmed || trimmed.startsWith('#')) continue
-    const eqIdx = trimmed.indexOf('=')
-    if (eqIdx === -1) continue
-    const key = trimmed.slice(0, eqIdx).trim()
-    const val = trimmed.slice(eqIdx + 1).trim()
-    if (key && val && !process.env[key]) process.env[key] = val
-  }
-} catch (_) {}
+// Load .env via shared loader (dotenv) — replaces hand-rolled parser.
+loadEnv()
 
 import { Resend } from 'resend'
 import { Redis } from '@upstash/redis'

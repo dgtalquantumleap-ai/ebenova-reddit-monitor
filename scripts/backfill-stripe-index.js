@@ -12,22 +12,9 @@
 //
 // Loads .env from cwd. Set UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN.
 
-import { readFileSync } from 'fs'
-import { resolve } from 'path'
+import { loadEnv } from '../lib/env.js'
 
-// Naive .env loader (matches the rest of the codebase's pattern)
-try {
-  const lines = readFileSync(resolve(process.cwd(), '.env'), 'utf8').split('\n')
-  for (const line of lines) {
-    const t = line.trim()
-    if (!t || t.startsWith('#')) continue
-    const eq = t.indexOf('=')
-    if (eq === -1) continue
-    const k = t.slice(0, eq).trim()
-    const v = t.slice(eq + 1).trim()
-    if (k && v && !process.env[k]) process.env[k] = v
-  }
-} catch (_) {}
+loadEnv()
 
 import { Redis } from '@upstash/redis'
 

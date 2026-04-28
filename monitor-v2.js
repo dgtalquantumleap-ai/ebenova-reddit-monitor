@@ -6,22 +6,10 @@
 // Start with: node monitor-v2.js
 // Env vars needed: REDIS_URL, RESEND_API_KEY, GROQ_API_KEY, FROM_EMAIL
 
-import { readFileSync } from 'fs'
-import { resolve }      from 'path'
+import { loadEnv } from './lib/env.js'
 
-// ── Load .env ─────────────────────────────────────────────────────────────────
-try {
-  const lines = readFileSync(resolve(process.cwd(), '.env'), 'utf8').split('\n')
-  for (const line of lines) {
-    const trimmed = line.trim()
-    if (!trimmed || trimmed.startsWith('#')) continue
-    const eq  = trimmed.indexOf('=')
-    if (eq === -1) continue
-    const key = trimmed.slice(0, eq).trim()
-    const val = trimmed.slice(eq + 1).trim()
-    if (key && val && !process.env[key]) process.env[key] = val
-  }
-} catch (_) {}
+// Load .env via shared loader (dotenv) — replaces hand-rolled parser.
+loadEnv()
 
 import { Resend }  from 'resend'
 import { Redis }   from '@upstash/redis'

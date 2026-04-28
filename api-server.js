@@ -12,28 +12,17 @@
 //   POST /v1/matches/feedback  — thumbs up/down on a draft
 
 import express from 'express'
-import { readFileSync } from 'fs'
-import { resolve, join } from 'path'
+import { join } from 'path'
 import { fileURLToPath } from 'url'
 import { dirname } from 'path'
 import stripeRoutes, { webhookHandler } from './routes/stripe.js'
+import { loadEnv } from './lib/env.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname  = dirname(__filename)
 
-// ── Load .env ──────────────────────────────────────────────────────────────
-try {
-  const lines = readFileSync(resolve(process.cwd(), '.env'), 'utf8').split('\n')
-  for (const line of lines) {
-    const t = line.trim()
-    if (!t || t.startsWith('#')) continue
-    const eq = t.indexOf('=')
-    if (eq === -1) continue
-    const k = t.slice(0, eq).trim()
-    const v = t.slice(eq + 1).trim()
-    if (k && v && !process.env[k]) process.env[k] = v
-  }
-} catch (_) {}
+// Load .env via shared loader (dotenv) — replaces hand-rolled parser.
+loadEnv()
 
 import { Redis } from '@upstash/redis'
 import { randomBytes } from 'crypto'
