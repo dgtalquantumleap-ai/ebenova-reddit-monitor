@@ -32,6 +32,7 @@ import searchSubstack      from './lib/scrapers/substack.js'
 import searchQuora         from './lib/scrapers/quora.js'
 import searchUpwork        from './lib/scrapers/upwork.js'
 import searchFiverr        from './lib/scrapers/fiverr.js'
+import { escapeHtml }      from './lib/html-escape.js'
 
 const RESEND_API_KEY   = process.env.RESEND_API_KEY
 const GROQ_API_KEY     = process.env.GROQ_API_KEY
@@ -331,31 +332,31 @@ function buildAlertEmail(monitor, matches) {
     const items = posts.map(p => `
       <div style="margin-bottom:18px;padding:14px;background:#f9f9f9;border-left:4px solid #c9a84c;border-radius:4px;">
         <div style="font-size:12px;color:#888;margin-bottom:5px;">
-          ${p.source === 'hackernews' ? 'HN' : p.source === 'medium' ? '📰 Medium' : p.source === 'substack' ? '📧 Substack' : p.source === 'quora' ? '💬 Quora' : p.source === 'upwork' ? '💼 Upwork' : p.source === 'fiverr' ? '🟢 Fiverr' : `r/${p.subreddit}`} · u/${p.author} · ${p.score} upvotes
+          ${p.source === 'hackernews' ? 'HN' : p.source === 'medium' ? '📰 Medium' : p.source === 'substack' ? '📧 Substack' : p.source === 'quora' ? '💬 Quora' : p.source === 'upwork' ? '💼 Upwork' : p.source === 'fiverr' ? '🟢 Fiverr' : `r/${escapeHtml(p.subreddit)}`} · u/${escapeHtml(p.author)} · ${escapeHtml(p.score)} upvotes
         </div>
-        <a href="${p.url}" style="font-size:15px;font-weight:600;color:#1a1a1a;text-decoration:none;">${p.title}</a>
-        ${p.body ? `<p style="font-size:13px;color:#555;margin:7px 0 0;line-height:1.5;">${p.body}${p.body.length >= 300 ? '…' : ''}</p>` : ''}
-        <a href="${p.url}" style="display:inline-block;margin-top:8px;font-size:12px;color:#c9a84c;font-weight:600;">Open thread →</a>
+        <a href="${escapeHtml(p.url)}" style="font-size:15px;font-weight:600;color:#1a1a1a;text-decoration:none;">${escapeHtml(p.title)}</a>
+        ${p.body ? `<p style="font-size:13px;color:#555;margin:7px 0 0;line-height:1.5;">${escapeHtml(p.body)}${p.body.length >= 300 ? '…' : ''}</p>` : ''}
+        <a href="${escapeHtml(p.url)}" style="display:inline-block;margin-top:8px;font-size:12px;color:#c9a84c;font-weight:600;">Open thread →</a>
         ${!p.approved ? `
         <div style="margin-top:8px;padding:6px 10px;background:#fdecea;border:1px solid #f5c6cb;border-radius:4px;font-size:12px;font-weight:700;color:#c0392b;">
-          ⚠️ DO NOT POST — ${p.subreddit} is not an approved subreddit
+          ⚠️ DO NOT POST — ${escapeHtml(p.subreddit)} is not an approved subreddit
         </div>` : ''}
         ${p.draft ? `
         <div style="margin-top:10px;padding:12px;background:#fffdf0;border:1px solid #e8d87a;border-radius:6px;">
           <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#a08c00;margin-bottom:6px;">✏️ Suggested reply</div>
-          <div style="font-size:13px;color:#333;line-height:1.6;white-space:pre-wrap;">${p.draft}</div>
+          <div style="font-size:13px;color:#333;line-height:1.6;white-space:pre-wrap;">${escapeHtml(p.draft)}</div>
         </div>` : ''}
       </div>`).join('')
     return `
       <div style="margin-bottom:28px;">
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:#aaa;margin-bottom:10px;">"${kw}" (${posts.length})</div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:#aaa;margin-bottom:10px;">"${escapeHtml(kw)}" (${posts.length})</div>
         ${items}
       </div>`
   }).join('')
 
   return `<!DOCTYPE html><html><body style="font-family:system-ui,sans-serif;max-width:680px;margin:0 auto;padding:32px 24px;background:#f5f5f5;color:#1a1a1a;">
     <div style="margin-bottom:24px;padding:20px;background:#0e0e0e;border-radius:8px;">
-      <div style="font-size:18px;font-weight:700;color:#f0ece4;">📡 Ebenova Insights — ${monitor.name}</div>
+      <div style="font-size:18px;font-weight:700;color:#f0ece4;">📡 Ebenova Insights — ${escapeHtml(monitor.name)}</div>
       <div style="font-size:13px;color:#9a9690;margin-top:6px;">${matches.length} new mention${matches.length !== 1 ? 's' : ''} · ${new Date().toUTCString()}</div>
     </div>
     ${keywordSections}

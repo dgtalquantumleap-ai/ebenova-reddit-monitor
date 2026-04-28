@@ -31,6 +31,7 @@ import searchQuora    from './lib/scrapers/quora.js'
 import searchUpwork   from './lib/scrapers/upwork.js'
 import searchFiverr   from './lib/scrapers/fiverr.js'
 import { sendSlackAlert } from './lib/slack.js'
+import { escapeHtml } from './lib/html-escape.js'
 
 // ── Redis client (optional — seenIds fallback when process restarts) ──────────
 function getRedis() {
@@ -598,27 +599,27 @@ function buildEmailHtml(matches) {
       const items = posts.map(p => `
         <div style="margin-bottom:20px;padding:14px;background:#f9f9f9;border-left:4px solid #c9a84c;border-radius:4px;">
           <div style="font-size:12px;color:#888;margin-bottom:5px;">
-            ${p.source === 'hackernews' ? 'HN' : p.source === 'medium' ? '📰 Medium' : p.source === 'substack' ? '📧 Substack' : p.source === 'quora' ? '💬 Quora' : p.source === 'upwork' ? '💼 Upwork Community' : p.source === 'fiverr' ? '🟢 Fiverr Community' : p.source === 'indiehackers' ? 'IndieHackers' : `r/${p.subreddit}`} · ${p.author} · ${p.score} points · ${p.comments} comments
+            ${p.source === 'hackernews' ? 'HN' : p.source === 'medium' ? '📰 Medium' : p.source === 'substack' ? '📧 Substack' : p.source === 'quora' ? '💬 Quora' : p.source === 'upwork' ? '💼 Upwork Community' : p.source === 'fiverr' ? '🟢 Fiverr Community' : p.source === 'indiehackers' ? 'IndieHackers' : `r/${escapeHtml(p.subreddit)}`} · ${escapeHtml(p.author)} · ${escapeHtml(p.score)} points · ${escapeHtml(p.comments)} comments
           </div>
           ${p.priority_score >= 8 ? `<div style="display:inline-block;margin-bottom:6px;background:#c9a84c;color:#000;padding:2px 8px;border-radius:3px;font-size:10px;font-weight:700;letter-spacing:0.5px;">🔥 HIGH PRIORITY</div>` : ''}
-          <a href="${p.url}" style="font-size:15px;font-weight:600;color:#1a1a1a;text-decoration:none;">${p.title}</a>
-          ${p.body ? `<p style="font-size:13px;color:#555;margin:7px 0 0;line-height:1.5;">${p.body}${p.body.length >= 300 ? '…' : ''}</p>` : ''}
-          <a href="${p.url}" style="display:inline-block;margin-top:8px;font-size:12px;color:#c9a84c;font-weight:600;">Open thread →</a>
+          <a href="${escapeHtml(p.url)}" style="font-size:15px;font-weight:600;color:#1a1a1a;text-decoration:none;">${escapeHtml(p.title)}</a>
+          ${p.body ? `<p style="font-size:13px;color:#555;margin:7px 0 0;line-height:1.5;">${escapeHtml(p.body)}${p.body.length >= 300 ? '…' : ''}</p>` : ''}
+          <a href="${escapeHtml(p.url)}" style="display:inline-block;margin-top:8px;font-size:12px;color:#c9a84c;font-weight:600;">Open thread →</a>
           ${!p.approved ? `
           <div style="margin-top:10px;padding:8px 12px;background:#fdecea;border:1px solid #f5c6cb;border-radius:6px;font-size:12px;font-weight:700;color:#c0392b;">
-            ⚠️ DO NOT POST — r/${p.subreddit} is not an approved subreddit
+            ⚠️ DO NOT POST — r/${escapeHtml(p.subreddit)} is not an approved subreddit
           </div>` : ''}
           ${p.draft ? `
           <div style="margin-top:12px;padding:12px;background:#fffdf0;border:1px solid #e8d87a;border-radius:6px;">
             <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#a08c00;margin-bottom:6px;">✏️ Suggested reply</div>
-            <div style="font-size:13px;color:#333;line-height:1.6;white-space:pre-wrap;">${p.draft}</div>
+            <div style="font-size:13px;color:#333;line-height:1.6;white-space:pre-wrap;">${escapeHtml(p.draft)}</div>
           </div>` : ''}
         </div>
       `).join('')
       return `
         <div style="margin-bottom:24px;">
           <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:#aaa;margin-bottom:10px;">
-            "${keyword}" (${posts.length})
+            "${escapeHtml(keyword)}" (${posts.length})
           </div>
           ${items}
         </div>
@@ -629,10 +630,10 @@ function buildEmailHtml(matches) {
       <div style="margin-bottom:40px;padding:20px;background:#fff;border:1px solid #eee;border-radius:8px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;padding-bottom:12px;border-bottom:2px solid #c9a84c;">
           <div>
-            <div style="font-size:18px;font-weight:700;color:#1a1a1a;">${product}</div>
+            <div style="font-size:18px;font-weight:700;color:#1a1a1a;">${escapeHtml(product)}</div>
             <div style="font-size:12px;color:#888;margin-top:2px;">${totalForProduct} new mention${totalForProduct !== 1 ? 's' : ''}</div>
           </div>
-          <a href="${PRODUCT_LINKS[product] || '#'}" style="font-size:12px;color:#c9a84c;font-weight:600;text-decoration:none;">Visit site →</a>
+          <a href="${escapeHtml(PRODUCT_LINKS[product] || '#')}" style="font-size:12px;color:#c9a84c;font-weight:600;text-decoration:none;">Visit site →</a>
         </div>
         ${keywordSections}
       </div>
