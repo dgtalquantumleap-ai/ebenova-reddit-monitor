@@ -17,14 +17,7 @@ import searchSubstack from './lib/scrapers/substack.js'
 import searchQuora    from './lib/scrapers/quora.js'
 import searchUpwork   from './lib/scrapers/upwork.js'
 import searchFiverr   from './lib/scrapers/fiverr.js'
-import {
-  isRedditAuthConfigured,
-  redditAuthHeaders,
-  redditOAuthHost,
-  redditPublicHost,
-  redditUserAgent,
-  invalidateRedditToken,
-} from './lib/reddit-auth.js'
+import { parseRedditRSS, buildRedditSearchUrl, parseRetryAfter } from './lib/reddit-rss.js'
 import { sendSlackAlert } from './lib/slack.js'
 import { escapeHtml } from './lib/html-escape.js'
 import { sanitizeForPrompt } from './lib/llm-safe-prompt.js'
@@ -424,101 +417,81 @@ const HN_KEYWORDS = [
 const seenIds = new Set()
 const seenHnIds = new Set()
 
-// ── Reddit search — OAuth client-credentials when configured, anon fallback ──
-// Same auth strategy as monitor-v2.js (see lib/reddit-auth.js).
+// ── Reddit search — public RSS feeds, no auth required ──────────────────────
+// Uses Reddit's public Atom feeds via lib/reddit-rss.js. RSS doesn't carry
+// score or comment counts, so those default to 0 in match records.
 async function searchReddit(keyword, subreddits) {
   const results = []
-  const encodedKeyword = encodeURIComponent(keyword)
-  const useOAuth = isRedditAuthConfigured()
-  const HOST = useOAuth ? redditOAuthHost() : redditPublicHost()
 
-  const paths = subreddits && subreddits.length > 0
-    ? subreddits.map(sr =>
-        `/r/${sr}/search.json?q=${encodedKeyword}&sort=new&limit=10&t=day&restrict_sr=1`
-      )
-    : [`/search.json?q=${encodedKeyword}&sort=new&limit=10&t=day`]
+  const urls = subreddits && subreddits.length > 0
+    ? subreddits.map(sr => buildRedditSearchUrl(keyword, sr))
+    : [buildRedditSearchUrl(keyword, null)]
 
-  async function buildHeaders() {
-    if (useOAuth) {
-      try { return await redditAuthHeaders() }
-      catch (err) {
-        console.warn(`[monitor] Reddit OAuth token fetch failed (${err.message}) — anon fallback this cycle`)
-        return { 'User-Agent': redditUserAgent() }
-      }
-    }
-    return { 'User-Agent': redditUserAgent() }
+  const headers = {
+    'User-Agent': process.env.REDDIT_USER_AGENT || 'Mozilla/5.0 (compatible; EbenovaBot/2.0)',
+    'Accept': 'application/atom+xml,application/rss+xml,application/xml;q=0.9,text/xml;q=0.8',
   }
-  let headers = await buildHeaders()
 
-  for (const path of paths) {
-    const url = HOST + path
+  for (const url of urls) {
     try {
-      let res = await fetch(url, { headers })
-      if (res.status === 401 && useOAuth) {
-        console.warn(`[monitor] Reddit 401 — refreshing token and retrying once`)
-        invalidateRedditToken()
-        try { headers = await buildHeaders(); res = await fetch(url, { headers }) }
-        catch (err) { console.warn(`[monitor] retry failed: ${err.message}`) }
-      }
+      const res = await fetch(url, { headers })
       if (!res.ok) {
-        console.warn(`[monitor] Reddit ${res.status} for "${keyword}" → ${url.slice(0, 100)}…`)
+        const retryAfter = parseRetryAfter(res.headers)
+        console.warn(`[monitor] Reddit ${res.status} for "${keyword}" → ${url.slice(0, 100)}…${retryAfter ? ` (Retry-After: ${retryAfter}s)` : ''}`)
+        await delay((retryAfter || 3) * 1000)
         continue
       }
-      const data = await res.json()
-      const posts = data?.data?.children || []
+      const xml = await res.text()
+      const entries = parseRedditRSS(xml)
 
-      console.log(`[monitor] Reddit API response: ${posts.length} posts found for "${keyword}"`)
-      if (posts.length > 0) {
-        console.log(`[monitor] Top 3 posts: ${posts.slice(0, 3).map(p => p.data.title).join(' | ')}`)
+      console.log(`[monitor] Reddit RSS: ${entries.length} entries for "${keyword}"`)
+      if (entries.length > 0) {
+        console.log(`[monitor] Top 3: ${entries.slice(0, 3).map(e => e.title).join(' | ')}`)
       }
 
-      for (const post of posts) {
-        const p = post.data
+      for (const entry of entries) {
         // Check memory first, then Redis fallback (handles restarts)
-        if (!seenIds.has(p.id) && redis) {
+        if (!seenIds.has(entry.id) && redis) {
           try {
-            const inRedis = await redis.get(`seen:v1:${p.id}`)
-            if (inRedis) seenIds.add(p.id) // backfill memory
+            const inRedis = await redis.get(`seen:v1:${entry.id}`)
+            if (inRedis) seenIds.add(entry.id) // backfill memory
           } catch (_) {}
         }
-        if (seenIds.has(p.id)) {
-          console.log(`[monitor] ⏭️ Already seen: "${p.title?.slice(0, 50)}" (${p.id})`)
+        if (seenIds.has(entry.id)) {
+          console.log(`[monitor] ⏭️ Already seen: "${entry.title?.slice(0, 50)}" (${entry.id})`)
           continue
         }
-        const createdAt = p.created_utc * 1000
-        const ageMs = Date.now() - createdAt
+        const createdAtMs = new Date(entry.createdAt).getTime()
+        const ageMs = Date.now() - createdAtMs
         const ageHours = (ageMs / (60 * 60 * 1000)).toFixed(1)
-        // Only alert on posts within the configured max age (default 3 hours)
-        // Guards against restarts re-alerting on very old content
         if (ageMs > POST_MAX_AGE_HOURS * 60 * 60 * 1000) {
-          console.log(`[monitor] ⏰ Too old (${ageHours}h): "${p.title?.slice(0, 50)}" (max: ${POST_MAX_AGE_HOURS}h)`)
+          console.log(`[monitor] ⏰ Too old (${ageHours}h): "${entry.title?.slice(0, 50)}" (max: ${POST_MAX_AGE_HOURS}h)`)
           continue
         }
-        seenIds.add(p.id)
-        // Persist to Redis so restarts don't re-alert on the same post (3-day TTL)
-        if (redis) redis.setex(`seen:v1:${p.id}`, 60 * 60 * 24 * 3, '1').catch(() => {})
-        console.log(`[monitor] 🎯 NEW MATCH FOUND: "${keyword}" → ${p.title}`)
-        console.log(`[monitor] Post URL: https://reddit.com${p.permalink}`)
+        seenIds.add(entry.id)
+        if (redis) redis.setex(`seen:v1:${entry.id}`, 60 * 60 * 24 * 3, '1').catch(() => {})
+        console.log(`[monitor] 🎯 NEW MATCH FOUND: "${keyword}" → ${entry.title}`)
+        console.log(`[monitor] Post URL: ${entry.url}`)
         console.log(`[monitor] Post age: ${ageHours} hours old`)
         results.push({
-          id:        p.id,
-          title:     p.title || p.body?.slice(0, 100) || '(no title)',
-          url:       `https://reddit.com${p.permalink}`,
-          subreddit: p.subreddit,
-          author:    p.author,
-          score:     p.score,
-          comments:  p.num_comments,
-          body:      (p.selftext || p.body || '').slice(0, 600),
-          createdAt: new Date(createdAt).toUTCString(),
+          id:        entry.id,
+          title:     entry.title || entry.body?.slice(0, 100) || '(no title)',
+          url:       entry.url,
+          subreddit: entry.subreddit,
+          author:    entry.author,
+          score:     0,        // RSS doesn't include score
+          comments:  0,        // RSS doesn't include comment count
+          body:      entry.body || '',
+          createdAt: new Date(createdAtMs).toUTCString(),
           keyword,
-          approved:  APPROVED_SUBREDDITS.has(p.subreddit),
+          approved:  APPROVED_SUBREDDITS.has(entry.subreddit),
         })
       }
     } catch (err) {
       console.error(`[monitor] fetch error for "${keyword}":`, err.message)
     }
 
-    // Polite delay between requests — avoid rate limiting
+    // Polite delay between requests — 1 req per 2s
     await delay(2000)
 
     // Memory cleanup: clear old posts if we exceed the limit

@@ -25,14 +25,7 @@ import { sanitizeForPrompt } from './lib/llm-safe-prompt.js'
 import { embeddingCacheKey } from './lib/embedding-cache.js'
 import { makeCostCap } from './lib/cost-cap.js'
 import { draftCall }   from './lib/draft-call.js'
-import {
-  isRedditAuthConfigured,
-  redditAuthHeaders,
-  redditOAuthHost,
-  redditPublicHost,
-  redditUserAgent,
-  invalidateRedditToken,
-} from './lib/reddit-auth.js'
+import { parseRedditRSS, buildRedditSearchUrl, parseRetryAfter } from './lib/reddit-rss.js'
 
 // F14: lazy daily cost caps. Soft-fail so the worker degrades gracefully
 // (skip-draft / skip-email / skip-embedding) rather than crashing.
@@ -269,100 +262,70 @@ async function semanticSearchSubreddit(monitorId, subreddit, keywordEntry, query
 // ── Reddit search ─────────────────────────────────────────────────────────────
 // Returns new posts (< POST_MAX_AGE_MS old) not yet seen for this monitor.
 //
-// Auth strategy: prefers OAuth client-credentials (oauth.reddit.com, ~600
-// req/10min headroom) when REDDIT_CLIENT_ID + SECRET are set. Falls back to
-// anonymous www.reddit.com endpoints when not configured (~60 req/min,
-// rate-limited). On 401 we invalidate the token and retry once with a
-// fresh one — covers the rare case Reddit rotates / revokes mid-cycle.
+// Uses Reddit's public RSS endpoints — no OAuth, no client_id, no env vars.
+// Trade-off vs the JSON API: RSS feeds don't include score or comments
+// count — those default to 0 in the result. Title/URL/subreddit/author/
+// body/published-date are all present.
 //
-// Failure-mode logging: every non-2xx response is logged with status + URL
-// so cycle logs make rate-limit problems visible (vs. silent in v1).
+// Rate-limit policy: respect Retry-After header when Reddit returns 429/503;
+// otherwise the existing 2-second post-call delay handles cadence.
+//
+// Failure logging: every non-2xx is logged with status + URL so cycle logs
+// surface problems immediately (vs. silently returning Medium-only).
 async function searchReddit(monitorId, keywordEntry) {
   const { keyword, subreddits = [] } = keywordEntry
   const results = []
-  const encoded = encodeURIComponent(keyword)
-  const useOAuth = isRedditAuthConfigured()
-  const HOST = useOAuth ? redditOAuthHost() : redditPublicHost()
 
-  // Path is the same for both hosts; OAuth uses the same /r/{sub}/search.json
-  // shape with a Bearer token. Only the hostname differs.
-  const paths = subreddits.length > 0
-    ? subreddits.map(sr =>
-        `/r/${sr}/search.json?q=${encoded}&sort=new&limit=10&t=day&restrict_sr=1`
-      )
-    : [`/search.json?q=${encoded}&sort=new&limit=10&t=day`]
+  // One URL per named subreddit, or a single global search if none are set.
+  const urls = subreddits.length > 0
+    ? subreddits.map(sr => buildRedditSearchUrl(keyword, sr))
+    : [buildRedditSearchUrl(keyword, null)]
 
-  // Build headers. Anonymous: just User-Agent. OAuth: add Bearer token.
-  async function buildHeaders() {
-    if (useOAuth) {
-      try {
-        return await redditAuthHeaders()
-      } catch (err) {
-        console.warn(`[v2][reddit] OAuth token fetch failed (${err.message}) — falling back to anonymous for this cycle`)
-        return { 'User-Agent': redditUserAgent() }
-      }
-    }
-    return { 'User-Agent': redditUserAgent() }
+  // Plain headers — no Bearer, no client_id. UA is still polite to send;
+  // Reddit's RSS endpoints don't gate on it the way the JSON API does.
+  const headers = {
+    'User-Agent': process.env.REDDIT_USER_AGENT || 'Mozilla/5.0 (compatible; EbenovaBot/2.0)',
+    'Accept': 'application/atom+xml,application/rss+xml,application/xml;q=0.9,text/xml;q=0.8',
   }
 
-  let headers = await buildHeaders()
-
-  for (const path of paths) {
-    const url = HOST + path
+  for (const url of urls) {
     try {
-      let res = await fetch(url, { headers })
-
-      // Token might have rotated mid-cycle. One retry with fresh token covers
-      // the common case before falling through to the error path.
-      if (res.status === 401 && useOAuth) {
-        console.warn(`[v2][reddit] 401 on "${keyword}" — refreshing token and retrying once`)
-        invalidateRedditToken()
-        try {
-          headers = await buildHeaders()
-          res = await fetch(url, { headers })
-        } catch (err) {
-          console.warn(`[v2][reddit] retry failed: ${err.message}`)
-        }
-      }
-
+      const res = await fetch(url, { headers })
       if (!res.ok) {
-        console.warn(`[v2][reddit] ${res.status} for "${keyword}" → ${url.slice(0, 100)}…`)
-        await delay(3000)
+        const retryAfter = parseRetryAfter(res.headers)
+        console.warn(`[v2][reddit:rss] ${res.status} for "${keyword}" → ${url.slice(0, 100)}…${retryAfter ? ` (Retry-After: ${retryAfter}s)` : ''}`)
+        await delay((retryAfter || 3) * 1000)
         continue
       }
-      const data = await res.json()
-      const posts = data?.data?.children || []
+      const xml = await res.text()
+      const entries = parseRedditRSS(xml)
       let newCount = 0
       let agedOut = 0
 
-      for (const post of posts) {
-        const p = post.data
-        if (await hasSeenWithRedis(monitorId, p.id)) continue
-        if (Date.now() - p.created_utc * 1000 > POST_MAX_AGE_MS) { agedOut++; continue }
-        markSeen(monitorId, p.id)
+      for (const entry of entries) {
+        if (await hasSeenWithRedis(monitorId, entry.id)) continue
+        const ageMs = Date.now() - new Date(entry.createdAt).getTime()
+        if (ageMs > POST_MAX_AGE_MS) { agedOut++; continue }
+        markSeen(monitorId, entry.id)
         newCount++
         results.push({
-          id:        p.id,
-          title:     p.title || '(no title)',
-          url:       `https://reddit.com${p.permalink}`,
-          subreddit: p.subreddit,
-          author:    p.author,
-          score:     p.score,
-          comments:  p.num_comments,
-          body:      (p.selftext || '').slice(0, 600),
-          createdAt: new Date(p.created_utc * 1000).toISOString(),
+          id:        entry.id,
+          title:     entry.title || '(no title)',
+          url:       entry.url,
+          subreddit: entry.subreddit,
+          author:    entry.author,
+          score:     0,        // RSS doesn't include score
+          comments:  0,        // RSS doesn't include comment count
+          body:      entry.body || '',
+          createdAt: entry.createdAt,
           keyword,
           source:    'reddit',
-          approved:  APPROVED_SUBREDDITS.has(p.subreddit),
+          approved:  APPROVED_SUBREDDITS.has(entry.subreddit),
         })
       }
-      // Always log per-URL so we can see whether Reddit is returning data.
-      // Tag the auth mode so cycle logs make it obvious whether OAuth is
-      // active when diagnosing "only Medium" complaints.
-      const authTag = useOAuth ? 'oauth' : 'anon'
-      console.log(`[v2][reddit:${authTag}] "${keyword}" → ${posts.length} fetched, ${newCount} new, ${agedOut} stale${posts.length === 0 ? ' (empty response — likely rate-limited)' : ''}`)
+      console.log(`[v2][reddit:rss] "${keyword}" → ${entries.length} fetched, ${newCount} new, ${agedOut} stale${entries.length === 0 ? ' (empty feed)' : ''}`)
     } catch (err) {
-      console.error(`[v2][reddit] fetch error "${keyword}":`, err.message)
+      console.error(`[v2][reddit:rss] fetch error "${keyword}":`, err.message)
     }
     await delay(2000)
   }
