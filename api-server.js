@@ -30,6 +30,7 @@ loadEnv()
 import { Redis } from '@upstash/redis'
 import { randomBytes } from 'crypto'
 import { makeRateLimiter } from './lib/rate-limit.js'
+import { verifyCaptcha } from './lib/captcha.js'
 
 // F5: Rate limit + email validation for signup abuse prevention.
 // Lazy-init the limiter so we don't call getRedis() before .env is loaded.
@@ -402,6 +403,22 @@ app.post('/v1/auth/signup', async (req, res) => {
   try {
     const redis = getRedis()
 
+    // F15: Soft-gate hCaptcha — only kick in for repeat IPs within an hour.
+    // First signup from any IP works without friction; subsequent ones require
+    // the captcha. Soft-skips if HCAPTCHA_SECRET_KEY is unset.
+    const recentSignups = Number(await redis.get(`signupcount:ip:${ip}`).catch(() => 0)) || 0
+    if (recentSignups >= 1 || req.body?.forceCaptcha) {
+      const cap = await verifyCaptcha(req.body?.captchaToken)
+      if (!cap.ok) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'CAPTCHA_REQUIRED', message: 'Please complete the captcha.' },
+          requiresCaptcha: true,
+          hcaptchaSiteKey: process.env.HCAPTCHA_SITE_KEY || null,
+        })
+      }
+    }
+
     // F5: Neutral response — don't leak whether email is already signed up.
     // Existing users still receive their original key via the email already on file.
     const existing = await redis.get(`insights:signup:${norm}`)
@@ -458,6 +475,11 @@ app.post('/v1/auth/signup', async (req, res) => {
         </body></html>`,
       }).catch(err => console.error('[signup] Email send failed:', err.message))
     }
+
+    // F15: increment per-IP signup counter so the next signup from this IP
+    // within an hour is gated by captcha.
+    await redis.incr(`signupcount:ip:${ip}`).catch(() => {})
+    await redis.expire(`signupcount:ip:${ip}`, 60 * 60).catch(() => {})
 
     console.log(`[signup] New user: ${norm} → key ${key.slice(0, 12)}…`)
     res.status(201).json({

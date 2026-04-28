@@ -8,6 +8,7 @@
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://js.hcaptcha.com/1/api.js?render=explicit" async defer></script>
 <style>
   body { background: #0a0a0a; color: #f0ece4; font-family: system-ui, sans-serif; }
   ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: #1a1a1a; } ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
@@ -60,19 +61,58 @@ function ApiKeyModal({ onSave }) {
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
+  // F15: hCaptcha state — only set when server demands captcha (repeat IP)
+  const [hcaptchaSiteKey, setHcaptchaSiteKey] = useState('');
+  const [captchaWidgetId, setCaptchaWidgetId] = useState(null);
+  const captchaContainerRef = React.useRef(null);
+
+  // Render hCaptcha widget when site key arrives. Uses explicit render API
+  // (script loaded with ?render=explicit). Stores widget ID for later getResponse().
+  useEffect(() => {
+    if (!hcaptchaSiteKey || captchaWidgetId !== null) return;
+    let cancelled = false;
+    const tryRender = () => {
+      if (cancelled) return;
+      if (typeof window === 'undefined' || !window.hcaptcha || !captchaContainerRef.current) {
+        setTimeout(tryRender, 200);
+        return;
+      }
+      try {
+        const id = window.hcaptcha.render(captchaContainerRef.current, { sitekey: hcaptchaSiteKey, theme: 'dark' });
+        setCaptchaWidgetId(id);
+      } catch (e) {
+        console.warn('[hcaptcha] render failed', e);
+      }
+    };
+    tryRender();
+    return () => { cancelled = true; };
+  }, [hcaptchaSiteKey, captchaWidgetId]);
 
   const signup = async () => {
     setErr(''); setMsg(''); setLoading(true);
-    const r = await fetch('/v1/auth/signup', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email, name }) });
+    const body = { email, name };
+    // F15: include captcha token if widget is rendered
+    if (captchaWidgetId !== null && window.hcaptcha) {
+      const token = window.hcaptcha.getResponse(captchaWidgetId);
+      if (!token) { setErr('Please complete the captcha.'); setLoading(false); return; }
+      body.captchaToken = token;
+    }
+    const r = await fetch('/v1/auth/signup', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
     const d = await r.json();
     setLoading(false);
     if (d.success) {
       // Branch 2: in-page key reveal kills the email round-trip
       if (d.apiKey) { onSave(d.apiKey, { isNewUser: !!d.isNewUser }); return; }
       setMsg(d.message || 'Check your email for your API key.');
-    } else {
-      setErr(d.error?.message || 'Signup failed.');
+      return;
     }
+    // F15: server says captcha required — render widget and let user retry
+    if (d.requiresCaptcha) {
+      setHcaptchaSiteKey(d.hcaptchaSiteKey || '');
+      setErr('Please complete the captcha to continue.');
+      return;
+    }
+    setErr(d.error?.message || 'Signup failed.');
   };
 
   if (mode === 'choose') return (
@@ -95,6 +135,8 @@ function ApiKeyModal({ onSave }) {
           <input type="email" placeholder="Email address" value={email} onChange={e=>setEmail(e.target.value)} onKeyDown={e=>e.key==='Enter'&&email&&signup()} />
           {err && <div style={{color:'#ff8080',fontSize:13}}>{err}</div>}
           {msg && <div style={{color:'#80ff80',fontSize:13,padding:'10px 14px',background:'#0a2a0a',borderRadius:6}}>{msg}</div>}
+          {/* F15: hCaptcha widget — only renders when server demands captcha (repeat IP) */}
+          {hcaptchaSiteKey && <div ref={captchaContainerRef} style={{margin:'4px 0'}} />}
           {!msg && <button className="btn-gold" onClick={signup} disabled={loading||!email}>{loading?'Sending…':'Get my free API key'}</button>}
           <button onClick={()=>setMode('choose')} style={{background:'none',border:'none',color:'#555',cursor:'pointer',fontSize:13}}>← Back</button>
         </div>
