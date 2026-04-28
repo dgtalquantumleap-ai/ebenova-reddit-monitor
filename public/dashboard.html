@@ -6,7 +6,7 @@
 <title>Ebenova Insights</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&family=Crimson+Pro:ital,wght@0,700;1,400&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/@phosphor-icons/web@2.1.1" defer></script>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -136,6 +136,40 @@ select.inp{cursor:pointer}
 /* Modal */
 .modal-bg{position:fixed;inset:0;background:rgba(15,23,42,.65);backdrop-filter:blur(5px);display:flex;align-items:center;justify-content:center;z-index:999;padding:16px}
 
+/* Terminal-themed Auth modal — extends the landing page intel-terminal aesthetic
+   to first sign-in. Once authenticated, dashboard returns to its light/Inter UI. */
+.term-bg{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:999;padding:16px;background:#0a0907;background-image:radial-gradient(circle at 18% 12%,rgba(201,168,76,.06),transparent 50%),radial-gradient(circle at 82% 88%,rgba(201,168,76,.04),transparent 60%)}
+.term-card{width:100%;max-width:440px;background:#14110d;border:1px solid #2a2419;border-radius:8px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.5),0 0 0 1px rgba(201,168,76,.05);font-family:'Inter',system-ui,sans-serif;color:#f5efe0}
+.term-head{background:linear-gradient(to bottom,#1f1a13,#14110d);border-bottom:1px solid #2a2419;padding:11px 14px;display:flex;align-items:center;gap:12px}
+.term-dots{display:flex;gap:6px}
+.term-dots span{width:10px;height:10px;border-radius:50%;background:#3a3328}
+.term-title{font-family:'JetBrains Mono',monospace;font-size:11px;color:#6f6757;letter-spacing:1.5px}
+.term-status{margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11px;color:#34d058;display:inline-flex;align-items:center;gap:6px}
+.term-status::before{content:'';width:6px;height:6px;border-radius:50%;background:#34d058;box-shadow:0 0 6px #34d058;animation:term-pulse 1.6s infinite}
+@keyframes term-pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.term-body{padding:36px 32px}
+.term-eyebrow{font-family:'JetBrains Mono',monospace;font-size:10px;color:#c9a84c;letter-spacing:3px;margin-bottom:14px;display:inline-flex;align-items:center;gap:10px}
+.term-eyebrow::before{content:'';width:6px;height:6px;border-radius:50%;background:#c9a84c;animation:term-pulse 1.6s infinite}
+.term-h{font-family:'Crimson Pro',Georgia,serif;font-size:32px;font-weight:700;line-height:1.05;letter-spacing:-1px;margin-bottom:14px}
+.term-h em{font-style:italic;font-weight:400;background:linear-gradient(135deg,#c9a84c,#e8c96a);-webkit-background-clip:text;background-clip:text;color:transparent}
+.term-sub{font-size:13.5px;color:#b9b09f;line-height:1.6;margin-bottom:24px}
+.term-input{width:100%;background:#0a0907;border:1px solid #2a2419;color:#f5efe0;border-radius:6px;padding:14px 14px;font-size:14px;font-family:'JetBrains Mono',monospace;outline:none;transition:border-color .15s,box-shadow .15s}
+.term-input:focus{border-color:#c9a84c;box-shadow:0 0 0 3px rgba(201,168,76,.12)}
+.term-input::placeholder{color:#6f6757}
+.term-btn{width:100%;margin-top:10px;padding:14px 18px;border-radius:6px;font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;letter-spacing:.5px;background:#c9a84c;color:#000;border:none;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:50px;transition:all .18s}
+.term-btn:hover:not(:disabled){background:#e8c96a;transform:translateY(-1px);box-shadow:0 8px 24px rgba(201,168,76,.25)}
+.term-btn:disabled{opacity:.4;cursor:not-allowed}
+.term-meta{font-family:'JetBrains Mono',monospace;font-size:10px;color:#6f6757;letter-spacing:1.5px;text-align:center;margin-top:18px}
+.term-meta b{color:#34d058}
+.term-error{margin-top:10px;padding:10px 12px;background:rgba(255,89,89,.08);border:1px solid rgba(255,89,89,.25);border-radius:6px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#ff8e8e;letter-spacing:.5px}
+.term-success{padding:14px 16px;background:rgba(52,208,88,.06);border:1px solid rgba(52,208,88,.2);border-radius:6px;margin-bottom:18px}
+.term-success-row{font-family:'JetBrains Mono',monospace;font-size:10px;color:#34d058;letter-spacing:2px;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+.term-success-row::before{content:'▸'}
+.term-back{margin-top:18px;background:none;border:none;color:#6f6757;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:1px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;padding:0}
+.term-back:hover{color:#b9b09f}
+.term-spin{display:inline-block;animation:term-spin 1s linear infinite}
+@keyframes term-spin{to{transform:rotate(360deg)}}
+
 /* Result card */
 .result-card{background:#fff;border:1px solid #E2E8F0;border-radius:10px;padding:18px 20px;margin-bottom:10px;transition:border-color .15s,box-shadow .15s}
 .result-card:hover{border-color:#CBD5E1;box-shadow:0 2px 8px rgba(0,0,0,.06)}
@@ -193,50 +227,50 @@ function AuthModal({ onSave }) {
   };
 
   return (
-    <div className="modal-bg">
-      <div className="card fade-up" style={{maxWidth:400,width:'100%',padding:36}}>
-        {!sent ? (
-          <>
-            <div style={{textAlign:'center',marginBottom:28}}>
-              <div style={{width:48,height:48,background:'linear-gradient(135deg,#C9A84C,#E8C96A)',borderRadius:12,display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px'}}>
-                <i className="ph-bold ph-broadcast" style={{fontSize:22,color:'#000'}}></i>
-              </div>
-              <div style={{fontSize:20,fontWeight:800,color:'#0F172A',marginBottom:6,letterSpacing:'-.4px'}}>Ebenova Insights</div>
-              <div style={{fontSize:13,color:'#64748B',lineHeight:1.6}}>Monitor 8 platforms for people actively<br/>looking for what you build.</div>
-            </div>
-            <div style={{display:'flex',flexDirection:'column',gap:10}}>
-              <input className="inp" type="email" placeholder="Enter your work email" value={email}
+    <div className="term-bg" role="dialog" aria-modal="true" aria-labelledby="term-h">
+      <div className="term-card">
+        <div className="term-head">
+          <div className="term-dots"><span></span><span></span><span></span></div>
+          <div className="term-title">EBNV-1 // ACCESS REQUEST</div>
+          <div className="term-status">{sent ? 'TRANSMITTED' : 'STANDBY'}</div>
+        </div>
+        <div className="term-body">
+          {!sent ? (
+            <>
+              <div className="term-eyebrow">SECURE SIGN-IN // MAGIC LINK</div>
+              <h2 className="term-h" id="term-h">Open the <em>terminal.</em></h2>
+              <p className="term-sub">Enter your email — we send you a magic link. No password, no setup, no credit card. You're inside the live feed in under a minute.</p>
+              <input
+                className="term-input"
+                type="email"
+                placeholder="you@yourcompany.com"
+                value={email}
                 onChange={e=>setEmail(e.target.value)}
                 onKeyDown={e=>e.key==='Enter'&&email.includes('@')&&submit()}
-                style={{padding:'11px 14px',fontSize:14}} />
-              {err && <div className="alert alert-error"><i className="ph ph-warning-circle"></i>{err}</div>}
-              <button className="btn btn-primary" style={{width:'100%',padding:'11px',fontSize:14,marginTop:2}} onClick={submit} disabled={loading||!email.includes('@')}>
+                aria-label="Email address"
+                autoFocus
+              />
+              {err && <div className="term-error">// ERROR · {err}</div>}
+              <button className="term-btn" onClick={submit} disabled={loading||!email.includes('@')} aria-label="Request magic login link">
                 {loading
-                  ? <><i className="ph ph-circle-notch spin"></i> SendingΓÇª</>
-                  : <><i className="ph-bold ph-arrow-right"></i> Get started free</>}
+                  ? <><span className="term-spin">◐</span> TRANSMITTING…</>
+                  : <>REQUEST ACCESS <span style={{fontSize:16}}>→</span></>}
               </button>
-              <p style={{textAlign:'center',fontSize:12,color:'#94A3B8',marginTop:4}}>Free forever ┬╖ No credit card needed</p>
-            </div>
-          </>
-        ) : (
-          <div style={{textAlign:'center'}}>
-            <div style={{width:52,height:52,background:'#ECFDF5',border:'1px solid #A7F3D0',borderRadius:14,display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 18px'}}>
-              <i className="ph-bold ph-envelope-open" style={{fontSize:24,color:'#065F46'}}></i>
-            </div>
-            <div style={{fontSize:18,fontWeight:700,marginBottom:8}}>Check your inbox</div>
-            <div style={{fontSize:13,color:'#64748B',lineHeight:1.7,marginBottom:20}}>
-              We sent a magic link to<br/>
-              <strong style={{color:'#0F172A',fontWeight:600}}>{email}</strong>
-            </div>
-            <div className="alert alert-info" style={{textAlign:'left',marginBottom:16}}>
-              <i className="ph ph-info"></i>
-              Click the link in the email to open your dashboard ΓÇö no password needed.
-            </div>
-            <button onClick={()=>{setSent(false);setEmail('');}} style={{background:'none',border:'none',color:'#94A3B8',cursor:'pointer',fontSize:13,display:'inline-flex',alignItems:'center',gap:5}}>
-              <i className="ph ph-arrow-left"></i> Use a different email
-            </button>
-          </div>
-        )}
+              <div className="term-meta"><b>●</b> FREE FOREVER · NO CREDIT CARD · 60-SEC SETUP</div>
+            </>
+          ) : (
+            <>
+              <div className="term-eyebrow">TRANSMISSION COMPLETE</div>
+              <h2 className="term-h" id="term-h">Check your <em>inbox.</em></h2>
+              <div className="term-success">
+                <div className="term-success-row">MAGIC LINK SENT</div>
+                <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:'#f5efe0',wordBreak:'break-all'}}>{email}</div>
+              </div>
+              <p className="term-sub" style={{marginBottom:0}}>Click the link in the email to open your dashboard. No password needed. The link is valid for 7 days — save it for return logins.</p>
+              <button onClick={()=>{setSent(false);setEmail('');}} className="term-back" aria-label="Use a different email">← USE A DIFFERENT EMAIL</button>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -284,7 +318,7 @@ function Sidebar({ tab, setTab, userEmail, plan, monitorCount, onSignOut }) {
         <div className="sb-user">
           <div className="sb-avatar">{initial}</div>
           <div className="sb-user-info">
-            <div className="sb-user-email">{userEmail||'ΓÇö'}</div>
+            <div className="sb-user-email">{userEmail||'—'}</div>
             <div style={{marginTop:3}}><span className="sb-plan">{planLabel}</span></div>
           </div>
           <button onClick={onSignOut} title="Sign out" style={{background:'none',border:'none',color:'#475569',cursor:'pointer',padding:4,borderRadius:5,flexShrink:0,display:'flex',alignItems:'center'}}>
@@ -349,11 +383,11 @@ function MatchCard({ match, monitorId, apiKey, onAction }) {
         style={{fontSize:14,fontWeight:600,color:'#0F172A',textDecoration:'none',display:'block',marginBottom:6,lineHeight:1.5}}>
         {match.title}
       </a>
-      {match.body && <p style={{fontSize:13,color:'#64748B',lineHeight:1.65,marginBottom:10}}>{match.body.slice(0,260)}{match.body.length>260?'ΓÇª':''}</p>}
+      {match.body && <p style={{fontSize:13,color:'#64748B',lineHeight:1.65,marginBottom:10}}>{match.body.slice(0,260)}{match.body.length>260?'…':''}</p>}
       <div style={{display:'flex',gap:8,alignItems:'center',fontSize:12,color:'#94A3B8',marginBottom:match.draft?0:10,flexWrap:'wrap'}}>
         {match.author && <span>u/{match.author}</span>}
-        {match.score!=null && <span>┬╖ {match.score} pts</span>}
-        {match.comments!=null && <span>┬╖ {match.comments} replies</span>}
+        {match.score!=null && <span>· {match.score} pts</span>}
+        {match.comments!=null && <span>· {match.comments} replies</span>}
         {match.keyword && <span style={{padding:'1px 7px',background:'#F8FAFC',border:'1px solid #E2E8F0',borderRadius:4,color:'#64748B',marginLeft:4}}>"{match.keyword}"</span>}
       </div>
       {match.draft && (
@@ -367,7 +401,7 @@ function MatchCard({ match, monitorId, apiKey, onAction }) {
           <i className="ph ph-check"></i> Replied
         </button>
         <button className="btn btn-ghost btn-sm" onClick={regenerate} disabled={drafting}>
-          <i className={`ph ph-arrow-clockwise${drafting?' spin':''}`}></i> {drafting?'DraftingΓÇª':'New draft'}
+          <i className={`ph ph-arrow-clockwise${drafting?' spin':''}`}></i> {drafting?'Drafting…':'New draft'}
         </button>
         <button className="btn btn-sm" style={{background:'transparent',border:'1px solid #F1F5F9',color:'#94A3B8',cursor:'pointer'}} onClick={()=>feedback('down')}>
           <i className="ph ph-x"></i> Skip
@@ -407,11 +441,11 @@ function SearchResultCard({ result, productContext, apiKey }) {
         style={{fontSize:14,fontWeight:600,color:'#0F172A',textDecoration:'none',display:'block',marginBottom:6,lineHeight:1.5}}>
         {result.title}
       </a>
-      {result.body && <p style={{fontSize:13,color:'#64748B',lineHeight:1.65,marginBottom:10}}>{result.body.slice(0,260)}{result.body.length>260?'ΓÇª':''}</p>}
+      {result.body && <p style={{fontSize:13,color:'#64748B',lineHeight:1.65,marginBottom:10}}>{result.body.slice(0,260)}{result.body.length>260?'…':''}</p>}
       <div style={{display:'flex',gap:8,alignItems:'center',fontSize:12,color:'#94A3B8',flexWrap:'wrap'}}>
         {result.author&&result.author!=='medium'&&result.author!=='substack'&&<span>by {result.author}</span>}
-        {result.score>0 && <span>┬╖ {result.score} pts</span>}
-        {result.comments>0 && <span>┬╖ {result.comments} replies</span>}
+        {result.score>0 && <span>· {result.score} pts</span>}
+        {result.comments>0 && <span>· {result.comments} replies</span>}
         {result.keyword && <span style={{padding:'1px 7px',background:'#F8FAFC',border:'1px solid #E2E8F0',borderRadius:4,color:'#64748B',marginLeft:4}}>"{result.keyword}"</span>}
       </div>
       {draft && (
@@ -424,7 +458,7 @@ function SearchResultCard({ result, productContext, apiKey }) {
         {!draft && (
           <button className="btn btn-white btn-sm" onClick={getDraft} disabled={drafting}>
             <i className={`ph${drafting?'-bold':''} ph-${drafting?'circle-notch':'robot'}${drafting?' spin':''}`}></i>
-            {drafting ? 'DraftingΓÇª' : 'Draft reply'}
+            {drafting ? 'Drafting…' : 'Draft reply'}
           </button>
         )}
         {draft && (
@@ -527,16 +561,16 @@ function SearchNow({ apiKey }) {
         <div className="card card-p" style={{marginBottom:20}}>
           <div style={{display:'flex',flexDirection:'column',gap:18}}>
             <div className="field">
-              <label className="label">Keywords <span style={{fontWeight:400,color:'#94A3B8'}}>ΓÇö one per line ┬╖ max 5</span></label>
+              <label className="label">Keywords <span style={{fontWeight:400,color:'#94A3B8'}}>— one per line · max 5</span></label>
               <textarea className="inp" rows={4}
-                placeholder={"just launched my SaaS\nlooking for a freelancer\nclient won't pay\nneed a tool forΓÇª"}
+                placeholder={"just launched my SaaS\nlooking for a freelancer\nclient won't pay\nneed a tool for…"}
                 value={keywords} onChange={e=>setKeywords(e.target.value)} />
               <span className="hint">Use phrases people actually type, not product categories</span>
             </div>
             <div className="field">
-              <label className="label">Your product <span style={{fontWeight:400,color:'#94A3B8'}}>ΓÇö optional, helps AI write relevant replies</span></label>
+              <label className="label">Your product <span style={{fontWeight:400,color:'#94A3B8'}}>— optional, helps AI write relevant replies</span></label>
               <textarea className="inp" rows={2}
-                placeholder="e.g. Ebenova monitors Reddit for buying-intent posts and drafts outreach repliesΓÇª"
+                placeholder="e.g. Ebenova monitors Reddit for buying-intent posts and drafts outreach replies…"
                 value={productCtx} onChange={e=>setProductCtx(e.target.value)} />
             </div>
             <div className="field">
@@ -547,7 +581,7 @@ function SearchNow({ apiKey }) {
             <div>
               <button className="btn btn-primary btn-lg" onClick={search} disabled={loading||!keywords.trim()}>
                 {loading
-                  ? <><i className="ph ph-circle-notch spin"></i> Scanning platformsΓÇª</>
+                  ? <><i className="ph ph-circle-notch spin"></i> Scanning platforms…</>
                   : <><i className="ph-bold ph-magnifying-glass"></i> Search Now</>}
               </button>
             </div>
@@ -559,8 +593,8 @@ function SearchNow({ apiKey }) {
             <div style={{width:52,height:52,background:'#FFFBEB',border:'1px solid #FDE68A',borderRadius:14,display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px'}}>
               <i className="ph-bold ph-magnifying-glass spin" style={{fontSize:24,color:'#92400E'}}></i>
             </div>
-            <div style={{fontSize:15,fontWeight:600,color:'#0F172A',marginBottom:4}}>Scanning 8 platformsΓÇª</div>
-            <div style={{fontSize:13,color:'#64748B',marginBottom:24}}>Usually takes 10ΓÇô20 seconds</div>
+            <div style={{fontSize:15,fontWeight:600,color:'#0F172A',marginBottom:4}}>Scanning 8 platforms…</div>
+            <div style={{fontSize:13,color:'#64748B',marginBottom:24}}>Usually takes 10–20 seconds</div>
             <div style={{display:'flex',flexDirection:'column',gap:8,maxWidth:560,margin:'0 auto'}}>
               {[100,88,72].map((w,i)=><div key={i} className="shimmer" style={{height:76,maxWidth:w+'%'}} />)}
             </div>
@@ -723,7 +757,7 @@ function CreateMonitor({ apiKey, onCreated }) {
               <input className="inp" placeholder="e.g. Freelance Leads, SaaS Mentions" value={form.name} onChange={e=>set('name',e.target.value)} />
             </div>
             <div className="field">
-              <label className="label">Keywords <span style={{fontWeight:400,color:'#94A3B8'}}>ΓÇö one per line</span></label>
+              <label className="label">Keywords <span style={{fontWeight:400,color:'#94A3B8'}}>— one per line</span></label>
               <textarea className="inp" rows={5}
                 placeholder={"client won't pay\nscope creep\nunpaid invoice\nneed contract template"}
                 value={form.keywords} onChange={e=>set('keywords',e.target.value)} />
@@ -733,29 +767,29 @@ function CreateMonitor({ apiKey, onCreated }) {
               <PlatformToggles value={form.platforms} onChange={v=>set('platforms',v)} />
             </div>
             <div className="field">
-              <label className="label">Subreddits <span style={{fontWeight:400,color:'#94A3B8'}}>ΓÇö comma-separated, blank = all</span></label>
+              <label className="label">Subreddits <span style={{fontWeight:400,color:'#94A3B8'}}>— comma-separated, blank = all</span></label>
               <input className="inp" placeholder="freelance, smallbusiness, Upwork" value={form.subreddits} onChange={e=>set('subreddits',e.target.value)} />
             </div>
             <div className="field">
-              <label className="label">Product description <span style={{fontWeight:400,color:'#94A3B8'}}>ΓÇö AI uses this to draft replies</span></label>
+              <label className="label">Product description <span style={{fontWeight:400,color:'#94A3B8'}}>— AI uses this to draft replies</span></label>
               <textarea className="inp" rows={3}
-                placeholder="Describe your product so the AI can write relevant, natural-sounding repliesΓÇª"
+                placeholder="Describe your product so the AI can write relevant, natural-sounding replies…"
                 value={form.productContext} onChange={e=>set('productContext',e.target.value)} />
             </div>
             <hr className="div" />
             <div className="field">
-              <label className="label">Alert email <span style={{fontWeight:400,color:'#94A3B8'}}>ΓÇö defaults to your signup email</span></label>
+              <label className="label">Alert email <span style={{fontWeight:400,color:'#94A3B8'}}>— defaults to your signup email</span></label>
               <input className="inp" type="email" placeholder="you@example.com" value={form.alertEmail} onChange={e=>set('alertEmail',e.target.value)} />
             </div>
             <div className="field">
-              <label className="label">Slack webhook <span style={{fontWeight:400,color:'#94A3B8'}}>ΓÇö optional</span></label>
-              <input className="inp" placeholder="https://hooks.slack.com/services/ΓÇª" value={form.slackWebhookUrl} onChange={e=>set('slackWebhookUrl',e.target.value)} />
+              <label className="label">Slack webhook <span style={{fontWeight:400,color:'#94A3B8'}}>— optional</span></label>
+              <input className="inp" placeholder="https://hooks.slack.com/services/…" value={form.slackWebhookUrl} onChange={e=>set('slackWebhookUrl',e.target.value)} />
             </div>
             {err && <div className="alert alert-error"><i className="ph ph-warning-circle"></i>{err}</div>}
             {ok  && <div className="alert alert-success"><i className="ph ph-check-circle"></i>{ok}</div>}
             <div>
               <button className="btn btn-primary" style={{minWidth:160}} onClick={submit} disabled={loading}>
-                {loading ? <><i className="ph ph-circle-notch spin"></i> CreatingΓÇª</> : <><i className="ph-bold ph-plus"></i> Create Monitor</>}
+                {loading ? <><i className="ph ph-circle-notch spin"></i> Creating…</> : <><i className="ph-bold ph-plus"></i> Create Monitor</>}
               </button>
             </div>
           </div>
@@ -797,14 +831,14 @@ function Settings({ apiKey, userEmail, plan, onSignOut, monitors, onRefresh }) {
               {(userEmail||'?')[0].toUpperCase()}
             </div>
             <div style={{flex:1}}>
-              <div style={{fontSize:14,fontWeight:600,color:'#0F172A'}}>{userEmail||'ΓÇö'}</div>
+              <div style={{fontSize:14,fontWeight:600,color:'#0F172A'}}>{userEmail||'—'}</div>
               <div style={{fontSize:12,color:'#64748B',marginTop:2}}>{planLabel} plan</div>
             </div>
             <span style={{fontSize:11,fontWeight:700,color:'#92400E',background:'#FFFBEB',border:'1px solid #FDE68A',padding:'3px 9px',borderRadius:5}}>{planLabel}</span>
           </div>
           {plan === 'starter' && (
             <div style={{fontSize:12,color:'#64748B',background:'#F8FAFC',border:'1px solid #E2E8F0',borderRadius:7,padding:'8px 12px',marginBottom:14,lineHeight:1.7}}>
-              <strong style={{color:'#374151'}}>Free tier includes:</strong> 1 monitor ┬╖ 10 keywords ┬╖ Email alerts only<br/>
+              <strong style={{color:'#374151'}}>Free tier includes:</strong> 1 monitor · 10 keywords · Email alerts only<br/>
               <span style={{color:'#94A3B8'}}>Upgrade for Slack alerts, more monitors, and unlimited keywords.</span>
             </div>
           )}
@@ -819,8 +853,8 @@ function Settings({ apiKey, userEmail, plan, onSignOut, monitors, onRefresh }) {
             <div className="tile-label">Upgrade plan</div>
             <div style={{display:'flex',gap:10,flexWrap:'wrap'}}>
               {[
-                {p:'growth',label:'Growth',price:'$29/mo',desc:'20 monitors ┬╖ 100 keywords ┬╖ Slack alerts'},
-                {p:'scale',label:'Scale',price:'$199/mo',desc:'100 monitors ┬╖ 500 keywords ┬╖ Webhooks + API'},
+                {p:'growth',label:'Growth',price:'$29/mo',desc:'20 monitors · 100 keywords · Slack alerts'},
+                {p:'scale',label:'Scale',price:'$199/mo',desc:'100 monitors · 500 keywords · Webhooks + API'},
               ].map(({p,label,price,desc})=>(
                 <div key={p} className="plan-card">
                   <div style={{fontWeight:700,fontSize:15,marginBottom:2}}>{label}</div>
@@ -852,7 +886,7 @@ function Settings({ apiKey, userEmail, plan, onSignOut, monitors, onRefresh }) {
               <div className={m.active?'active-dot':'paused-dot'}></div>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontSize:13,fontWeight:600,color:'#0F172A',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{m.name}</div>
-                <div style={{fontSize:12,color:'#94A3B8',marginTop:2}}>{m.keyword_count} keywords ┬╖ {m.total_matches_found||0} matches found</div>
+                <div style={{fontSize:12,color:'#94A3B8',marginTop:2}}>{m.keyword_count} keywords · {m.total_matches_found||0} matches found</div>
               </div>
               <button className="btn btn-danger btn-sm" onClick={()=>del(m.id,m.name)} disabled={deleting===m.id}>
                 {deleting===m.id ? <i className="ph ph-circle-notch spin"></i> : <i className="ph ph-trash"></i>}
