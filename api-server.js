@@ -23,6 +23,7 @@ import { fileURLToPath } from 'url'
 import { dirname } from 'path'
 import stripeRoutes, { webhookHandler } from './routes/stripe.js'
 import { createRouter as createFindRouter } from './routes/find.js'
+import { createRouter as createFeedbackRouter } from './routes/feedback.js'
 import searchMedium      from './lib/scrapers/medium.js'
 import searchSubstack    from './lib/scrapers/substack.js'
 import searchQuora       from './lib/scrapers/quora.js'
@@ -161,6 +162,16 @@ app.use('/v1/find', (req, res, next) => {
     catch (err) { return res.status(503).json({ success: false, error: { code: 'NOT_CONFIGURED', message: err.message } }) }
   }
   _findRouter(req, res, next)
+})
+
+// Feedback endpoint — same lazy-mount pattern.
+let _feedbackRouter
+app.use('/v1/feedback', (req, res, next) => {
+  if (!_feedbackRouter) {
+    try { _feedbackRouter = createFeedbackRouter({ redis: getRedis() }) }
+    catch (err) { return res.status(503).json({ success: false, error: { code: 'NOT_CONFIGURED', message: err.message } }) }
+  }
+  _feedbackRouter(req, res, next)
 })
 
 // ── GET /health ────────────────────────────────────────────────────────────
