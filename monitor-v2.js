@@ -25,6 +25,14 @@ import { sanitizeForPrompt } from './lib/llm-safe-prompt.js'
 import { embeddingCacheKey } from './lib/embedding-cache.js'
 import { makeCostCap } from './lib/cost-cap.js'
 import { draftCall }   from './lib/draft-call.js'
+import {
+  isRedditAuthConfigured,
+  redditAuthHeaders,
+  redditOAuthHost,
+  redditPublicHost,
+  redditUserAgent,
+  invalidateRedditToken,
+} from './lib/reddit-auth.js'
 
 // F14: lazy daily cost caps. Soft-fail so the worker degrades gracefully
 // (skip-draft / skip-email / skip-embedding) rather than crashing.
@@ -261,31 +269,64 @@ async function semanticSearchSubreddit(monitorId, subreddit, keywordEntry, query
 // ── Reddit search ─────────────────────────────────────────────────────────────
 // Returns new posts (< POST_MAX_AGE_MS old) not yet seen for this monitor.
 //
-// Failure-mode logging: Reddit silently degrades scraping for generic bot UAs
-// and rate-limits to 60 req/min anonymous. When testers report "only Medium
-// matches" the cause is almost always Reddit returning 403/429. We log every
-// non-2xx with the status code + URL so the cycle log surfaces it.
+// Auth strategy: prefers OAuth client-credentials (oauth.reddit.com, ~600
+// req/10min headroom) when REDDIT_CLIENT_ID + SECRET are set. Falls back to
+// anonymous www.reddit.com endpoints when not configured (~60 req/min,
+// rate-limited). On 401 we invalidate the token and retry once with a
+// fresh one — covers the rare case Reddit rotates / revokes mid-cycle.
+//
+// Failure-mode logging: every non-2xx response is logged with status + URL
+// so cycle logs make rate-limit problems visible (vs. silent in v1).
 async function searchReddit(monitorId, keywordEntry) {
   const { keyword, subreddits = [] } = keywordEntry
   const results = []
   const encoded = encodeURIComponent(keyword)
+  const useOAuth = isRedditAuthConfigured()
+  const HOST = useOAuth ? redditOAuthHost() : redditPublicHost()
 
-  const urls = subreddits.length > 0
+  // Path is the same for both hosts; OAuth uses the same /r/{sub}/search.json
+  // shape with a Bearer token. Only the hostname differs.
+  const paths = subreddits.length > 0
     ? subreddits.map(sr =>
-        `https://www.reddit.com/r/${sr}/search.json?q=${encoded}&sort=new&limit=10&t=day&restrict_sr=1`
+        `/r/${sr}/search.json?q=${encoded}&sort=new&limit=10&t=day&restrict_sr=1`
       )
-    : [`https://www.reddit.com/search.json?q=${encoded}&sort=new&limit=10&t=day`]
+    : [`/search.json?q=${encoded}&sort=new&limit=10&t=day`]
 
-  // Realistic browser UA — Reddit aggressively rate-limits identifiable bot UAs.
-  // Override via REDDIT_USER_AGENT if you have a registered API client.
-  const UA = process.env.REDDIT_USER_AGENT
-    || 'Mozilla/5.0 (compatible; EbenovaBot/2.0; +https://ebenova-insights-production.up.railway.app)'
+  // Build headers. Anonymous: just User-Agent. OAuth: add Bearer token.
+  async function buildHeaders() {
+    if (useOAuth) {
+      try {
+        return await redditAuthHeaders()
+      } catch (err) {
+        console.warn(`[v2][reddit] OAuth token fetch failed (${err.message}) — falling back to anonymous for this cycle`)
+        return { 'User-Agent': redditUserAgent() }
+      }
+    }
+    return { 'User-Agent': redditUserAgent() }
+  }
 
-  for (const url of urls) {
+  let headers = await buildHeaders()
+
+  for (const path of paths) {
+    const url = HOST + path
     try {
-      const res = await fetch(url, { headers: { 'User-Agent': UA } })
+      let res = await fetch(url, { headers })
+
+      // Token might have rotated mid-cycle. One retry with fresh token covers
+      // the common case before falling through to the error path.
+      if (res.status === 401 && useOAuth) {
+        console.warn(`[v2][reddit] 401 on "${keyword}" — refreshing token and retrying once`)
+        invalidateRedditToken()
+        try {
+          headers = await buildHeaders()
+          res = await fetch(url, { headers })
+        } catch (err) {
+          console.warn(`[v2][reddit] retry failed: ${err.message}`)
+        }
+      }
+
       if (!res.ok) {
-        console.warn(`[v2][reddit] ${res.status} for "${keyword}" → ${url.slice(0, 80)}…`)
+        console.warn(`[v2][reddit] ${res.status} for "${keyword}" → ${url.slice(0, 100)}…`)
         await delay(3000)
         continue
       }
@@ -315,8 +356,11 @@ async function searchReddit(monitorId, keywordEntry) {
           approved:  APPROVED_SUBREDDITS.has(p.subreddit),
         })
       }
-      // Always log per-URL so we can see whether Reddit is returning data
-      console.log(`[v2][reddit] "${keyword}" → ${posts.length} fetched, ${newCount} new, ${agedOut} stale${posts.length === 0 ? ' (empty response — likely rate-limited)' : ''}`)
+      // Always log per-URL so we can see whether Reddit is returning data.
+      // Tag the auth mode so cycle logs make it obvious whether OAuth is
+      // active when diagnosing "only Medium" complaints.
+      const authTag = useOAuth ? 'oauth' : 'anon'
+      console.log(`[v2][reddit:${authTag}] "${keyword}" → ${posts.length} fetched, ${newCount} new, ${agedOut} stale${posts.length === 0 ? ' (empty response — likely rate-limited)' : ''}`)
     } catch (err) {
       console.error(`[v2][reddit] fetch error "${keyword}":`, err.message)
     }
