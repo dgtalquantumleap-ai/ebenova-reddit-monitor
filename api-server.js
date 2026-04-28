@@ -399,6 +399,7 @@ app.post('/v1/auth/signup', async (req, res) => {
         success: true,
         message: 'Account ready. Check your email for your API key.',
         plan: 'starter',
+        isNewUser: false,  // existing user — frontend skips wizard
       })
     }
 
@@ -449,8 +450,10 @@ app.post('/v1/auth/signup', async (req, res) => {
     console.log(`[signup] New user: ${norm} → key ${key.slice(0, 12)}…`)
     res.status(201).json({
       success: true,
-      message: 'Account created. Check your email for your API key.',
+      message: 'Account created.',
       plan: 'starter',
+      apiKey: key,        // Branch 2: in-page reveal kills email round-trip
+      isNewUser: true,    // Branch 2: tells frontend to route to wizard
     })
   } catch (err) {
     res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
