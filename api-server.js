@@ -236,6 +236,18 @@ app.post('/v1/matches/feedback', async (req, res) => {
     return res.status(400).json({ success: false, error: { code: 'INVALID_INPUT', message: 'monitor_id, match_id, and feedback (up|down) required' } })
   try {
     const redis = getRedis()
+
+    // F6: Verify the caller owns this monitor before allowing a write to its
+    // matches. Without this, any authenticated user could write feedback into
+    // any other user's matches. Return 404 (not 403) to avoid leaking whether
+    // the monitor exists.
+    const monitorRaw = await redis.get(`insights:monitor:${monitor_id}`)
+    if (!monitorRaw) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Monitor not found' } })
+    const monitor = typeof monitorRaw === 'string' ? JSON.parse(monitorRaw) : monitorRaw
+    if (monitor.owner !== auth.owner) {
+      return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Monitor not found' } })
+    }
+
     const key = `insights:match:${monitor_id}:${match_id}`
     const raw = await redis.get(key)
     if (!raw) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Match not found' } })
