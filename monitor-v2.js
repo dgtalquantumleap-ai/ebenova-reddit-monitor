@@ -22,6 +22,27 @@ import searchUpwork        from './lib/scrapers/upwork.js'
 import searchFiverr        from './lib/scrapers/fiverr.js'
 import { escapeHtml }      from './lib/html-escape.js'
 import { sanitizeForPrompt } from './lib/llm-safe-prompt.js'
+import { embeddingCacheKey } from './lib/embedding-cache.js'
+import { makeCostCap } from './lib/cost-cap.js'
+
+// F14: lazy daily cost caps. Soft-fail so the worker degrades gracefully
+// (skip-draft / skip-email / skip-embedding) rather than crashing.
+let _groqCap, _resendCap, _embedCap
+function getGroqCap() {
+  if (!redis) return null
+  if (!_groqCap) _groqCap = makeCostCap(redis, { resource: 'groq', dailyMax: parseInt(process.env.GROQ_DAILY_MAX || '5000') })
+  return _groqCap
+}
+function getResendCap() {
+  if (!redis) return null
+  if (!_resendCap) _resendCap = makeCostCap(redis, { resource: 'resend', dailyMax: parseInt(process.env.RESEND_DAILY_MAX || '90') })
+  return _resendCap
+}
+function getEmbedCap() {
+  if (!redis) return null
+  if (!_embedCap) _embedCap = makeCostCap(redis, { resource: 'openai-embedding', dailyMax: parseInt(process.env.OPENAI_EMBEDDING_DAILY_MAX || '10000') })
+  return _embedCap
+}
 
 const RESEND_API_KEY   = process.env.RESEND_API_KEY
 const GROQ_API_KEY     = process.env.GROQ_API_KEY
@@ -31,6 +52,14 @@ const FROM_EMAIL       = process.env.FROM_EMAIL || 'insights@ebenova.dev'
 const POLL_MINUTES     = parseInt(process.env.POLL_INTERVAL_MINUTES || '15')
 const MAX_SEEN         = 50_000
 const SEMANTIC_ENABLED = !!(OPENAI_API_KEY || VOYAGE_API_KEY)
+
+// F11: max age for Reddit semantic-search posts. Was hardcoded 60 min.
+// Defaults to 3h (matches monitor.js default). Tune via POST_MAX_AGE_HOURS env.
+const POST_MAX_AGE_HOURS = (() => {
+  const h = parseInt(process.env.POST_MAX_AGE_HOURS || '3')
+  return Number.isFinite(h) && h > 0 ? h : 3
+})()
+const POST_MAX_AGE_MS = POST_MAX_AGE_HOURS * 60 * 60 * 1000
 
 // ── Redis client ──────────────────────────────────────────────────────────────
 // Upstash REST only (same as Signova's lib/redis.js).
@@ -112,9 +141,32 @@ const APPROVED_SUBREDDITS = new Set([
 
 const embeddingCache = new Map() // cache embeddings to save API calls
 
+function setCacheWithSoftCap(key, vec) {
+  // F12: soft LRU — drop oldest 1000 entries when cache exceeds 5000.
+  // Map iterates in insertion order, so the first keys are the oldest.
+  embeddingCache.set(key, vec)
+  if (embeddingCache.size > 5000) {
+    let i = 0
+    for (const k of embeddingCache.keys()) {
+      if (i++ >= 1000) break
+      embeddingCache.delete(k)
+    }
+  }
+}
+
 async function getEmbedding(text) {
-  const key = text.slice(0, 100)
+  const key = embeddingCacheKey(text)  // F12: hash full text, not slice(0, 100)
   if (embeddingCache.has(key)) return embeddingCache.get(key)
+
+  // F14: daily embedding cost cap — return null (caller falls back to keyword-only)
+  const ecap = getEmbedCap()
+  if (ecap) {
+    const r = await ecap()
+    if (!r.allowed) {
+      console.warn(`[v2][semantic] OpenAI embedding daily cap hit (${r.used}/${r.max}) — keyword-only mode`)
+      return null
+    }
+  }
 
   try {
     if (OPENAI_API_KEY) {
@@ -126,7 +178,7 @@ async function getEmbedding(text) {
       if (!res.ok) return null
       const data = await res.json()
       const vec = data?.data?.[0]?.embedding || null
-      if (vec) embeddingCache.set(key, vec)
+      if (vec) setCacheWithSoftCap(key, vec)
       return vec
     }
 
@@ -139,7 +191,7 @@ async function getEmbedding(text) {
       if (!res.ok) return null
       const data = await res.json()
       const vec = data?.data?.[0]?.embedding || null
-      if (vec) embeddingCache.set(key, vec)
+      if (vec) setCacheWithSoftCap(key, vec)
       return vec
     }
   } catch (err) {
@@ -175,7 +227,7 @@ async function semanticSearchSubreddit(monitorId, subreddit, keywordEntry, query
     for (const post of posts) {
       const p = post.data
       if (await hasSeenWithRedis(monitorId, p.id)) continue
-      if (Date.now() - p.created_utc * 1000 > 60 * 60 * 1000) continue
+      if (Date.now() - p.created_utc * 1000 > POST_MAX_AGE_MS) continue
 
       const postText = `${p.title} ${(p.selftext || '').slice(0, 400)}`
       const postEmbedding = await getEmbedding(postText)
@@ -230,7 +282,7 @@ async function searchReddit(monitorId, keywordEntry) {
       for (const post of posts) {
         const p = post.data
         if (await hasSeenWithRedis(monitorId, p.id)) continue
-        if (Date.now() - p.created_utc * 1000 > 60 * 60 * 1000) continue
+        if (Date.now() - p.created_utc * 1000 > POST_MAX_AGE_MS) continue
         markSeen(monitorId, p.id)
         results.push({
           id:        p.id,
@@ -262,6 +314,16 @@ async function generateReplyDraft(post, productContext) {
   if (!GROQ_API_KEY) return null
   if (!productContext || !productContext.trim()) return null
   if (!post.approved) return null
+
+  // F14: daily Groq cost cap — skip draft (post still gets through)
+  const gcap = getGroqCap()
+  if (gcap) {
+    const r = await gcap()
+    if (!r.allowed) {
+      console.warn(`[v2] Groq daily cap hit (${r.used}/${r.max}) — skipping draft`)
+      return null
+    }
+  }
 
   // F8: Sanitize all untrusted inputs. In v2 BOTH the post fields AND the
   // productContext are user-controlled (the latter from the tenant's monitor
@@ -389,6 +451,18 @@ async function sendMonitorAlert(monitor, matches) {
   }
   const keywords = [...new Set(matches.map(m => m.keyword))]
   const subject  = `Insights: ${matches.length} new mention${matches.length !== 1 ? 's' : ''} — ${keywords.slice(0, 3).join(', ')}${keywords.length > 3 ? '…' : ''}`
+
+  // F14: daily Resend cost cap — skip send (matches still stored in Redis,
+  // dashboard still shows them, Slack alert if configured still fires).
+  const rcap = getResendCap()
+  if (rcap) {
+    const r = await rcap()
+    if (!r.allowed) {
+      console.warn(`[v2][${monitor.id}] Resend daily cap hit (${r.used}/${r.max}) — skipping email send`)
+      return
+    }
+  }
+
   try {
     await resend.emails.send({
       from:    `Ebenova Insights <${FROM_EMAIL}>`,

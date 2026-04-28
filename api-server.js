@@ -3,20 +3,32 @@
 // Mounts alongside the v1/v2 cron workers via start-all.js
 //
 // Endpoints:
-//   GET  /health
-//   GET  /v1/monitors          — list monitors for an owner (by API key)
-//   POST /v1/monitors          — create monitor
-//   DELETE /v1/monitors/:id    — deactivate monitor
-//   GET  /v1/matches           — list recent matches for a monitor
-//   POST /v1/matches/draft     — regenerate AI draft for a match
-//   POST /v1/matches/feedback  — thumbs up/down on a draft
+//   GET    /health
+//   GET    /v1/me                — auth check + plan/email
+//   GET    /v1/monitors          — list monitors for an owner (by API key)
+//   POST   /v1/monitors          — create monitor (atomic plan-limit check, F13)
+//   DELETE /v1/monitors/:id      — deactivate monitor
+//   GET    /v1/matches           — list recent matches for a monitor
+//   POST   /v1/matches/draft     — regenerate AI draft for a match (Groq cost-capped)
+//   POST   /v1/matches/feedback  — thumbs up/down on a draft
+//   POST   /v1/auth/signup       — magic-link auth (idempotent, resends login)
+//   POST   /v1/subscribe         — landing-page waitlist
+//   POST   /v1/billing/*         — Stripe checkout/portal/webhook (F1-F4 fixes)
+//   POST   /v1/search            — on-demand cross-platform search (cost-capped)
+//   POST   /v1/search/draft      — AI reply for a search result (Groq cost-capped)
 
 import express from 'express'
 import { join } from 'path'
 import { fileURLToPath } from 'url'
 import { dirname } from 'path'
 import stripeRoutes, { webhookHandler } from './routes/stripe.js'
-import { createRouter as createOnboardingRouter } from './routes/onboarding.js'
+import searchMedium      from './lib/scrapers/medium.js'
+import searchSubstack    from './lib/scrapers/substack.js'
+import searchQuora       from './lib/scrapers/quora.js'
+import searchUpwork      from './lib/scrapers/upwork.js'
+import searchFiverr      from './lib/scrapers/fiverr.js'
+import searchGitHub      from './lib/scrapers/github.js'
+import searchProductHunt from './lib/scrapers/producthunt.js'
 import { loadEnv } from './lib/env.js'
 import { makeCorsMiddleware } from './lib/cors.js'
 import helmet from 'helmet'
@@ -24,15 +36,19 @@ import helmet from 'helmet'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname  = dirname(__filename)
 
-// Load .env via shared loader (dotenv) — replaces hand-rolled parser.
+// Load .env via shared dotenv loader (replaces hand-rolled parser).
 loadEnv()
 
 import { Redis } from '@upstash/redis'
 import { randomBytes } from 'crypto'
 import { makeRateLimiter } from './lib/rate-limit.js'
+import { makeCostCap } from './lib/cost-cap.js'
+import { verifyCaptcha } from './lib/captcha.js'
 
-// F5: Rate limit + email validation for signup abuse prevention.
-// Lazy-init the limiter so we don't call getRedis() before .env is loaded.
+const PORT = parseInt(process.env.API_PORT || process.env.PORT || '3001')
+const ADMIN_KEY = process.env.MONITOR_ADMIN_KEY
+
+// F5: Signup rate limit + email validation. Lazy-init so .env loads first.
 let _signupLimiter
 function signupLimiter() {
   if (!_signupLimiter) _signupLimiter = makeRateLimiter(getRedis(), { max: 3, windowSeconds: 3600 })
@@ -44,8 +60,16 @@ const DISPOSABLE_DOMAINS = new Set([
   'sharklasers.com','trashmail.com','yopmail.com','throwawaymail.com',
 ])
 
-const PORT = parseInt(process.env.API_PORT || process.env.PORT || '3001')
-const ADMIN_KEY = process.env.MONITOR_ADMIN_KEY   // for internal provisioning
+// F14: Daily cost caps. Lazy-init so missing Redis at boot doesn't crash.
+let _groqCap, _searchCap
+function getGroqCap() {
+  if (!_groqCap) _groqCap = makeCostCap(getRedis(), { resource: 'groq', dailyMax: parseInt(process.env.GROQ_DAILY_MAX || '5000') })
+  return _groqCap
+}
+function getSearchCap() {
+  if (!_searchCap) _searchCap = makeCostCap(getRedis(), { resource: 'search', dailyMax: parseInt(process.env.SEARCH_DAILY_MAX || '500') })
+  return _searchCap
+}
 
 // ── Redis ──────────────────────────────────────────────────────────────────
 function getRedis() {
@@ -55,7 +79,7 @@ function getRedis() {
   return new Redis({ url, token })
 }
 
-// ── Auth helper — validates API key against Signova's Redis key store ─────
+// ── Auth helper — validates API key against Redis key store ─────────────────
 async function authenticate(req) {
   const auth = req.headers['authorization'] || ''
   const key  = auth.startsWith('Bearer ') ? auth.slice(7).trim() : ''
@@ -77,7 +101,7 @@ async function authenticate(req) {
 }
 
 const PLAN_LIMITS = {
-  starter: { monitors: 3,   keywords: 20  },
+  starter: { monitors: 1,   keywords: 10  },
   growth:  { monitors: 20,  keywords: 100 },
   scale:   { monitors: 100, keywords: 500 },
 }
@@ -95,15 +119,18 @@ app.post('/v1/billing/webhook',
 )
 
 // Security headers — X-Content-Type-Options, X-Frame-Options, HSTS,
-// Referrer-Policy, basic CSP. Loosened CSP to allow the dashboard's
-// React/Tailwind CDN scripts (Branch 3 will bundle them locally).
+// Referrer-Policy, basic CSP. Loosened CSP to allow the dashboard's React,
+// Tailwind, and Phosphor icon CDN scripts (a future change will bundle these).
 app.use(helmet({
   contentSecurityPolicy: {
     useDefaults: true,
     directives: {
-      'script-src': ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com", "https://unpkg.com", "'unsafe-eval'"],
-      'connect-src': ["'self'", "https://hooks.slack.com"],
-      'img-src': ["'self'", 'data:'],
+      'script-src': ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com", "https://unpkg.com", "'unsafe-eval'", "https://js.hcaptcha.com"],
+      'connect-src': ["'self'", "https://hooks.slack.com", "https://hcaptcha.com", "https://*.hcaptcha.com"],
+      'img-src': ["'self'", 'data:', "https://imgs.hcaptcha.com"],
+      'frame-src': ["'self'", "https://hcaptcha.com", "https://*.hcaptcha.com"],
+      'style-src': ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      'font-src': ["'self'", 'https:', 'data:'],
     },
   },
   crossOriginEmbedderPolicy: false,
@@ -115,7 +142,7 @@ app.get('/', (req, res) => res.sendFile(join(__dirname, 'public', 'index.html'))
 app.get('/dashboard', (req, res) => res.sendFile(join(__dirname, 'public', 'dashboard.html')))
 
 // CORS allowlist (replaces wildcard). Set ALLOWED_ORIGINS env to override.
-const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://ebenova.dev,https://ebenova-insights-production.up.railway.app')
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://ebenova.dev,https://www.ebenova.dev,https://ebenova-insights-production.up.railway.app')
   .split(',').map(s => s.trim()).filter(Boolean)
 app.use(makeCorsMiddleware(ALLOWED_ORIGINS))
 
@@ -123,20 +150,6 @@ app.use(makeCorsMiddleware(ALLOWED_ORIGINS))
 // Note: /v1/billing/webhook is mounted above, before express.json().
 // stripeRoutes (the router) only contains /checkout and /portal now.
 app.use('/v1/billing', stripeRoutes)
-
-// Onboarding wizard endpoints (/v1/onboarding/suggest + /sample-matches).
-// Lazy-mounted so missing Redis env at boot doesn't crash the process.
-let _onboardingRouter
-app.use('/v1/onboarding', (req, res, next) => {
-  if (!_onboardingRouter) {
-    try {
-      _onboardingRouter = createOnboardingRouter({ redis: getRedis() })
-    } catch (err) {
-      return res.status(503).json({ success: false, error: { code: 'NOT_CONFIGURED', message: err.message } })
-    }
-  }
-  _onboardingRouter(req, res, next)
-})
 
 // ── GET /health ────────────────────────────────────────────────────────────
 app.get('/health', async (req, res) => {
@@ -152,7 +165,19 @@ app.get('/health', async (req, res) => {
   })
 })
 
-// ── GET /v1/monitors ──────────────────────────────────────────────────────
+// ── GET /v1/me ─────────────────────────────────────────────────────────────
+app.get('/v1/me', async (req, res) => {
+  const auth = await authenticate(req)
+  if (!auth.ok) return res.status(auth.status).json({ success: false, error: auth.error })
+  res.json({
+    success: true,
+    email: auth.owner,
+    plan: auth.keyData.insightsPlan || 'starter',
+    name: auth.keyData.name || '',
+  })
+})
+
+// ── GET /v1/monitors ───────────────────────────────────────────────────────
 app.get('/v1/monitors', async (req, res) => {
   const auth = await authenticate(req)
   if (!auth.ok) return res.status(auth.status).json({ success: false, error: auth.error })
@@ -182,7 +207,7 @@ app.get('/v1/monitors', async (req, res) => {
   }
 })
 
-// ── POST /v1/monitors ─────────────────────────────────────────────────────
+// ── POST /v1/monitors ──────────────────────────────────────────────────────
 app.post('/v1/monitors', async (req, res) => {
   const auth = await authenticate(req)
   if (!auth.ok) return res.status(auth.status).json({ success: false, error: auth.error })
@@ -197,14 +222,25 @@ app.post('/v1/monitors', async (req, res) => {
     return res.status(400).json({ success: false, error: { code: 'KEYWORD_LIMIT_EXCEEDED', message: `Max ${limits.keywords} keywords on ${plan} plan` } })
   try {
     const redis = getRedis()
-    const existing = await redis.smembers(`insights:monitors:${auth.owner}`) || []
-    if (existing.length >= limits.monitors)
-      return res.status(429).json({ success: false, error: { code: 'MONITOR_LIMIT_REACHED', message: `Max ${limits.monitors} monitors on ${plan} plan` } })
     const cleanKws = keywords.map(k => typeof k === 'string'
       ? { keyword: k.trim(), subreddits: [], productContext: '' }
       : { keyword: String(k.keyword || '').trim(), subreddits: Array.isArray(k.subreddits) ? k.subreddits.slice(0, 10) : [], productContext: String(k.productContext || '').slice(0, 500) }
     ).filter(k => k.keyword.length > 1)
     const id = `mon_${randomBytes(12).toString('hex')}`
+
+    // F13: atomic add-then-check-then-rollback to close the plan-limit race.
+    // Two concurrent requests both passing the old `existing.length >= limits`
+    // check could each then sadd, ending up at limits+1. The new pattern adds
+    // the ID FIRST, counts the set, and rolls back if over.
+    const ownerSetKey = `insights:monitors:${auth.owner}`
+    const wasAdded = await redis.sadd(ownerSetKey, id)
+    if (!wasAdded) return res.status(500).json({ success: false, error: { code: 'INTERNAL', message: 'monitor id collision' } })
+    const ownedAfter = await redis.smembers(ownerSetKey) || []
+    if (ownedAfter.length > limits.monitors) {
+      await redis.srem(ownerSetKey, id)
+      return res.status(429).json({ success: false, error: { code: 'MONITOR_LIMIT_REACHED', message: `Max ${limits.monitors} monitors on ${plan} plan` } })
+    }
+
     const now = new Date().toISOString()
     const monitor = { id, owner: auth.owner, name: name.trim().slice(0, 100), keywords: cleanKws,
       productContext: (productContext || '').slice(0, 2000), alertEmail: alertEmail || auth.owner,
@@ -216,7 +252,6 @@ app.post('/v1/monitors', async (req, res) => {
       includeFiverrForum: includeFiverrForum !== false,
       active: true, plan, createdAt: now, lastPollAt: null, totalMatchesFound: 0 }
     await redis.set(`insights:monitor:${id}`, JSON.stringify(monitor))
-    await redis.sadd(`insights:monitors:${auth.owner}`, id)
     await redis.sadd('insights:active_monitors', id)
     res.status(201).json({ success: true, monitor_id: id, name: monitor.name, keyword_count: cleanKws.length,
       keywords: cleanKws.map(k => k.keyword), plan, alert_email: monitor.alertEmail, active: true,
@@ -226,7 +261,7 @@ app.post('/v1/monitors', async (req, res) => {
   }
 })
 
-// ── DELETE /v1/monitors/:id ───────────────────────────────────────────────
+// ── DELETE /v1/monitors/:id ────────────────────────────────────────────────
 app.delete('/v1/monitors/:id', async (req, res) => {
   const auth = await authenticate(req)
   if (!auth.ok) return res.status(auth.status).json({ success: false, error: auth.error })
@@ -245,7 +280,7 @@ app.delete('/v1/monitors/:id', async (req, res) => {
   }
 })
 
-// ── GET /v1/matches ───────────────────────────────────────────────────────
+// ── GET /v1/matches ────────────────────────────────────────────────────────
 app.get('/v1/matches', async (req, res) => {
   const auth = await authenticate(req)
   if (!auth.ok) return res.status(auth.status).json({ success: false, error: auth.error })
@@ -271,7 +306,7 @@ app.get('/v1/matches', async (req, res) => {
   }
 })
 
-// ── POST /v1/matches/feedback ─────────────────────────────────────────────
+// ── POST /v1/matches/feedback ──────────────────────────────────────────────
 app.post('/v1/matches/feedback', async (req, res) => {
   const auth = await authenticate(req)
   if (!auth.ok) return res.status(auth.status).json({ success: false, error: auth.error })
@@ -281,10 +316,9 @@ app.post('/v1/matches/feedback', async (req, res) => {
   try {
     const redis = getRedis()
 
-    // F6: Verify the caller owns this monitor before allowing a write to its
-    // matches. Without this, any authenticated user could write feedback into
-    // any other user's matches. Return 404 (not 403) to avoid leaking whether
-    // the monitor exists.
+    // F6: Verify the caller owns this monitor before allowing a write.
+    // Without this, any authenticated user could write feedback into any
+    // other user's matches. Return 404 (not 403) to avoid leaking existence.
     const monitorRaw = await redis.get(`insights:monitor:${monitor_id}`)
     if (!monitorRaw) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Monitor not found' } })
     const monitor = typeof monitorRaw === 'string' ? JSON.parse(monitorRaw) : monitorRaw
@@ -312,6 +346,16 @@ app.post('/v1/matches/draft', async (req, res) => {
     return res.status(400).json({ success: false, error: { code: 'MISSING_PARAM', message: 'monitor_id and match_id required' } })
   const groqKey = process.env.GROQ_API_KEY
   if (!groqKey) return res.status(503).json({ success: false, error: { code: 'NO_AI', message: 'AI drafts not configured' } })
+
+  // F14: daily Groq cost cap — return 429 instead of crashing on overload.
+  try {
+    const cap = await getGroqCap()()
+    if (!cap.allowed) {
+      console.warn(`[matches/draft] Groq daily cap hit (${cap.used}/${cap.max}) — refusing draft`)
+      return res.status(429).json({ success: false, error: { code: 'DAILY_CAP', message: 'Daily AI draft quota reached. Try again tomorrow.' } })
+    }
+  } catch (_) { /* if redis unavailable, allow through */ }
+
   try {
     const redis = getRedis()
     const key = `insights:match:${monitor_id}:${match_id}`
@@ -339,7 +383,7 @@ app.post('/v1/matches/draft', async (req, res) => {
   }
 })
 
-// ── POST /v1/subscribe — waitlist ─────────────────────────────────────────
+// ── POST /v1/subscribe — landing page waitlist ─────────────────────────────
 app.post('/v1/subscribe', async (req, res) => {
   const { email, plan = 'starter' } = req.body
   if (!email?.includes('@')) return res.status(400).json({ success: false, error: { code: 'MISSING_EMAIL', message: 'Valid email required' } })
@@ -356,11 +400,11 @@ app.post('/v1/subscribe', async (req, res) => {
   }
 })
 
-// ── POST /v1/auth/signup — self-serve API key provisioning ───────────────
-// Creates an API key, stores it in Redis, and emails it to the user.
-// Starter plan is assigned automatically. Upgrade via /v1/billing/checkout.
+// ── POST /v1/auth/signup — magic-link auth ─────────────────────────────────
+// Idempotent: existing email gets a fresh magic-link email; new email gets
+// a key + welcome email. Login flow is "click link → /dashboard?key=xxx".
 app.post('/v1/auth/signup', async (req, res) => {
-  // F5: per-IP rate limit (3/hour). Trust X-Forwarded-For from Railway's proxy.
+  // F5: per-IP rate limit (3/hour). Trust X-Forwarded-For from Railway proxy.
   const ip = req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress || 'unknown'
   try {
     const limited = await signupLimiter()(`signup:ip:${ip}`)
@@ -371,7 +415,6 @@ app.post('/v1/auth/signup', async (req, res) => {
       })
     }
   } catch (err) {
-    // If Redis is down, don't block signups — log and continue
     console.error('[signup] rate limiter error:', err.message)
   }
 
@@ -390,24 +433,55 @@ app.post('/v1/auth/signup', async (req, res) => {
   try {
     const redis = getRedis()
 
-    // F5: Neutral response — don't leak whether email is already signed up.
-    // Existing users still receive their original key via the email already on file.
-    const existing = await redis.get(`insights:signup:${norm}`)
-    if (existing) {
-      console.log(`[signup] repeat signup attempt: ${norm}`)
-      return res.status(201).json({
-        success: true,
-        message: 'Account ready. Check your email for your API key.',
-        plan: 'starter',
-        isNewUser: false,  // existing user — frontend skips wizard
-      })
+    // F15: Soft-gate hCaptcha — only kick in for repeat IPs within an hour.
+    // First signup from any IP works without friction.
+    const recentSignups = Number(await redis.get(`signupcount:ip:${ip}`).catch(() => 0)) || 0
+    if (recentSignups >= 1 || req.body?.forceCaptcha) {
+      const cap = await verifyCaptcha(req.body?.captchaToken)
+      if (!cap.ok) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'CAPTCHA_REQUIRED', message: 'Please complete the captcha.' },
+          requiresCaptcha: true,
+          hcaptchaSiteKey: process.env.HCAPTCHA_SITE_KEY || null,
+        })
+      }
     }
 
-    // Generate key: ins_{32 random hex chars}
+    // Idempotent — existing user gets a fresh magic-link email
+    const existing = await redis.get(`insights:signup:${norm}`)
+    if (existing) {
+      const d = typeof existing === 'string' ? JSON.parse(existing) : existing
+      const resendKey = process.env.RESEND_API_KEY
+      if (resendKey && d.key) {
+        const { Resend } = await import('resend')
+        const resend = new Resend(resendKey)
+        const from = process.env.FROM_EMAIL || 'insights@ebenova.dev'
+        const appUrl = process.env.APP_URL || 'https://ebenova-insights-production.up.railway.app'
+        await resend.emails.send({
+          from: `Ebenova Insights <${from}>`, to: norm,
+          subject: 'Your Ebenova Insights login link',
+          html: `<!DOCTYPE html><html><body style="font-family:system-ui,sans-serif;max-width:560px;margin:0 auto;padding:32px 24px;background:#f5f5f5;">
+            <div style="padding:24px;background:#0e0e0e;border-radius:8px;margin-bottom:24px;">
+              <div style="font-size:18px;font-weight:700;color:#c9a84c;">📡 Ebenova Insights</div>
+            </div>
+            <div style="padding:24px;background:#fff;border-radius:8px;border:1px solid #eee;">
+              <p style="margin:0 0 16px;font-size:15px;">Here's your magic login link:</p>
+              <a href="${appUrl}/dashboard?key=${d.key}" style="display:inline-block;background:#c9a84c;color:#000;font-weight:700;padding:14px 28px;border-radius:6px;text-decoration:none;font-size:15px;">Open Dashboard →</a>
+              <p style="margin:16px 0 0;font-size:12px;color:#aaa;">Link expires in 7 days. If you didn't request this, ignore it.</p>
+            </div>
+          </body></html>`,
+        }).catch(err => console.error('[auth] Resend login email failed:', err.message))
+      }
+      // F15: increment IP counter even on idempotent path
+      await redis.incr(`signupcount:ip:${ip}`).catch(() => {})
+      await redis.expire(`signupcount:ip:${ip}`, 60 * 60).catch(() => {})
+      return res.json({ success: true, already_exists: true, message: 'Magic link sent — check your email.' })
+    }
+
+    // New email — provision key
     const key = `ins_${randomBytes(16).toString('hex')}`
     const now = new Date().toISOString()
-
-    // Store the key in Redis (same shape as manual provisions)
     const keyData = {
       owner: norm,
       email: norm,
@@ -418,43 +492,163 @@ app.post('/v1/auth/signup', async (req, res) => {
       source: 'self-signup',
     }
     await redis.set(`apikey:${key}`, JSON.stringify(keyData))
-    await redis.set(`insights:signup:${norm}`, JSON.stringify({ key, createdAt: now }))
+    await redis.set(`insights:signup:${norm}`, JSON.stringify({ key, email: norm, createdAt: now }))
 
-    // Send welcome email via Resend
     const resendKey = process.env.RESEND_API_KEY
     if (resendKey) {
       const { Resend } = await import('resend')
       const resend = new Resend(resendKey)
       const from = process.env.FROM_EMAIL || 'insights@ebenova.dev'
       const appUrl = process.env.APP_URL || 'https://ebenova-insights-production.up.railway.app'
+      const limits = PLAN_LIMITS.starter
       await resend.emails.send({
         from:    `Ebenova Insights <${from}>`,
         to:      norm,
-        subject: 'Your Ebenova Insights API key',
+        subject: 'Welcome to Ebenova Insights — your magic login link',
         html:    `<!DOCTYPE html><html><body style="font-family:system-ui,sans-serif;max-width:560px;margin:0 auto;padding:32px 24px;background:#f5f5f5;">
           <div style="padding:24px;background:#0e0e0e;border-radius:8px;margin-bottom:24px;">
             <div style="font-size:18px;font-weight:700;color:#c9a84c;">📡 Ebenova Insights</div>
           </div>
           <div style="padding:24px;background:#fff;border-radius:8px;border:1px solid #eee;">
             <p style="margin:0 0 16px;font-size:15px;">Hi${userName ? ' '+userName : ''},</p>
-            <p style="margin:0 0 16px;font-size:15px;color:#333;">Here's your API key for Ebenova Insights:</p>
-            <div style="padding:14px 16px;background:#f5f5f5;border-radius:6px;font-family:monospace;font-size:15px;font-weight:700;letter-spacing:0.5px;margin-bottom:20px;word-break:break-all;">${key}</div>
-            <p style="margin:0 0 16px;font-size:14px;color:#666;">You're on the <strong>Starter plan</strong> — 3 monitors, 20 keywords, email digest. Free forever.</p>
-            <a href="${appUrl}/dashboard" style="display:inline-block;background:#c9a84c;color:#000;font-weight:700;padding:12px 24px;border-radius:6px;text-decoration:none;font-size:15px;">Open Dashboard →</a>
+            <p style="margin:0 0 16px;font-size:15px;color:#333;">Welcome aboard. Click below to open your dashboard — no password needed.</p>
+            <a href="${appUrl}/dashboard?key=${key}" style="display:inline-block;background:#c9a84c;color:#000;font-weight:700;padding:14px 28px;border-radius:6px;text-decoration:none;font-size:15px;margin-bottom:20px;">Open Dashboard →</a>
+            <p style="margin:0 0 4px;font-size:14px;color:#666;">You're on the <strong>Starter plan</strong> — ${limits.monitors} monitor, ${limits.keywords} keywords, email alerts. Free forever.</p>
+            <p style="margin:16px 0 0;font-size:12px;color:#aaa;">Save this email — the link logs you back in any time.</p>
           </div>
           <p style="margin-top:20px;font-size:12px;color:#aaa;text-align:center;">Ebenova Insights · <a href="https://ebenova.dev" style="color:#c9a84c;">ebenova.dev</a></p>
         </body></html>`,
       }).catch(err => console.error('[signup] Email send failed:', err.message))
     }
 
+    // F15: increment IP counter for the soft-gate
+    await redis.incr(`signupcount:ip:${ip}`).catch(() => {})
+    await redis.expire(`signupcount:ip:${ip}`, 60 * 60).catch(() => {})
+
     console.log(`[signup] New user: ${norm} → key ${key.slice(0, 12)}…`)
     res.status(201).json({
       success: true,
-      message: 'Account created.',
+      message: 'Account created. Check your email for the login link.',
       plan: 'starter',
-      apiKey: key,        // Branch 2: in-page reveal kills email round-trip
-      isNewUser: true,    // Branch 2: tells frontend to route to wizard
     })
+  } catch (err) {
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
+  }
+})
+
+// ── On-demand search helper — Reddit global search (no auth needed) ────────
+async function searchRedditNow(keyword) {
+  const url = `https://www.reddit.com/search.json?q=${encodeURIComponent(keyword)}&sort=new&limit=25&t=month`
+  try {
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'EbenovaInsights/2.0 (on-demand search)' },
+      signal: AbortSignal.timeout(8000),
+    })
+    if (!res.ok) return []
+    const data = await res.json()
+    return (data?.data?.children || []).map(c => c.data).map(p => ({
+      id: `reddit_${p.id}`,
+      source: 'reddit',
+      title: p.title,
+      body: (p.selftext || '').slice(0, 500),
+      url: `https://reddit.com${p.permalink}`,
+      subreddit: p.subreddit,
+      author: p.author,
+      score: p.score,
+      comments: p.num_comments,
+      createdAt: new Date(p.created_utc * 1000).toISOString(),
+      keyword,
+      approved: true,
+    }))
+  } catch { return [] }
+}
+
+// ── POST /v1/search — on-demand cross-platform search ──────────────────────
+app.post('/v1/search', async (req, res) => {
+  const auth = await authenticate(req)
+  if (!auth.ok) return res.status(auth.status).json({ success: false, error: auth.error })
+
+  // F14: daily search cap (each call hits up to 8 platforms — protects bandwidth)
+  try {
+    const cap = await getSearchCap()()
+    if (!cap.allowed) {
+      console.warn(`[search] daily cap hit (${cap.used}/${cap.max}) — refusing`)
+      return res.status(429).json({ success: false, error: { code: 'DAILY_CAP', message: 'Daily search quota reached. Try again tomorrow.' } })
+    }
+  } catch (_) { /* redis unavailable — allow */ }
+
+  const { keywords = [], platforms = ['reddit','medium','substack','quora','upwork','fiverr','github','producthunt'] } = req.body
+  if (!Array.isArray(keywords) || keywords.length === 0)
+    return res.status(400).json({ success: false, error: { code: 'MISSING_FIELD', message: 'keywords array required' } })
+
+  const kws = keywords.slice(0, 5).map(k => String(k).trim()).filter(Boolean)
+  if (!kws.length) return res.status(400).json({ success: false, error: { code: 'INVALID_INPUT', message: 'No valid keywords' } })
+
+  const platformSet = new Set(Array.isArray(platforms) ? platforms : [])
+  const noSeen = { has: () => false, add: () => {} }
+  const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
+
+  const all = []
+  const seenSet = new Set()
+
+  try {
+    for (const kw of kws) {
+      const kwEntry = { keyword: kw }
+      const opts = { seenIds: noSeen, delay: null, MAX_AGE_MS }
+      const tasks = []
+      if (platformSet.has('reddit'))      tasks.push(searchRedditNow(kw))
+      if (platformSet.has('medium'))      tasks.push(searchMedium(kwEntry, opts).catch(() => []))
+      if (platformSet.has('substack'))    tasks.push(searchSubstack(kwEntry, opts).catch(() => []))
+      if (platformSet.has('quora'))       tasks.push(searchQuora(kwEntry, opts).catch(() => []))
+      if (platformSet.has('upwork'))      tasks.push(searchUpwork(kwEntry, opts).catch(() => []))
+      if (platformSet.has('fiverr'))      tasks.push(searchFiverr(kwEntry, opts).catch(() => []))
+      if (platformSet.has('github'))      tasks.push(searchGitHub(kwEntry, opts).catch(() => []))
+      if (platformSet.has('producthunt')) tasks.push(searchProductHunt(kwEntry, opts).catch(() => []))
+      const batches = await Promise.all(tasks)
+      for (const batch of batches) {
+        for (const item of (batch || [])) {
+          if (!seenSet.has(item.id)) { seenSet.add(item.id); all.push(item) }
+        }
+      }
+    }
+    all.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    res.json({ success: true, results: all.slice(0, 100), count: all.length, searchedAt: new Date().toISOString() })
+  } catch (err) {
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
+  }
+})
+
+// ── POST /v1/search/draft — AI reply for an on-demand search result ────────
+app.post('/v1/search/draft', async (req, res) => {
+  const auth = await authenticate(req)
+  if (!auth.ok) return res.status(auth.status).json({ success: false, error: auth.error })
+
+  const { title, body: postBody, subreddit, source, productContext } = req.body
+  if (!title) return res.status(400).json({ success: false, error: { code: 'MISSING_FIELD', message: 'title required' } })
+
+  const groqKey = process.env.GROQ_API_KEY
+  if (!groqKey) return res.status(503).json({ success: false, error: { code: 'NO_AI', message: 'AI drafts not configured' } })
+
+  // F14: daily Groq cost cap
+  try {
+    const cap = await getGroqCap()()
+    if (!cap.allowed) {
+      console.warn(`[search/draft] Groq daily cap hit (${cap.used}/${cap.max}) — refusing draft`)
+      return res.status(429).json({ success: false, error: { code: 'DAILY_CAP', message: 'Daily AI draft quota reached. Try again tomorrow.' } })
+    }
+  } catch (_) { /* redis unavailable — allow */ }
+
+  try {
+    const prompt = `You are a helpful community member. Write a genuine 2-4 sentence reply to this post. Casual tone. No marketing language. If your product (described below) is genuinely relevant, mention it naturally.\n\nProduct context: ${(productContext||'').slice(0,1200)}\n\nPost title: ${title}\nSource: ${source||'reddit'}${subreddit?`/${subreddit}`:''}\nBody: ${(postBody||'(none)').slice(0,600)}\n\nReply with SKIP if not relevant, else just the reply text.`
+    const gr = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${groqKey}` },
+      body: JSON.stringify({ model: 'llama-3.3-70b-versatile', max_tokens: 300, messages: [{ role: 'user', content: prompt }] }),
+    })
+    if (!gr.ok) return res.status(502).json({ success: false, error: { code: 'AI_ERROR', message: 'Groq request failed' } })
+    const gd = await gr.json()
+    const raw = gd.choices?.[0]?.message?.content?.trim() || null
+    res.json({ success: true, draft: (!raw || raw === 'SKIP') ? null : raw })
   } catch (err) {
     res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
   }
