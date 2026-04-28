@@ -11,37 +11,19 @@
 // The CLIENT_CONFIGS map below holds all client configs.
 // Add a new entry for each new client. IDs are stable — rerunning is safe.
 
-import { readFileSync } from 'fs'
 import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
+import { loadEnv } from '../lib/env.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
-// ── Load .env — tries local .env then sibling signova project (same Redis) ───
-function loadEnvFile(filePath) {
-  try {
-    const lines = readFileSync(filePath, 'utf8').split('\n')
-    let loaded = 0
-    for (const line of lines) {
-      const t = line.trim()
-      if (!t || t.startsWith('#')) continue
-      const eq = t.indexOf('=')
-      if (eq === -1) continue
-      const k = t.slice(0, eq).trim()
-      const v = t.slice(eq + 1).trim()
-      if (k && v && !process.env[k]) { process.env[k] = v; loaded++ }
-    }
-    if (loaded > 0) console.log(`[env] Loaded ${loaded} vars from ${filePath}`)
-    return loaded
-  } catch (_) { return 0 }
-}
-
-// 1. Local .env (Railway injects these at runtime, may be missing locally)
-loadEnvFile(resolve(process.cwd(), '.env'))
-// 2. Sibling Signova project shares the same Upstash Redis instance
-loadEnvFile(resolve(process.cwd(), '../signova/.env'))
-loadEnvFile(resolve(process.cwd(), '../signova/.env.local'))
-loadEnvFile(resolve(process.cwd(), '../signova/.env.production'))
+// Load .env via shared loader. Multi-source: local .env first, then sibling
+// Signova project (shares the same Upstash Redis). dotenv handles missing
+// files silently; override:false (default) preserves existing env vars.
+loadEnv()
+loadEnv(resolve(process.cwd(), '../signova/.env'))
+loadEnv(resolve(process.cwd(), '../signova/.env.local'))
+loadEnv(resolve(process.cwd(), '../signova/.env.production'))
 
 import { Redis } from '@upstash/redis'
 

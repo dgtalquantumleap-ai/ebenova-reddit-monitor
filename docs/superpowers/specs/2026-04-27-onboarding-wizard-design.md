@@ -1,10 +1,18 @@
 # Onboarding Wizard + Navigation Refresh — Design
 
-**Status:** Draft for review
+**Status:** Active (Branch 1 critical fixes merged 2026-04-28; this is Branch 2)
 **Author:** Claude (with Olumide)
-**Date:** 2026-04-27
-**Scope:** SaaS dashboard UX — first-time user activation
+**Date:** 2026-04-27 (revised 2026-04-28)
+**Scope:** SaaS dashboard UX — first-time user activation + tightly-coupled hardening
 **Estimated build time:** 1–2 weeks (one developer)
+
+## Revision 2026-04-28 — items folded in from Branch 3
+
+Three Branch 3 items were promoted into this branch because they sit on the same touch surface (`api-server.js` and `.env` parsing) and would otherwise force a redundant edit cycle later:
+
+1. **CORS tightening** — replace the wildcard `Access-Control-Allow-Origin: *` with a strict allowlist (`https://ebenova.dev` + Railway prod URL).
+2. **Helmet / security headers** — add `helmet` middleware for `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Strict-Transport-Security`, basic CSP.
+3. **`.env` parser → real `dotenv`** — replace the hand-rolled parsers in `api-server.js`, `monitor.js`, `monitor-v2.js`, `scripts/provision-client.js`, and `scripts/backfill-stripe-index.js` with a single shared loader using the `dotenv` package (already a devDep — promote to runtime).
 
 ---
 
@@ -132,8 +140,22 @@ The result: real signups bounce before creating a working monitor, which means t
 | `lib/llm/prompts.js` | Versioned system prompt for keyword suggestion | ~80 |
 | `lib/keyword-suggest.js` | Orchestrates suggest call, validates output schema, falls back to template gallery on failure | ~100 |
 | `lib/sample-matches.js` | Parallel scraper invocation, dedup, ranking | ~120 |
-| `lib/rate-limit.js` | Redis-backed sliding-window rate limiter, used by all new endpoints | ~80 |
 | `lib/templates.js` | 8 fallback templates (Freelancer / Agency / SaaS / Coach / Course / Ecommerce / Local Service / Other) | ~150 |
+| `lib/env.js` | Single shared `dotenv`-based env loader (replaces 5 hand-rolled parsers) | ~25 |
+| `lib/cors.js` | CORS allowlist middleware (replaces wildcard) | ~30 |
+
+`lib/rate-limit.js` already exists from Branch 1 (F5) — reused here for the new wizard endpoints.
+
+### Existing-file edits (folded-in hardening)
+
+| File | Change |
+|---|---|
+| `api-server.js` | Add `helmet()` middleware. Replace wildcard CORS with `lib/cors.js`. Replace inline `.env` parser with `lib/env.js`. |
+| `monitor.js` | Replace inline `.env` parser with `lib/env.js`. |
+| `monitor-v2.js` | Replace inline `.env` parser with `lib/env.js`. |
+| `scripts/provision-client.js` | Replace inline `.env` parser with `lib/env.js`. |
+| `scripts/backfill-stripe-index.js` | Replace inline `.env` parser with `lib/env.js`. |
+| `package.json` | Add `helmet` dep. Promote `dotenv` from devDep → dep. |
 
 ### Frontend — restructure
 
@@ -307,13 +329,15 @@ No browser/E2E tests in this change — manual QA on the wizard flow before ship
 
 ## Security
 
-- All user-supplied strings escaped before rendering (resolves audit findings #2 and #5 for the wizard surface).
-- `description` sanitized before LLM call (audit #1).
-- Rate limits on every new endpoint (audit #6).
-- Signup endpoint hardened: rate limit + neutral responses + hCaptcha (audit #11, #13).
+- All user-supplied strings escaped before rendering (resolves audit findings #2 and #5 for the wizard surface — Branch 1 already applied `escapeHtml` to email/Slack output; this branch applies the same pattern to any new HTML the wizard renders).
+- `description` sanitized via `lib/llm-safe-prompt.js` (Branch 1) before LLM call.
+- Rate limits via `lib/rate-limit.js` (Branch 1) on every new endpoint.
+- Signup endpoint further hardened in this branch: hCaptcha on top of the rate-limit + email validation that landed in Branch 1.
+- **CORS allowlist** (folded in from Branch 3): replace wildcard `Access-Control-Allow-Origin: *` with strict allowlist. Allowed origins from env: `ALLOWED_ORIGINS` (comma-separated). Defaults: `https://ebenova.dev`, Railway prod URL.
+- **Helmet middleware** (folded in): `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, `Strict-Transport-Security: max-age=31536000; includeSubDomains`, basic CSP allowing only first-party + Tailwind/React CDNs the dashboard already uses.
+- **`.env` parser → `dotenv`** (folded in): single `lib/env.js` loader replaces 5 hand-rolled parsers. Fixes the `STRIPE_WEBHOOK_SECRET="whsec_..."` literal-quote bug that was lurking before Branch 1's webhook fix even worked.
 - Anthropic API key never exposed to client; used only server-side.
-- CORS tightened to `https://ebenova.dev` and the Railway prod URL (audit #4) — done in this change since we're touching `api-server.js`.
-- API key still in `localStorage` for now (audit #5 separate, larger change to httpOnly cookies — out of scope here).
+- API key still in `localStorage` for now (httpOnly-cookie migration is a separate, larger UX change — out of scope here).
 
 ---
 
@@ -343,21 +367,47 @@ No browser/E2E tests in this change — manual QA on the wizard flow before ship
 
 ## Implementation order (suggested)
 
-1. **Day 1:** Backend skeleton — `routes/onboarding.js`, `lib/rate-limit.js`, signup endpoint changes, env vars.
-2. **Day 2:** Anthropic wrapper + prompt + zod validation + template fallback.
-3. **Day 3:** `lib/sample-matches.js` reusing existing scrapers.
-4. **Day 4:** Frontend wizard skeleton (4 step components, progress bar, transitions).
-5. **Day 5:** Wire wizard to backend, streaming UI, error states, skip path.
-6. **Day 6:** Settings split, match-card tooltip, help icons, microcopy pass.
-7. **Day 7:** Testing, manual QA, polish, accessibility check.
+1. **Day 1 — hardening foundation (folded-in items first):**
+   - `lib/env.js` (dotenv-based loader) + replace 5 inline parsers
+   - `lib/cors.js` (allowlist middleware)
+   - `helmet` middleware in `api-server.js`
+   - `package.json` deps update (`helmet`, `dotenv` → runtime)
+   - Tests: `lib/env.test.js`, `lib/cors.test.js`
+2. **Day 2:** Backend skeleton — `routes/onboarding.js`, signup endpoint hCaptcha + in-page key reveal, env vars.
+3. **Day 3:** Anthropic wrapper + prompt + zod validation + template fallback.
+4. **Day 4:** `lib/sample-matches.js` reusing existing scrapers.
+5. **Day 5:** Frontend wizard skeleton (3 step components, welcome + confirmation screens, progress bar, transitions).
+6. **Day 6:** Wire wizard to backend, streaming UI, error states, skip path.
+7. **Day 7:** Settings split, match-card tooltip, help icons, microcopy pass.
+8. **Day 8:** Testing, manual QA, polish, accessibility check.
 
-Approximately 1 working week for one engineer at full focus, with a buffer for the unknowns in days 4–5.
+Approximately 8 working days for one engineer at full focus. Day 1's hardening foundation pays dividends by simplifying everything that follows — no more `STRIPE_WEBHOOK_SECRET="..."` literal-quote landmines, no more `.env` parser drift across 5 files.
 
 ---
 
-## Related work (separate tasks)
+## Related work
 
-- **Stripe webhook fixes** (audit findings #1–4): silently broken in production, separate critical-priority task.
-- **Reply-draft model swap** (Anthropic for paid / Groq for free): smaller change, ~1 day, after this lands.
-- **XSS escaping in email digests** (audit #5): touches `monitor.js` and `monitor-v2.js`, separate task.
-- **Subscription cancellation handling** (audit #9): revenue leak, separate critical task.
+**Already shipped in Branch 1 (PR #1, merged 2026-04-28):**
+- Stripe webhook fixes (F1–F4)
+- Signup rate limit + email validation + neutral response (F5)
+- Feedback endpoint owner check (F6)
+- HTML escaping in email and Slack (F7)
+- LLM prompt sanitization (F8)
+- monitor-v2 isPolling guard (F9)
+
+**Branch 3 (deferred — pure long-tail hardening, no `api-server.js` work):**
+- Scraper ID truncation collisions (`lib/scrapers/fiverr.js`, `upwork.js`, `quora.js`)
+- `monitor-v2.js` semantic-age filter hardcoded to 60 min
+- Embedding cache key bug
+- `monitor.js` / `monitor-v2.js` deduplication refactor
+- MCP package version drift (6 files claiming 3 different versions)
+- `glama.json` advertising 3 tools that don't exist
+- `INPUT_SCHEMA.json` declaring 5 platform inputs the actor never reads
+- Two divergent MCP server implementations
+- `esbuild` dead dependency in `mcp-package`
+- Quota counters for Groq / OpenAI / Resend cost caps
+- Plan-limit race condition
+
+**Smaller tasks scheduled after Branch 2:**
+- **Reply-draft model swap** (Anthropic Haiku for paid / Groq for free): ~1 day, easy after Anthropic wrapper lands in this branch.
+- **`localStorage` → httpOnly cookies** for API key storage: separate UX change.

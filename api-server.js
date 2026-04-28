@@ -12,28 +12,20 @@
 //   POST /v1/matches/feedback  — thumbs up/down on a draft
 
 import express from 'express'
-import { readFileSync } from 'fs'
-import { resolve, join } from 'path'
+import { join } from 'path'
 import { fileURLToPath } from 'url'
 import { dirname } from 'path'
 import stripeRoutes, { webhookHandler } from './routes/stripe.js'
+import { createRouter as createOnboardingRouter } from './routes/onboarding.js'
+import { loadEnv } from './lib/env.js'
+import { makeCorsMiddleware } from './lib/cors.js'
+import helmet from 'helmet'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname  = dirname(__filename)
 
-// ── Load .env ──────────────────────────────────────────────────────────────
-try {
-  const lines = readFileSync(resolve(process.cwd(), '.env'), 'utf8').split('\n')
-  for (const line of lines) {
-    const t = line.trim()
-    if (!t || t.startsWith('#')) continue
-    const eq = t.indexOf('=')
-    if (eq === -1) continue
-    const k = t.slice(0, eq).trim()
-    const v = t.slice(eq + 1).trim()
-    if (k && v && !process.env[k]) process.env[k] = v
-  }
-} catch (_) {}
+// Load .env via shared loader (dotenv) — replaces hand-rolled parser.
+loadEnv()
 
 import { Redis } from '@upstash/redis'
 import { randomBytes } from 'crypto'
@@ -102,22 +94,49 @@ app.post('/v1/billing/webhook',
   webhookHandler
 )
 
+// Security headers — X-Content-Type-Options, X-Frame-Options, HSTS,
+// Referrer-Policy, basic CSP. Loosened CSP to allow the dashboard's
+// React/Tailwind CDN scripts (Branch 3 will bundle them locally).
+app.use(helmet({
+  contentSecurityPolicy: {
+    useDefaults: true,
+    directives: {
+      'script-src': ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com", "https://unpkg.com", "'unsafe-eval'"],
+      'connect-src': ["'self'", "https://hooks.slack.com"],
+      'img-src': ["'self'", 'data:'],
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+}))
+
 app.use(express.json())
 app.use(express.static(join(__dirname, 'public')))
 app.get('/', (req, res) => res.sendFile(join(__dirname, 'public', 'index.html')))
 app.get('/dashboard', (req, res) => res.sendFile(join(__dirname, 'public', 'dashboard.html')))
-app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS, PATCH')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
-  if (req.method === 'OPTIONS') return res.status(200).end()
-  next()
-})
+
+// CORS allowlist (replaces wildcard). Set ALLOWED_ORIGINS env to override.
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://ebenova.dev,https://ebenova-insights-production.up.railway.app')
+  .split(',').map(s => s.trim()).filter(Boolean)
+app.use(makeCorsMiddleware(ALLOWED_ORIGINS))
 
 // ── Stripe billing (checkout + portal) ─────────────────────────────────────
 // Note: /v1/billing/webhook is mounted above, before express.json().
 // stripeRoutes (the router) only contains /checkout and /portal now.
 app.use('/v1/billing', stripeRoutes)
+
+// Onboarding wizard endpoints (/v1/onboarding/suggest + /sample-matches).
+// Lazy-mounted so missing Redis env at boot doesn't crash the process.
+let _onboardingRouter
+app.use('/v1/onboarding', (req, res, next) => {
+  if (!_onboardingRouter) {
+    try {
+      _onboardingRouter = createOnboardingRouter({ redis: getRedis() })
+    } catch (err) {
+      return res.status(503).json({ success: false, error: { code: 'NOT_CONFIGURED', message: err.message } })
+    }
+  }
+  _onboardingRouter(req, res, next)
+})
 
 // ── GET /health ────────────────────────────────────────────────────────────
 app.get('/health', async (req, res) => {
@@ -380,6 +399,7 @@ app.post('/v1/auth/signup', async (req, res) => {
         success: true,
         message: 'Account ready. Check your email for your API key.',
         plan: 'starter',
+        isNewUser: false,  // existing user — frontend skips wizard
       })
     }
 
@@ -430,8 +450,10 @@ app.post('/v1/auth/signup', async (req, res) => {
     console.log(`[signup] New user: ${norm} → key ${key.slice(0, 12)}…`)
     res.status(201).json({
       success: true,
-      message: 'Account created. Check your email for your API key.',
+      message: 'Account created.',
       plan: 'starter',
+      apiKey: key,        // Branch 2: in-page reveal kills email round-trip
+      isNewUser: true,    // Branch 2: tells frontend to route to wizard
     })
   } catch (err) {
     res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })

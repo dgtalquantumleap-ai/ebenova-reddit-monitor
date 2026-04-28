@@ -66,8 +66,13 @@ function ApiKeyModal({ onSave }) {
     const r = await fetch('/v1/auth/signup', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email, name }) });
     const d = await r.json();
     setLoading(false);
-    if (d.success) setMsg(d.message || 'Check your email for your API key.');
-    else setErr(d.error?.message || 'Signup failed.');
+    if (d.success) {
+      // Branch 2: in-page key reveal kills the email round-trip
+      if (d.apiKey) { onSave(d.apiKey, { isNewUser: !!d.isNewUser }); return; }
+      setMsg(d.message || 'Check your email for your API key.');
+    } else {
+      setErr(d.error?.message || 'Signup failed.');
+    }
   };
 
   if (mode === 'choose') return (
@@ -166,6 +171,16 @@ function MatchCard({ match, monitorId, apiKey, onAction }) {
         {match.author && `u/${match.author}`}{match.score!=null ? ` · ${match.score} pts` : ''}{match.comments!=null ? ` · ${match.comments} comments` : ''}
         {match.keyword && <span style={{marginLeft:8,padding:'1px 6px',background:'#1a1a1a',borderRadius:3,color:'#666'}}>"{match.keyword}"</span>}
       </div>
+      {match.matchedKeyword && match.intentType && (
+        <div style={{fontSize:11,color:'#666',marginTop:-4,marginBottom:8,fontStyle:'italic'}}>
+          Matched on "<span style={{color:'#aaa'}}>{match.matchedKeyword}</span>" — {
+            match.intentType==='buying'?'🎯 Buying intent':
+            match.intentType==='pain'?'💢 Pain point':
+            match.intentType==='comparison'?'⚖️ Comparison':
+            '❓ Question'
+          }
+        </div>
+      )}
       {match.draft && (
         <div style={{padding:12,background:'#1a1600',border:'1px solid #4a3800',borderRadius:6,marginBottom:12}}>
           <div style={{fontSize:10,fontWeight:700,textTransform:'uppercase',letterSpacing:'1px',color:'#c9a84c',marginBottom:6}}>✏️ Suggested reply</div>
@@ -180,6 +195,215 @@ function MatchCard({ match, monitorId, apiKey, onAction }) {
       </div>
     </div>
   );
+}
+
+// ── Onboarding Wizard ────────────────────────────────────────────────────────
+function OnboardingWizard({ apiKey, onComplete, onSkip }) {
+  const [step, setStep] = useState(0)  // 0=welcome, 1=describe, 2=pick, 3=review, 4=confirm
+  const [description, setDescription] = useState('')
+  const [suggestion, setSuggestion] = useState(null)
+  const [pickedKeywords, setPickedKeywords] = useState(new Set())
+  const [customKeyword, setCustomKeyword] = useState('')
+  const [monitorName, setMonitorName] = useState('')
+  const [sampleMatches, setSampleMatches] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  const advance = () => setStep(s => Math.min(s + 1, 4))
+  const back = () => setStep(s => Math.max(s - 1, 0))
+
+  const totalSteps = 3
+  const stepNumber = step >= 1 && step <= 3 ? step : 0
+
+  const fetchSuggestions = async () => {
+    if (description.trim().length < 20) { setError('Tell us a bit more — at least 20 characters.'); return }
+    setError(''); setLoading(true)
+    const r = await apiFetch('/v1/onboarding/suggest', { method:'POST', body: JSON.stringify({ description }) }, apiKey)
+    setLoading(false)
+    if (!r.ok) { setError(r.data?.error?.message || 'Could not generate suggestions.'); return }
+    setSuggestion(r.data)
+    setMonitorName(r.data.suggestedName || 'My Monitor')
+    const preChecked = new Set((r.data.keywords || []).filter(k => k.confidence === 'high').map(k => k.keyword))
+    setPickedKeywords(preChecked)
+    advance()
+  }
+
+  const toggleKeyword = (kw) => {
+    const next = new Set(pickedKeywords)
+    if (next.has(kw)) next.delete(kw); else next.add(kw)
+    setPickedKeywords(next)
+  }
+
+  const addCustomKeyword = () => {
+    if (!customKeyword.trim()) return
+    const next = new Set([...pickedKeywords, customKeyword.trim()])
+    setPickedKeywords(next)
+    setCustomKeyword('')
+  }
+
+  const createMonitor = async () => {
+    setError(''); setLoading(true)
+    const allKeywords = [...pickedKeywords]
+    if (allKeywords.length === 0) { setError('Pick at least one keyword.'); setLoading(false); return }
+    const monitorBody = {
+      name: monitorName.trim() || 'My Monitor',
+      keywords: allKeywords.map(k => ({ keyword: k, subreddits: suggestion.subreddits, productContext: suggestion.productContext })),
+      productContext: suggestion.productContext,
+      includeMedium: suggestion.platforms.includes('medium'),
+      includeSubstack: suggestion.platforms.includes('substack'),
+      includeQuora: suggestion.platforms.includes('quora'),
+      includeUpworkForum: suggestion.platforms.includes('upwork'),
+      includeFiverrForum: suggestion.platforms.includes('fiverr'),
+    }
+    const m = await apiFetch('/v1/monitors', { method:'POST', body: JSON.stringify(monitorBody) }, apiKey)
+    if (!m.ok) { setError(m.data?.error?.message || 'Could not create monitor.'); setLoading(false); return }
+    const s = await apiFetch('/v1/onboarding/sample-matches', { method:'POST', body: JSON.stringify({
+      keywords: allKeywords, subreddits: suggestion.subreddits, platforms: suggestion.platforms, monitorId: m.data.id,
+    }) }, apiKey)
+    setSampleMatches(s.ok ? (s.data.matches || []) : [])
+    setLoading(false)
+    advance()
+    setTimeout(() => onComplete(), 4000)
+  }
+
+  const intentLabel = { buying: '🎯 Buying intent', pain: '💢 Pain point', comparison: '⚖️ Comparison', question: '❓ Question' }
+
+  const stepShell = (children) => (
+    <div style={{maxWidth:560,margin:'0 auto',padding:'48px 24px',position:'relative'}}>
+      {stepNumber > 0 && (
+        <div style={{marginBottom:32}}>
+          <div style={{fontSize:11,color:'#888',letterSpacing:1.5,textTransform:'uppercase',marginBottom:8}}>
+            Step {stepNumber} of {totalSteps}
+          </div>
+          <div style={{display:'flex',gap:6}}>
+            {Array.from({length:totalSteps}).map((_,i) => (
+              <div key={i} style={{flex:1,height:3,borderRadius:2,background:i < stepNumber ? '#c9a84c' : '#222'}} />
+            ))}
+          </div>
+        </div>
+      )}
+      <button onClick={onSkip} style={{position:'absolute',top:24,right:24,background:'none',border:'none',color:'#666',cursor:'pointer',fontSize:13}}>I'll set it up myself →</button>
+      {children}
+    </div>
+  )
+
+  if (step === 0) return stepShell(
+    <div style={{textAlign:'center',padding:'40px 0'}}>
+      <div style={{fontSize:48,marginBottom:24}}>📡</div>
+      <div style={{fontSize:22,fontWeight:700,marginBottom:12}}>Welcome to Ebenova Insights</div>
+      <div style={{color:'#888',marginBottom:32}}>We'll find the right keywords for your monitor in under 2 minutes.</div>
+      <button className="btn-gold" style={{padding:'12px 32px',fontSize:15}} onClick={advance}>Let's go →</button>
+    </div>
+  )
+
+  if (step === 1) return stepShell(
+    <>
+      <div style={{fontSize:22,fontWeight:600,marginBottom:8}}>What do you sell?</div>
+      <div style={{fontSize:13,color:'#888',marginBottom:20}}>2–3 sentences. Mention what you sell, who buys it, and what problem you solve.</div>
+      <textarea rows={6} value={description} onChange={e=>setDescription(e.target.value)} style={{fontSize:14,padding:14}}
+        placeholder="I run a small SEO agency. We help SaaS startups get their first 10k organic visitors. Most clients come to us frustrated with content agencies that didn't move the needle." />
+      {error && <div style={{color:'#ff8080',fontSize:13,marginTop:12}}>{error}</div>}
+      <div style={{display:'flex',gap:12,marginTop:24}}>
+        <button onClick={back} className="btn-outline">← Back</button>
+        <button className="btn-gold" style={{flex:1}} disabled={loading} onClick={fetchSuggestions}>{loading ? 'Finding keywords your customers actually use…' : 'Find my keywords →'}</button>
+      </div>
+    </>
+  )
+
+  if (step === 2) return stepShell(
+    <>
+      <div style={{fontSize:22,fontWeight:600,marginBottom:8}}>Pick the keywords to monitor</div>
+      <div style={{fontSize:13,color:'#888',marginBottom:20}}>Tap to toggle. We pre-checked the strongest matches.</div>
+      {['buying','pain','comparison','question'].map(intent => {
+        const items = (suggestion?.keywords || []).filter(k => k.intentType === intent)
+        if (items.length === 0) return null
+        return (
+          <div key={intent} style={{marginBottom:20}}>
+            <div style={{fontSize:11,color:'#c9a84c',letterSpacing:1,marginBottom:8}}>{intentLabel[intent]}</div>
+            <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
+              {items.map(k => {
+                const on = pickedKeywords.has(k.keyword)
+                return (
+                  <button key={k.keyword} onClick={()=>toggleKeyword(k.keyword)}
+                    style={{padding:'6px 12px',borderRadius:16,fontSize:13,cursor:'pointer',
+                      border:on?'1px solid #c9a84c':'1px solid #333',
+                      background:on?'rgba(201,168,76,0.15)':'#1a1a1a',
+                      color:on?'#f0ece4':'#888'}}>
+                    {on?'✓ ':''}{k.keyword}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })}
+      <div style={{marginTop:20,paddingTop:20,borderTop:'1px solid #222'}}>
+        <div style={{fontSize:11,color:'#888',letterSpacing:1,marginBottom:8}}>+ ADD YOUR OWN</div>
+        <div style={{display:'flex',gap:8}}>
+          <input value={customKeyword} onChange={e=>setCustomKeyword(e.target.value)} placeholder="e.g. looking for accountant" onKeyDown={e=>e.key==='Enter'&&addCustomKeyword()} />
+          <button className="btn-outline" onClick={addCustomKeyword}>Add</button>
+        </div>
+      </div>
+      <div style={{display:'flex',gap:12,marginTop:24}}>
+        <button onClick={back} className="btn-outline">← Back</button>
+        <button className="btn-gold" style={{flex:1}} disabled={pickedKeywords.size===0} onClick={advance}>Looks good ({pickedKeywords.size}) →</button>
+      </div>
+      {suggestion?.fallback && <div style={{fontSize:11,color:'#888',marginTop:16,textAlign:'center',fontStyle:'italic'}}>Using a starter set — you can refine these any time.</div>}
+    </>
+  )
+
+  if (step === 3) return stepShell(
+    <>
+      <div style={{fontSize:22,fontWeight:600,marginBottom:20}}>Review your monitor</div>
+      <div style={{marginBottom:16}}>
+        <label>Name</label>
+        <input value={monitorName} onChange={e=>setMonitorName(e.target.value)} />
+      </div>
+      <div style={{marginBottom:16}}>
+        <div style={{fontSize:11,color:'#888',letterSpacing:1,textTransform:'uppercase',marginBottom:6}}>{pickedKeywords.size} KEYWORDS</div>
+        <div style={{padding:12,background:'#1a1a1a',borderRadius:6,fontSize:13,color:'#aaa'}}>{[...pickedKeywords].slice(0,5).join(', ')}{pickedKeywords.size > 5 ? `, +${pickedKeywords.size-5} more` : ''}</div>
+      </div>
+      <div style={{marginBottom:16}}>
+        <div style={{fontSize:11,color:'#888',letterSpacing:1,textTransform:'uppercase',marginBottom:6}}>SUBREDDITS (AI PICKED)</div>
+        <div style={{padding:12,background:'#1a1a1a',borderRadius:6,fontSize:13,color:'#aaa'}}>{(suggestion?.subreddits || []).map(s=>'r/'+s).join(', ')}</div>
+      </div>
+      <div style={{marginBottom:24}}>
+        <div style={{fontSize:11,color:'#888',letterSpacing:1,textTransform:'uppercase',marginBottom:6}}>PLATFORMS</div>
+        <div style={{padding:12,background:'#1a1a1a',borderRadius:6,fontSize:13,color:'#aaa'}}>{(suggestion?.platforms || []).join(' · ')}</div>
+      </div>
+      {error && <div style={{color:'#ff8080',fontSize:13,marginBottom:12}}>{error}</div>}
+      <div style={{display:'flex',gap:12}}>
+        <button onClick={back} className="btn-outline">← Back</button>
+        <button className="btn-gold" style={{flex:1}} disabled={loading} onClick={createMonitor}>{loading ? 'Creating…' : 'Create my monitor →'}</button>
+      </div>
+    </>
+  )
+
+  // step === 4: confirmation
+  return stepShell(
+    <>
+      <div style={{padding:14,background:'#0a2a0a',border:'1px solid #1a5a1a',borderRadius:8,color:'#80ff80',marginBottom:24,textAlign:'center'}}>
+        ✓ Monitor active. First scan in ~15 min.
+      </div>
+      {sampleMatches.length > 0 && (
+        <>
+          <div style={{fontSize:11,color:'#888',letterSpacing:1.5,textTransform:'uppercase',marginBottom:12}}>Recent posts that would have matched</div>
+          {sampleMatches.slice(0, 3).map(m => (
+            <div key={m.url} style={{padding:12,background:'#1a1a1a',borderRadius:6,marginBottom:8,borderLeft:'3px solid #c9a84c'}}>
+              <div style={{fontSize:10,color:'#c9a84c',fontWeight:700,marginBottom:4}}>{m.source==='reddit'?`r/${m.subreddit}`:m.source}</div>
+              <div style={{fontSize:13,color:'#f0ece4',lineHeight:1.4}}>{(m.title || '').slice(0, 140)}</div>
+            </div>
+          ))}
+        </>
+      )}
+      {sampleMatches.length === 0 && (
+        <div style={{padding:24,textAlign:'center',color:'#666',fontSize:13}}>
+          Nothing matched in the last 7 days — your monitor is active and will catch new posts as they arrive.
+        </div>
+      )}
+      <div style={{textAlign:'center',marginTop:24,fontSize:13,color:'#888'}}>Taking you to your dashboard…</div>
+    </>
+  )
 }
 
 // ── View 1: Create Monitor ───────────────────────────────────────────────────
@@ -312,25 +536,30 @@ function MatchesFeed({ apiKey, monitors }) {
   );
 }
 
-// ── View 3: Settings ─────────────────────────────────────────────────────────
+// ── View 3: Settings (split into 3 sub-tabs) ─────────────────────────────────
 function Settings({ apiKey, onChangeKey, monitors, onRefresh }) {
-  const [copied, setCopied] = useState(false);
-  const [deletingId, setDeletingId] = useState('');
-
-  const copyKey = () => { navigator.clipboard.writeText(apiKey); setCopied(true); setTimeout(()=>setCopied(false),1500); };
-
-  const deleteMonitor = async (id, name) => {
-    if (!confirm(`Delete monitor "${name}"?`)) return;
-    setDeletingId(id);
-    await apiFetch(`/v1/monitors/${id}`, { method:'DELETE' }, apiKey);
-    setDeletingId('');
-    onRefresh();
-  };
-
+  const [subTab, setSubTab] = useState('account');
   return (
-    <div style={{maxWidth:580,padding:'24px 0'}}>
-      <h2 style={{fontSize:20,fontWeight:700,marginBottom:24}}>Settings</h2>
-      <div className="card" style={{padding:20,marginBottom:16}}>
+    <div style={{padding:'24px 0'}}>
+      <h2 style={{fontSize:20,fontWeight:700,marginBottom:20}}>Settings</h2>
+      <div style={{display:'flex',gap:0,marginBottom:24,borderBottom:'1px solid #222'}}>
+        {[['account','Account'],['billing','Billing'],['monitors','Monitors']].map(([id,label])=>(
+          <button key={id} className={`tab${subTab===id?' active':''}`} onClick={()=>setSubTab(id)}>{label}</button>
+        ))}
+      </div>
+      {subTab==='account' && <SettingsAccount apiKey={apiKey} onChangeKey={onChangeKey} />}
+      {subTab==='billing' && <SettingsBilling apiKey={apiKey} monitors={monitors} />}
+      {subTab==='monitors' && <SettingsMonitors apiKey={apiKey} monitors={monitors} onRefresh={onRefresh} />}
+    </div>
+  );
+}
+
+function SettingsAccount({ apiKey, onChangeKey }) {
+  const [copied, setCopied] = useState(false);
+  const copyKey = () => { navigator.clipboard.writeText(apiKey); setCopied(true); setTimeout(()=>setCopied(false),1500); };
+  return (
+    <div style={{maxWidth:580}}>
+      <div className="card" style={{padding:20}}>
         <div style={{fontSize:13,color:'#888',marginBottom:8}}>API Key</div>
         <div style={{display:'flex',gap:8,alignItems:'center'}}>
           <div style={{fontFamily:'monospace',fontSize:13,background:'#0a0a0a',padding:'7px 12px',borderRadius:6,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
@@ -340,7 +569,14 @@ function Settings({ apiKey, onChangeKey, monitors, onRefresh }) {
           <button className="btn-outline" style={{fontSize:12,whiteSpace:'nowrap',borderColor:'#555',color:'#888'}} onClick={onChangeKey}>Change</button>
         </div>
       </div>
-      <div className="card" style={{padding:20,marginBottom:16}}>
+    </div>
+  );
+}
+
+function SettingsBilling({ apiKey, monitors }) {
+  return (
+    <div style={{maxWidth:580}}>
+      <div className="card" style={{padding:20}}>
         <div style={{fontSize:13,color:'#888',marginBottom:12}}>Upgrade Plan</div>
         <div style={{display:'flex',gap:12,flexWrap:'wrap'}}>
           {[{plan:'growth',label:'Growth — $29/mo',desc:'20 monitors · 100 keywords · Slack'},
@@ -351,12 +587,27 @@ function Settings({ apiKey, onChangeKey, monitors, onRefresh }) {
               <button className="btn-gold" style={{width:'100%',fontSize:13}} onClick={async ()=>{
                 const r = await apiFetch('/v1/billing/checkout',{method:'POST',body:JSON.stringify({plan,successUrl:window.location.href+'?upgrade=success',cancelUrl:window.location.href})},apiKey);
                 if(r.ok && r.data.checkoutUrl) window.location.href=r.data.checkoutUrl;
-                else alert(r.data?.error||'Checkout unavailable');
+                else alert(r.data?.error?.message || r.data?.error || 'Checkout unavailable');
               }}>Upgrade to {plan.charAt(0).toUpperCase()+plan.slice(1)}</button>
             </div>
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+function SettingsMonitors({ apiKey, monitors, onRefresh }) {
+  const [deletingId, setDeletingId] = useState('');
+  const deleteMonitor = async (id, name) => {
+    if (!confirm(`Delete monitor "${name}"?`)) return;
+    setDeletingId(id);
+    await apiFetch(`/v1/monitors/${id}`, { method:'DELETE' }, apiKey);
+    setDeletingId('');
+    onRefresh();
+  };
+  return (
+    <div style={{maxWidth:580}}>
       <div className="card" style={{padding:20}}>
         <div style={{fontSize:13,color:'#888',marginBottom:12}}>Active Monitors</div>
         {monitors.length === 0 && <div style={{color:'#555',fontSize:13}}>No monitors yet.</div>}
@@ -384,9 +635,30 @@ function App() {
   const [showKeyModal, setShowKeyModal] = useState(!localStorage.getItem('insights_api_key'));
   const [tab, setTab] = useState('feed');
   const [monitors, setMonitors] = useState([]);
+  const [showWizard, setShowWizard] = useState(false);
 
-  const saveKey = (k) => { localStorage.setItem('insights_api_key', k); setApiKey(k); setShowKeyModal(false); };
+  const saveKey = (k, opts = {}) => {
+    localStorage.setItem('insights_api_key', k);
+    setApiKey(k);
+    setShowKeyModal(false);
+    // Branch 2: route first-time users to the wizard
+    if (opts.isNewUser && !localStorage.getItem('insights_onboarding_complete')) {
+      setShowWizard(true);
+    }
+  };
   const changeKey = () => { localStorage.removeItem('insights_api_key'); setApiKey(''); setShowKeyModal(true); };
+
+  const completeWizard = () => {
+    localStorage.setItem('insights_onboarding_complete', '1');
+    setShowWizard(false);
+    loadMonitors();
+    setTab('feed');
+  };
+  const skipWizard = () => {
+    localStorage.setItem('insights_onboarding_complete', '1');
+    setShowWizard(false);
+    setTab('create');
+  };
 
   const loadMonitors = useCallback(async () => {
     if (!apiKey) return;
@@ -396,23 +668,33 @@ function App() {
 
   useEffect(() => { if (apiKey) loadMonitors(); }, [apiKey, loadMonitors]);
 
+  // Returning users with monitors: never show wizard again
+  useEffect(() => {
+    if (monitors.length > 0) localStorage.setItem('insights_onboarding_complete', '1');
+  }, [monitors.length]);
+
   return (
     <div style={{minHeight:'100vh'}}>
       {showKeyModal && <ApiKeyModal onSave={saveKey} />}
-      <header style={{background:'#0e0e0e',borderBottom:'1px solid #1a1a1a',padding:'0 24px',display:'flex',alignItems:'center',gap:24,height:56}}>
-        <div style={{fontWeight:700,fontSize:16,color:'#c9a84c',letterSpacing:'-0.5px'}}>📡 Ebenova Insights</div>
-        <nav style={{display:'flex',gap:0,marginLeft:16}}>
-          {[['feed','Matches'],['create','Create Monitor'],['settings','Settings']].map(([id,label])=>(
-            <button key={id} className={`tab${tab===id?' active':''}`} onClick={()=>setTab(id)}>{label}</button>
-          ))}
-        </nav>
-        <div style={{marginLeft:'auto',fontSize:12,color:'#555'}}>{monitors.length} monitor{monitors.length!==1?'s':''}</div>
-      </header>
-      <main style={{maxWidth:760,margin:'0 auto',padding:'0 24px'}}>
-        {tab==='feed' && <MatchesFeed apiKey={apiKey} monitors={monitors} />}
-        {tab==='create' && <CreateMonitor apiKey={apiKey} onCreated={loadMonitors} />}
-        {tab==='settings' && <Settings apiKey={apiKey} onChangeKey={changeKey} monitors={monitors} onRefresh={loadMonitors} />}
-      </main>
+      {showWizard && <OnboardingWizard apiKey={apiKey} onComplete={completeWizard} onSkip={skipWizard} />}
+      {!showWizard && (
+        <>
+          <header style={{background:'#0e0e0e',borderBottom:'1px solid #1a1a1a',padding:'0 24px',display:'flex',alignItems:'center',gap:24,height:56}}>
+            <div style={{fontWeight:700,fontSize:16,color:'#c9a84c',letterSpacing:'-0.5px'}}>📡 Ebenova Insights</div>
+            <nav style={{display:'flex',gap:0,marginLeft:16}}>
+              {[['feed','Matches'],['create','Create Monitor'],['settings','Settings']].map(([id,label])=>(
+                <button key={id} className={`tab${tab===id?' active':''}`} onClick={()=>setTab(id)}>{label}</button>
+              ))}
+            </nav>
+            <div style={{marginLeft:'auto',fontSize:12,color:'#555'}}>{monitors.length} monitor{monitors.length!==1?'s':''}</div>
+          </header>
+          <main style={{maxWidth:760,margin:'0 auto',padding:'0 24px'}}>
+            {tab==='feed' && <MatchesFeed apiKey={apiKey} monitors={monitors} />}
+            {tab==='create' && <CreateMonitor apiKey={apiKey} onCreated={loadMonitors} />}
+            {tab==='settings' && <Settings apiKey={apiKey} onChangeKey={changeKey} monitors={monitors} onRefresh={loadMonitors} />}
+          </main>
+        </>
+      )}
     </div>
   );
 }
