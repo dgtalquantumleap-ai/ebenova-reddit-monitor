@@ -47,7 +47,7 @@ import { makeRateLimiter } from './lib/rate-limit.js'
 import { makeCostCap } from './lib/cost-cap.js'
 import { verifyCaptcha } from './lib/captcha.js'
 import { applyInviteToUser } from './lib/invite.js'
-import { buildDraftPrompt, validateDraft } from './lib/draft-prompt.js'
+import { draftCall } from './lib/draft-call.js'
 
 const PORT = parseInt(process.env.API_PORT || process.env.PORT || '3001')
 const ADMIN_KEY = process.env.MONITOR_ADMIN_KEY
@@ -368,8 +368,10 @@ app.post('/v1/matches/draft', async (req, res) => {
   const { monitor_id, match_id } = req.body
   if (!monitor_id || !match_id)
     return res.status(400).json({ success: false, error: { code: 'MISSING_PARAM', message: 'monitor_id and match_id required' } })
-  const groqKey = process.env.GROQ_API_KEY
-  if (!groqKey) return res.status(503).json({ success: false, error: { code: 'NO_AI', message: 'Reply drafting unavailable' } })
+  // Accept either Groq or Deepseek as a draft provider. draftCall() handles
+  // primary/peer fallback internally per DRAFT_PRIMARY env.
+  const hasProvider = !!(process.env.GROQ_API_KEY || process.env.DEEPSEEK_API_KEY)
+  if (!hasProvider) return res.status(503).json({ success: false, error: { code: 'NO_PROVIDER', message: 'Reply drafting unavailable' } })
 
   // F14: daily Groq cost cap — return 429 instead of crashing on overload.
   try {
@@ -390,42 +392,15 @@ app.post('/v1/matches/draft', async (req, res) => {
     const monitor = monRaw ? (typeof monRaw === 'string' ? JSON.parse(monRaw) : monRaw) : {}
     if (monitor.owner !== auth.owner) return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'Not your monitor' } })
     const productContext = match.productContext || monitor.productContext || ''
-    const prompt = buildDraftPrompt({
+    const { draft: finalDraft, model: draftedBy } = await draftCall({
       title: match.title,
       body: match.body,
       subreddit: match.subreddit,
       productContext: productContext.slice(0, 1200),
       productName: monitor.productName || monitor.name,
     })
-    const gr = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${groqKey}` },
-      body: JSON.stringify({ model: 'llama-3.3-70b-versatile', max_tokens: 320, temperature: 0.8, messages: [{ role: 'user', content: prompt }] }),
-    })
-    if (!gr.ok) return res.status(502).json({ success: false, error: { code: 'DRAFT_ERROR', message: 'Reply drafting failed' } })
-    const gd = await gr.json()
-    const draft = gd.choices?.[0]?.message?.content?.trim() || null
-    // Run quick AI-tell sanity check; if it trips, try a single regen with a stricter nudge
-    let finalDraft = (!draft || draft === 'SKIP') ? null : draft
-    if (finalDraft) {
-      const v = validateDraft(finalDraft)
-      if (!v.ok && v.reason === 'ai_tell') {
-        console.log(`[matches/draft] regen due to AI tell: ${v.matched}`)
-        const stricter = prompt + `\n\nIMPORTANT: Your last attempt used the phrase "${v.matched}" which is forbidden. Rewrite without it.`
-        const gr2 = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${groqKey}` },
-          body: JSON.stringify({ model: 'llama-3.3-70b-versatile', max_tokens: 320, temperature: 0.7, messages: [{ role: 'user', content: stricter }] }),
-        })
-        if (gr2.ok) {
-          const gd2 = await gr2.json()
-          const draft2 = gd2.choices?.[0]?.message?.content?.trim() || null
-          if (draft2 && draft2 !== 'SKIP') finalDraft = draft2
-        }
-      }
-    }
-    await redis.set(key, JSON.stringify({ ...match, draft: finalDraft, draftRegeneratedAt: new Date().toISOString() }))
-    res.json({ success: true, match_id, draft: finalDraft })
+    await redis.set(key, JSON.stringify({ ...match, draft: finalDraft, draftedBy, draftRegeneratedAt: new Date().toISOString() }))
+    res.json({ success: true, match_id, draft: finalDraft, draftedBy })
   } catch (err) {
     res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
   }
