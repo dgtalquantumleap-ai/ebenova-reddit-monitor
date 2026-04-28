@@ -171,6 +171,16 @@ function MatchCard({ match, monitorId, apiKey, onAction }) {
         {match.author && `u/${match.author}`}{match.score!=null ? ` · ${match.score} pts` : ''}{match.comments!=null ? ` · ${match.comments} comments` : ''}
         {match.keyword && <span style={{marginLeft:8,padding:'1px 6px',background:'#1a1a1a',borderRadius:3,color:'#666'}}>"{match.keyword}"</span>}
       </div>
+      {match.matchedKeyword && match.intentType && (
+        <div style={{fontSize:11,color:'#666',marginTop:-4,marginBottom:8,fontStyle:'italic'}}>
+          Matched on "<span style={{color:'#aaa'}}>{match.matchedKeyword}</span>" — {
+            match.intentType==='buying'?'🎯 Buying intent':
+            match.intentType==='pain'?'💢 Pain point':
+            match.intentType==='comparison'?'⚖️ Comparison':
+            '❓ Question'
+          }
+        </div>
+      )}
       {match.draft && (
         <div style={{padding:12,background:'#1a1600',border:'1px solid #4a3800',borderRadius:6,marginBottom:12}}>
           <div style={{fontSize:10,fontWeight:700,textTransform:'uppercase',letterSpacing:'1px',color:'#c9a84c',marginBottom:6}}>✏️ Suggested reply</div>
@@ -526,25 +536,30 @@ function MatchesFeed({ apiKey, monitors }) {
   );
 }
 
-// ── View 3: Settings ─────────────────────────────────────────────────────────
+// ── View 3: Settings (split into 3 sub-tabs) ─────────────────────────────────
 function Settings({ apiKey, onChangeKey, monitors, onRefresh }) {
-  const [copied, setCopied] = useState(false);
-  const [deletingId, setDeletingId] = useState('');
-
-  const copyKey = () => { navigator.clipboard.writeText(apiKey); setCopied(true); setTimeout(()=>setCopied(false),1500); };
-
-  const deleteMonitor = async (id, name) => {
-    if (!confirm(`Delete monitor "${name}"?`)) return;
-    setDeletingId(id);
-    await apiFetch(`/v1/monitors/${id}`, { method:'DELETE' }, apiKey);
-    setDeletingId('');
-    onRefresh();
-  };
-
+  const [subTab, setSubTab] = useState('account');
   return (
-    <div style={{maxWidth:580,padding:'24px 0'}}>
-      <h2 style={{fontSize:20,fontWeight:700,marginBottom:24}}>Settings</h2>
-      <div className="card" style={{padding:20,marginBottom:16}}>
+    <div style={{padding:'24px 0'}}>
+      <h2 style={{fontSize:20,fontWeight:700,marginBottom:20}}>Settings</h2>
+      <div style={{display:'flex',gap:0,marginBottom:24,borderBottom:'1px solid #222'}}>
+        {[['account','Account'],['billing','Billing'],['monitors','Monitors']].map(([id,label])=>(
+          <button key={id} className={`tab${subTab===id?' active':''}`} onClick={()=>setSubTab(id)}>{label}</button>
+        ))}
+      </div>
+      {subTab==='account' && <SettingsAccount apiKey={apiKey} onChangeKey={onChangeKey} />}
+      {subTab==='billing' && <SettingsBilling apiKey={apiKey} monitors={monitors} />}
+      {subTab==='monitors' && <SettingsMonitors apiKey={apiKey} monitors={monitors} onRefresh={onRefresh} />}
+    </div>
+  );
+}
+
+function SettingsAccount({ apiKey, onChangeKey }) {
+  const [copied, setCopied] = useState(false);
+  const copyKey = () => { navigator.clipboard.writeText(apiKey); setCopied(true); setTimeout(()=>setCopied(false),1500); };
+  return (
+    <div style={{maxWidth:580}}>
+      <div className="card" style={{padding:20}}>
         <div style={{fontSize:13,color:'#888',marginBottom:8}}>API Key</div>
         <div style={{display:'flex',gap:8,alignItems:'center'}}>
           <div style={{fontFamily:'monospace',fontSize:13,background:'#0a0a0a',padding:'7px 12px',borderRadius:6,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
@@ -554,7 +569,14 @@ function Settings({ apiKey, onChangeKey, monitors, onRefresh }) {
           <button className="btn-outline" style={{fontSize:12,whiteSpace:'nowrap',borderColor:'#555',color:'#888'}} onClick={onChangeKey}>Change</button>
         </div>
       </div>
-      <div className="card" style={{padding:20,marginBottom:16}}>
+    </div>
+  );
+}
+
+function SettingsBilling({ apiKey, monitors }) {
+  return (
+    <div style={{maxWidth:580}}>
+      <div className="card" style={{padding:20}}>
         <div style={{fontSize:13,color:'#888',marginBottom:12}}>Upgrade Plan</div>
         <div style={{display:'flex',gap:12,flexWrap:'wrap'}}>
           {[{plan:'growth',label:'Growth — $29/mo',desc:'20 monitors · 100 keywords · Slack'},
@@ -565,12 +587,27 @@ function Settings({ apiKey, onChangeKey, monitors, onRefresh }) {
               <button className="btn-gold" style={{width:'100%',fontSize:13}} onClick={async ()=>{
                 const r = await apiFetch('/v1/billing/checkout',{method:'POST',body:JSON.stringify({plan,successUrl:window.location.href+'?upgrade=success',cancelUrl:window.location.href})},apiKey);
                 if(r.ok && r.data.checkoutUrl) window.location.href=r.data.checkoutUrl;
-                else alert(r.data?.error||'Checkout unavailable');
+                else alert(r.data?.error?.message || r.data?.error || 'Checkout unavailable');
               }}>Upgrade to {plan.charAt(0).toUpperCase()+plan.slice(1)}</button>
             </div>
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+function SettingsMonitors({ apiKey, monitors, onRefresh }) {
+  const [deletingId, setDeletingId] = useState('');
+  const deleteMonitor = async (id, name) => {
+    if (!confirm(`Delete monitor "${name}"?`)) return;
+    setDeletingId(id);
+    await apiFetch(`/v1/monitors/${id}`, { method:'DELETE' }, apiKey);
+    setDeletingId('');
+    onRefresh();
+  };
+  return (
+    <div style={{maxWidth:580}}>
       <div className="card" style={{padding:20}}>
         <div style={{fontSize:13,color:'#888',marginBottom:12}}>Active Monitors</div>
         {monitors.length === 0 && <div style={{color:'#555',fontSize:13}}>No monitors yet.</div>}
