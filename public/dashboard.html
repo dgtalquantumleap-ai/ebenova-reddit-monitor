@@ -665,6 +665,7 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
   const [picked, setPicked] = useState(new Set())
   const [customKw, setCustomKw] = useState('')
   const [monitorName, setMonitorName] = useState('')
+  const [replyTone, setReplyTone] = useState('conversational')
   const [savedMonitorId, setSavedMonitorId] = useState('')
   const [sampleMatches, setSampleMatches] = useState([])
   const [loading, setLoading] = useState(false)
@@ -728,6 +729,7 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
       name: monitorName.trim() || 'My Monitor',
       keywords: allKws.map(k => ({ keyword: k, productContext: suggestion?.productContext || description })),
       productContext: suggestion?.productContext || description,
+      replyTone,
     };
     const m = await apiFetch('/v1/monitors', { method:'POST', body: JSON.stringify(body) }, apiKey);
     if (!m.ok) { setErr(m.data?.error?.message || 'Could not create monitor.'); setLoading(false); setStep(3); return; }
@@ -925,6 +927,27 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
               <label className="label">Monitor name</label>
               <input className="inp" value={monitorName} onChange={e=>setMonitorName(e.target.value)} />
             </div>
+            <div className="field" style={{marginBottom:14}}>
+              <label className="label">Reply tone <span style={{fontSize:11,fontWeight:400,color:'#94A3B8'}}>· how drafts should sound</span></label>
+              <div style={{display:'flex',flexWrap:'wrap',gap:6,marginTop:6}}>
+                {[
+                  {id:'conversational',label:'Conversational',hint:'Casual, like a friend'},
+                  {id:'professional', label:'Professional', hint:'Polished, senior-consultant tone'},
+                  {id:'empathetic',   label:'Empathetic',   hint:'Warm, acknowledges feelings'},
+                  {id:'expert',       label:'Expert',       hint:'Confident, specific, no hedging'},
+                  {id:'playful',      label:'Playful',      hint:'Light, comfortable with a joke'},
+                ].map(t => (
+                  <button key={t.id} type="button" onClick={()=>setReplyTone(t.id)}
+                    title={t.hint}
+                    style={{
+                      padding:'7px 12px',borderRadius:6,fontSize:12.5,fontWeight:500,fontFamily:'inherit',cursor:'pointer',
+                      border: replyTone===t.id ? '1px solid #FF6B35' : '1px solid #E2E8F0',
+                      background: replyTone===t.id ? 'rgba(255,107,53,.10)' : '#fff',
+                      color: replyTone===t.id ? '#FF6B35' : '#475569',
+                    }}>{t.label}</button>
+                ))}
+              </div>
+            </div>
             <div style={{padding:'12px 0',borderBottom:'1px solid #F1F5F9',display:'flex',justifyContent:'space-between'}}>
               <span style={{fontSize:12,color:'#94A3B8',fontFamily:"'JetBrains Mono',monospace",letterSpacing:1}}>KEYWORDS</span>
               <span style={{fontSize:13.5,fontWeight:500,color:'#0F172A'}}>{picked.size} selected</span>
@@ -932,6 +955,10 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
             <div style={{padding:'12px 0',borderBottom:'1px solid #F1F5F9',display:'flex',justifyContent:'space-between'}}>
               <span style={{fontSize:12,color:'#94A3B8',fontFamily:"'JetBrains Mono',monospace",letterSpacing:1}}>EXPECTED VOLUME</span>
               <span style={{fontSize:13.5,fontWeight:500,color:'#16A34A'}}>~{totalMatches()} matches/week</span>
+            </div>
+            <div style={{padding:'12px 0',borderBottom:'1px solid #F1F5F9',display:'flex',justifyContent:'space-between'}}>
+              <span style={{fontSize:12,color:'#94A3B8',fontFamily:"'JetBrains Mono',monospace",letterSpacing:1}}>SCANNING</span>
+              <span style={{fontSize:13.5,fontWeight:500,color:'#475569'}}>Reddit · Medium · Substack · Quora · Upwork · Fiverr</span>
             </div>
             {err && <div className="alert alert-error" style={{marginTop:14}}><i className="ph ph-warning-circle"></i>{err}</div>}
             <div style={{display:'flex',gap:12,marginTop:18}}>

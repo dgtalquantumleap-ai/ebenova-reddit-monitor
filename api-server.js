@@ -235,7 +235,7 @@ app.get('/v1/monitors', async (req, res) => {
 app.post('/v1/monitors', async (req, res) => {
   const auth = await authenticate(req)
   if (!auth.ok) return res.status(auth.status).json({ success: false, error: auth.error })
-  const { name, keywords = [], productContext, alertEmail, slackWebhookUrl,
+  const { name, keywords = [], productContext, alertEmail, slackWebhookUrl, replyTone,
     includeMedium, includeSubstack, includeQuora, includeUpworkForum, includeFiverrForum } = req.body
   const plan = auth.keyData.insightsPlan || 'starter'
   const limits = PLAN_LIMITS[plan] || PLAN_LIMITS.starter
@@ -265,10 +265,15 @@ app.post('/v1/monitors', async (req, res) => {
       return res.status(429).json({ success: false, error: { code: 'MONITOR_LIMIT_REACHED', message: `Max ${limits.monitors} monitors on ${plan} plan` } })
     }
 
+    // Reply tone — validated against the centralized preset list
+    const VALID_TONES = new Set(['conversational', 'professional', 'empathetic', 'expert', 'playful'])
+    const tone = VALID_TONES.has(replyTone) ? replyTone : 'conversational'
+
     const now = new Date().toISOString()
     const monitor = { id, owner: auth.owner, name: name.trim().slice(0, 100), keywords: cleanKws,
       productContext: (productContext || '').slice(0, 2000), alertEmail: alertEmail || auth.owner,
       slackWebhookUrl: (slackWebhookUrl || '').slice(0, 500),
+      replyTone:          tone,
       includeMedium:      includeMedium      !== false,
       includeSubstack:    includeSubstack    !== false,
       includeQuora:       includeQuora       !== false,
@@ -324,6 +329,15 @@ app.get('/v1/matches', async (req, res) => {
       const mr = await redis.get(`insights:match:${monitor_id}:${matchId}`)
       if (mr) matches.push(typeof mr === 'string' ? JSON.parse(mr) : mr)
     }
+    // Source priority — Reddit always surfaces first because it's the
+    // highest-traffic, highest-intent platform. Within source, newer first.
+    const SOURCE_RANK = { reddit: 0, hackernews: 1, quora: 2, medium: 3, substack: 4, upwork: 5, fiverr: 6 }
+    matches.sort((a, b) => {
+      const ra = SOURCE_RANK[a.source] ?? 99
+      const rb = SOURCE_RANK[b.source] ?? 99
+      if (ra !== rb) return ra - rb
+      return new Date(b.createdAt || 0) - new Date(a.createdAt || 0)
+    })
     res.json({ success: true, monitor_id, matches, count: matches.length, offset: off, limit: lim })
   } catch (err) {
     res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
@@ -398,6 +412,7 @@ app.post('/v1/matches/draft', async (req, res) => {
       subreddit: match.subreddit,
       productContext: productContext.slice(0, 1200),
       productName: monitor.productName || monitor.name,
+      tone: monitor.replyTone, // monitor's saved tone — falls back to 'conversational' inside buildDraftPrompt
     })
     await redis.set(key, JSON.stringify({ ...match, draft: finalDraft, draftedBy, draftRegeneratedAt: new Date().toISOString() }))
     res.json({ success: true, match_id, draft: finalDraft, draftedBy })
