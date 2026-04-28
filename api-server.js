@@ -197,14 +197,27 @@ app.post('/v1/monitors', async (req, res) => {
     return res.status(400).json({ success: false, error: { code: 'KEYWORD_LIMIT_EXCEEDED', message: `Max ${limits.keywords} keywords on ${plan} plan` } })
   try {
     const redis = getRedis()
-    const existing = await redis.smembers(`insights:monitors:${auth.owner}`) || []
-    if (existing.length >= limits.monitors)
-      return res.status(429).json({ success: false, error: { code: 'MONITOR_LIMIT_REACHED', message: `Max ${limits.monitors} monitors on ${plan} plan` } })
     const cleanKws = keywords.map(k => typeof k === 'string'
       ? { keyword: k.trim(), subreddits: [], productContext: '' }
       : { keyword: String(k.keyword || '').trim(), subreddits: Array.isArray(k.subreddits) ? k.subreddits.slice(0, 10) : [], productContext: String(k.productContext || '').slice(0, 500) }
     ).filter(k => k.keyword.length > 1)
     const id = `mon_${randomBytes(12).toString('hex')}`
+
+    // F13: atomic add-then-check-then-rollback to close the plan-limit race.
+    // Two concurrent requests both passing the old `existing.length >= limits`
+    // check could each then sadd, ending up at limits+1. The new pattern adds
+    // the ID FIRST, counts the set, and rolls back if over.
+    const ownerSetKey = `insights:monitors:${auth.owner}`
+    const wasAdded = await redis.sadd(ownerSetKey, id)
+    if (!wasAdded) {
+      return res.status(500).json({ success: false, error: { code: 'INTERNAL', message: 'monitor id collision' } })
+    }
+    const ownedAfter = await redis.smembers(ownerSetKey) || []
+    if (ownedAfter.length > limits.monitors) {
+      await redis.srem(ownerSetKey, id)
+      return res.status(429).json({ success: false, error: { code: 'MONITOR_LIMIT_REACHED', message: `Max ${limits.monitors} monitors on ${plan} plan` } })
+    }
+
     const now = new Date().toISOString()
     const monitor = { id, owner: auth.owner, name: name.trim().slice(0, 100), keywords: cleanKws,
       productContext: (productContext || '').slice(0, 2000), alertEmail: alertEmail || auth.owner,
@@ -216,7 +229,6 @@ app.post('/v1/monitors', async (req, res) => {
       includeFiverrForum: includeFiverrForum !== false,
       active: true, plan, createdAt: now, lastPollAt: null, totalMatchesFound: 0 }
     await redis.set(`insights:monitor:${id}`, JSON.stringify(monitor))
-    await redis.sadd(`insights:monitors:${auth.owner}`, id)
     await redis.sadd('insights:active_monitors', id)
     res.status(201).json({ success: true, monitor_id: id, name: monitor.name, keyword_count: cleanKws.length,
       keywords: cleanKws.map(k => k.keyword), plan, alert_email: monitor.alertEmail, active: true,
