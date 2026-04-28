@@ -20,6 +20,21 @@ import searchFiverr   from './lib/scrapers/fiverr.js'
 import { sendSlackAlert } from './lib/slack.js'
 import { escapeHtml } from './lib/html-escape.js'
 import { sanitizeForPrompt } from './lib/llm-safe-prompt.js'
+import { makeCostCap } from './lib/cost-cap.js'
+
+// F14: lazy daily cost caps for Groq + Resend. Soft-fail so the worker
+// never crashes when a cap is reached — drafts/emails just degrade gracefully.
+let _groqCap, _resendCap
+function getGroqCap() {
+  if (!redis) return null
+  if (!_groqCap) _groqCap = makeCostCap(redis, { resource: 'groq', dailyMax: parseInt(process.env.GROQ_DAILY_MAX || '5000') })
+  return _groqCap
+}
+function getResendCap() {
+  if (!redis) return null
+  if (!_resendCap) _resendCap = makeCostCap(redis, { resource: 'resend', dailyMax: parseInt(process.env.RESEND_DAILY_MAX || '90') })
+  return _resendCap
+}
 
 // ── Redis client (optional — seenIds fallback when process restarts) ──────────
 function getRedis() {
@@ -384,6 +399,16 @@ async function generateReplyDraft(post) {
     return null
   }
 
+  // F14: daily Groq cost cap — skip draft (post still gets through)
+  const cap = getGroqCap()
+  if (cap) {
+    const r = await cap()
+    if (!r.allowed) {
+      console.warn(`[monitor] Groq daily cap hit (${r.used}/${r.max}) — skipping draft`)
+      return null
+    }
+  }
+
   // F8: Sanitize all untrusted inputs before they enter the prompt. Reddit
   // post fields are user-controlled and could contain injection payloads
   // ("Ignore previous instructions..."). Sanitization strips control chars
@@ -716,6 +741,16 @@ async function sendAlert(matches) {
     console.log(`[monitor] ⚠️  Email skipped — ${subject}`)
     console.log(`[monitor] Matches: ${JSON.stringify(matches.map(m => ({ title: m.title, url: m.url })))}`)
     return
+  }
+
+  // F14: daily Resend cost cap — skip send (matches still log to console)
+  const rcap = getResendCap()
+  if (rcap) {
+    const r = await rcap()
+    if (!r.allowed) {
+      console.warn(`[monitor] Resend daily cap hit (${r.used}/${r.max}) — skipping email send`)
+      return
+    }
   }
 
   try {

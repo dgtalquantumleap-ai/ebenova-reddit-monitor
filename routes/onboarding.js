@@ -8,11 +8,18 @@ import express from 'express'
 import { suggestKeywords } from '../lib/keyword-suggest.js'
 import { getSampleMatches } from '../lib/sample-matches.js'
 import { makeRateLimiter } from '../lib/rate-limit.js'
+import { makeCostCap } from '../lib/cost-cap.js'
+import { TEMPLATES } from '../lib/templates.js'
 
 // Factory pattern lets tests inject mocked dependencies.
 export function makeOnboardingHandler({ redis, suggestFn, sampleMatchesFn }) {
   const ipLimiter = makeRateLimiter(redis, { max: 5, windowSeconds: 3600 })
   const keyLimiter = makeRateLimiter(redis, { max: 3, windowSeconds: 86400 })
+  // F14: daily Anthropic cost cap. Falls through to template gallery on hit.
+  const anthropicCap = makeCostCap(redis, {
+    resource: 'anthropic',
+    dailyMax: parseInt(process.env.ANTHROPIC_DAILY_MAX || '1000'),
+  })
 
   async function authenticate(req) {
     const auth = req.headers['authorization'] || ''
@@ -50,6 +57,13 @@ export function makeOnboardingHandler({ redis, suggestFn, sampleMatchesFn }) {
       const limits = await checkLimits(req, auth.apiKey)
       if (limits.limited) {
         return res.status(429).json({ success: false, error: { code: 'RATE_LIMITED', message: `Too many requests. Try again in ${Math.ceil(limits.retryAfterSeconds/60)} minutes.` } })
+      }
+
+      // F14: daily Anthropic cost cap — falls through to template gallery
+      const cap = await anthropicCap()
+      if (!cap.allowed) {
+        console.warn(`[onboarding] Anthropic daily cap hit (${cap.used}/${cap.max}) — template fallback`)
+        return res.json({ success: true, ...TEMPLATES.other, fallback: true, fallbackReason: 'daily_cap' })
       }
 
       try {

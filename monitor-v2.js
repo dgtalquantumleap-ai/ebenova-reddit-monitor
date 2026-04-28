@@ -23,6 +23,26 @@ import searchFiverr        from './lib/scrapers/fiverr.js'
 import { escapeHtml }      from './lib/html-escape.js'
 import { sanitizeForPrompt } from './lib/llm-safe-prompt.js'
 import { embeddingCacheKey } from './lib/embedding-cache.js'
+import { makeCostCap } from './lib/cost-cap.js'
+
+// F14: lazy daily cost caps. Soft-fail so the worker degrades gracefully
+// (skip-draft / skip-email / skip-embedding) rather than crashing.
+let _groqCap, _resendCap, _embedCap
+function getGroqCap() {
+  if (!redis) return null
+  if (!_groqCap) _groqCap = makeCostCap(redis, { resource: 'groq', dailyMax: parseInt(process.env.GROQ_DAILY_MAX || '5000') })
+  return _groqCap
+}
+function getResendCap() {
+  if (!redis) return null
+  if (!_resendCap) _resendCap = makeCostCap(redis, { resource: 'resend', dailyMax: parseInt(process.env.RESEND_DAILY_MAX || '90') })
+  return _resendCap
+}
+function getEmbedCap() {
+  if (!redis) return null
+  if (!_embedCap) _embedCap = makeCostCap(redis, { resource: 'openai-embedding', dailyMax: parseInt(process.env.OPENAI_EMBEDDING_DAILY_MAX || '10000') })
+  return _embedCap
+}
 
 const RESEND_API_KEY   = process.env.RESEND_API_KEY
 const GROQ_API_KEY     = process.env.GROQ_API_KEY
@@ -137,6 +157,16 @@ function setCacheWithSoftCap(key, vec) {
 async function getEmbedding(text) {
   const key = embeddingCacheKey(text)  // F12: hash full text, not slice(0, 100)
   if (embeddingCache.has(key)) return embeddingCache.get(key)
+
+  // F14: daily embedding cost cap — return null (caller falls back to keyword-only)
+  const ecap = getEmbedCap()
+  if (ecap) {
+    const r = await ecap()
+    if (!r.allowed) {
+      console.warn(`[v2][semantic] OpenAI embedding daily cap hit (${r.used}/${r.max}) — keyword-only mode`)
+      return null
+    }
+  }
 
   try {
     if (OPENAI_API_KEY) {
@@ -285,6 +315,16 @@ async function generateReplyDraft(post, productContext) {
   if (!productContext || !productContext.trim()) return null
   if (!post.approved) return null
 
+  // F14: daily Groq cost cap — skip draft (post still gets through)
+  const gcap = getGroqCap()
+  if (gcap) {
+    const r = await gcap()
+    if (!r.allowed) {
+      console.warn(`[v2] Groq daily cap hit (${r.used}/${r.max}) — skipping draft`)
+      return null
+    }
+  }
+
   // F8: Sanitize all untrusted inputs. In v2 BOTH the post fields AND the
   // productContext are user-controlled (the latter from the tenant's monitor
   // config) — a malicious tenant could otherwise inject instructions into
@@ -411,6 +451,18 @@ async function sendMonitorAlert(monitor, matches) {
   }
   const keywords = [...new Set(matches.map(m => m.keyword))]
   const subject  = `Insights: ${matches.length} new mention${matches.length !== 1 ? 's' : ''} — ${keywords.slice(0, 3).join(', ')}${keywords.length > 3 ? '…' : ''}`
+
+  // F14: daily Resend cost cap — skip send (matches still stored in Redis,
+  // dashboard still shows them, Slack alert if configured still fires).
+  const rcap = getResendCap()
+  if (rcap) {
+    const r = await rcap()
+    if (!r.allowed) {
+      console.warn(`[v2][${monitor.id}] Resend daily cap hit (${r.used}/${r.max}) — skipping email send`)
+      return
+    }
+  }
+
   try {
     await resend.emails.send({
       from:    `Ebenova Insights <${FROM_EMAIL}>`,
