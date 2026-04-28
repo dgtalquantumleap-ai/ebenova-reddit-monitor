@@ -1,700 +1,938 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Ebenova Insights — Dashboard</title>
-<script src="https://cdn.tailwindcss.com"></script>
+<title>Ebenova Insights</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/@phosphor-icons/web@2.1.1" defer></script>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <style>
-  body { background: #0a0a0a; color: #f0ece4; font-family: system-ui, sans-serif; }
-  ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: #1a1a1a; } ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
-  .gold { color: #c9a84c; } .gold-border { border-color: #c9a84c; }
-  .card { background: #111; border: 1px solid #222; border-radius: 8px; }
-  .btn-gold { background: #c9a84c; color: #000; font-weight: 600; padding: 8px 20px; border-radius: 6px; cursor: pointer; border: none; transition: opacity 0.15s; }
-  .btn-gold:hover { opacity: 0.85; }
-  .btn-outline { background: transparent; color: #c9a84c; border: 1px solid #c9a84c; font-weight: 600; padding: 7px 18px; border-radius: 6px; cursor: pointer; transition: background 0.15s; }
-  .btn-outline:hover { background: rgba(201,168,76,0.1); }
-  .tab { padding: 10px 20px; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s; color: #888; font-weight: 500; }
-  .tab.active { color: #c9a84c; border-bottom-color: #c9a84c; }
-  .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; }
-  .badge-reddit { background: #ff4500; color: #fff; }
-  .badge-hn { background: #ff6600; color: #fff; }
-  .badge-medium { background: #00ab6c; color: #fff; }
-  .badge-substack { background: #ff6719; color: #fff; }
-  .badge-quora { background: #b92b27; color: #fff; }
-  .badge-upwork { background: #6fda44; color: #000; }
-  .badge-fiverr { background: #1dbf73; color: #fff; }
-  .badge-other { background: #444; color: #fff; }
-  input, textarea, select { background: #1a1a1a; border: 1px solid #333; color: #f0ece4; border-radius: 6px; padding: 8px 12px; width: 100%; outline: none; transition: border-color 0.15s; }
-  input:focus, textarea:focus, select:focus { border-color: #c9a84c; }
-  input[type="checkbox"] { width: auto; }
-  label { color: #aaa; font-size: 13px; font-weight: 500; display: block; margin-bottom: 4px; }
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',system-ui,sans-serif;background:#F1F5F9;color:#0F172A;-webkit-font-smoothing:antialiased;font-size:14px}
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:4px}
+
+/* Layout */
+.layout{display:flex;min-height:100vh}
+.sidebar{width:236px;background:#0F172A;display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:100;border-right:1px solid #1E293B}
+.main{margin-left:236px;flex:1;display:flex;flex-direction:column;min-height:100vh}
+
+/* Sidebar */
+.sb-logo{padding:18px 16px 14px;border-bottom:1px solid #1E293B;display:flex;align-items:center;gap:10px}
+.sb-logo-icon{width:34px;height:34px;background:linear-gradient(135deg,#C9A84C,#E8C96A);border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.sb-logo-icon i{color:#000;font-size:18px}
+.sb-logo-text{line-height:1.2}
+.sb-logo-name{font-size:14px;font-weight:700;color:#F8FAFC;letter-spacing:-0.3px}
+.sb-logo-sub{font-size:10px;color:#475569;font-weight:500;text-transform:uppercase;letter-spacing:0.5px}
+.sb-nav{flex:1;padding:10px 10px;display:flex;flex-direction:column;gap:2px;overflow-y:auto}
+.sb-section{font-size:10px;font-weight:600;color:#334155;text-transform:uppercase;letter-spacing:0.8px;padding:10px 8px 4px}
+.sb-item{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;cursor:pointer;border:none;background:transparent;color:#64748B;font-size:13px;font-weight:500;width:100%;text-align:left;transition:all .15s;font-family:inherit}
+.sb-item i{font-size:17px;flex-shrink:0;width:20px;text-align:center}
+.sb-item:hover{background:#1E293B;color:#CBD5E1}
+.sb-item.active{background:rgba(201,168,76,.12);color:#C9A84C}
+.sb-item .badge-count{margin-left:auto;background:#1E293B;color:#64748B;font-size:10px;font-weight:600;padding:1px 6px;border-radius:10px}
+.sb-item.active .badge-count{background:rgba(201,168,76,.15);color:#C9A84C}
+.sb-footer{padding:12px;border-top:1px solid #1E293B}
+.sb-user{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:8px;cursor:pointer;transition:background .15s}
+.sb-user:hover{background:#1E293B}
+.sb-avatar{width:28px;height:28px;border-radius:50%;background:rgba(201,168,76,.12);border:1px solid rgba(201,168,76,.25);color:#C9A84C;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.sb-user-info{flex:1;min-width:0}
+.sb-user-email{font-size:11.5px;color:#94A3B8;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sb-plan{font-size:9px;font-weight:700;color:#C9A84C;background:rgba(201,168,76,.1);border:1px solid rgba(201,168,76,.2);padding:1px 5px;border-radius:4px;text-transform:uppercase;letter-spacing:0.5px}
+
+/* Page */
+.page-header{background:#fff;border-bottom:1px solid #E2E8F0;padding:22px 32px 18px;display:flex;align-items:flex-start;justify-content:space-between;gap:12;flex-wrap:wrap}
+.page-header-text{}
+.page-title{font-size:18px;font-weight:700;color:#0F172A;letter-spacing:-.3px;margin-bottom:3px}
+.page-subtitle{font-size:13px;color:#64748B}
+.page-body{padding:24px 32px;max-width:1100px}
+
+/* Card */
+.card{background:#fff;border:1px solid #E2E8F0;border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+.card-p{padding:22px 24px}
+
+/* Fields */
+.field{display:flex;flex-direction:column;gap:6px}
+.label{font-size:12px;font-weight:600;color:#374151;letter-spacing:.1px}
+.hint{font-size:11.5px;color:#94A3B8;line-height:1.5}
+input.inp,textarea.inp,select.inp{background:#fff;border:1px solid #D1D5DB;color:#0F172A;border-radius:8px;padding:9px 12px;width:100%;outline:none;font-size:13.5px;font-family:inherit;transition:border-color .15s,box-shadow .15s;line-height:1.5}
+input.inp:focus,textarea.inp:focus,select.inp:focus{border-color:#C9A84C;box-shadow:0 0 0 3px rgba(201,168,76,.1)}
+input.inp::placeholder,textarea.inp::placeholder{color:#9CA3AF}
+textarea.inp{resize:vertical}
+select.inp{cursor:pointer}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;font-family:inherit;font-weight:600;border-radius:8px;cursor:pointer;border:none;transition:all .15s;font-size:13.5px;padding:9px 16px;white-space:nowrap;text-decoration:none}
+.btn i{font-size:16px}
+.btn-sm{font-size:12px;padding:6px 11px;border-radius:6px;gap:5px}
+.btn-sm i{font-size:14px}
+.btn-lg{font-size:15px;padding:12px 22px;border-radius:9px}
+.btn-lg i{font-size:18px}
+.btn-primary{background:#C9A84C;color:#000;box-shadow:0 1px 3px rgba(201,168,76,.3)}
+.btn-primary:hover{background:#D4B560;box-shadow:0 2px 6px rgba(201,168,76,.35)}
+.btn-primary:disabled{opacity:.5;cursor:not-allowed}
+.btn-white{background:#fff;color:#374151;border:1px solid #D1D5DB;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.btn-white:hover{background:#F9FAFB;border-color:#9CA3AF}
+.btn-ghost{background:transparent;color:#6B7280;border:1px solid #E5E7EB}
+.btn-ghost:hover{background:#F9FAFB;color:#374151;border-color:#D1D5DB}
+.btn-danger{background:transparent;color:#DC2626;border:1px solid #FECACA}
+.btn-danger:hover{background:#FEF2F2}
+
+/* Pills */
+.pill-wrap{display:flex;flex-wrap:wrap;gap:6px}
+.pill{display:inline-flex;align-items:center;gap:4px;padding:5px 12px;border-radius:20px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid #E2E8F0;background:#fff;color:#64748B;transition:all .15s;user-select:none;font-family:inherit}
+.pill i{font-size:13px}
+.pill:hover{border-color:#CBD5E1;color:#374151;background:#F8FAFC}
+.pill.on{background:#FFFBEB;border-color:#FCD34D;color:#92400E;font-weight:600}
+
+/* Source badges */
+.badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:5px;font-size:11px;font-weight:600;letter-spacing:.1px}
+.badge-reddit{background:#FEE2E2;color:#991B1B}
+.badge-hn{background:#FEF3C7;color:#92400E}
+.badge-medium{background:#D1FAE5;color:#065F46}
+.badge-substack{background:#FEF3C7;color:#92400E}
+.badge-quora{background:#FEE2E2;color:#991B1B}
+.badge-upwork{background:#D1FAE5;color:#065F46}
+.badge-fiverr{background:#D1FAE5;color:#065F46}
+.badge-github{background:#F3F4F6;color:#1F2937;border:1px solid #E5E7EB}
+.badge-producthunt{background:#FEE2E2;color:#991B1B}
+.badge-other{background:#F3F4F6;color:#6B7280}
+.badge-hot{background:#FEF3C7;color:#92400E}
+
+/* Alerts */
+.alert{padding:10px 14px;border-radius:8px;font-size:13px;line-height:1.5;display:flex;align-items:flex-start;gap:8px}
+.alert i{font-size:16px;flex-shrink:0;margin-top:1px}
+.alert-error{background:#FEF2F2;border:1px solid #FECACA;color:#991B1B}
+.alert-success{background:#ECFDF5;border:1px solid #A7F3D0;color:#065F46}
+.alert-info{background:#EFF6FF;border:1px solid #BFDBFE;color:#1E40AF}
+
+/* Draft box */
+.draft-box{background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;padding:14px 16px;margin-top:12px}
+.draft-header{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#92400E;margin-bottom:8px;display:flex;align-items:center;gap:5px}
+.draft-header i{font-size:13px}
+.draft-text{font-size:13px;color:#451A03;line-height:1.75;white-space:pre-wrap}
+
+/* Empty state */
+.empty{display:flex;flex-direction:column;align-items:center;text-align:center;padding:56px 32px}
+.empty-icon{width:52px;height:52px;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:14px;display:flex;align-items:center;justify-content:center;margin-bottom:16px;color:#94A3B8}
+.empty-icon i{font-size:24px}
+.empty-title{font-size:15px;font-weight:600;color:#374151;margin-bottom:6px}
+.empty-desc{font-size:13px;color:#6B7280;max-width:300px;line-height:1.6;margin-bottom:20px}
+
+/* Shimmer */
+@keyframes shimmer{0%{background-position:-600px 0}100%{background-position:600px 0}}
+.shimmer{background:linear-gradient(90deg,#F1F5F9 25%,#E2E8F0 50%,#F1F5F9 75%);background-size:1200px 100%;animation:shimmer 1.8s infinite;border-radius:8px}
+
+/* Animations */
+@keyframes fadeUp{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+.fade-up{animation:fadeUp .2s ease}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin{animation:spin 1s linear infinite;display:inline-block}
+
+/* Modal */
+.modal-bg{position:fixed;inset:0;background:rgba(15,23,42,.65);backdrop-filter:blur(5px);display:flex;align-items:center;justify-content:center;z-index:999;padding:16px}
+
+/* Result card */
+.result-card{background:#fff;border:1px solid #E2E8F0;border-radius:10px;padding:18px 20px;margin-bottom:10px;transition:border-color .15s,box-shadow .15s}
+.result-card:hover{border-color:#CBD5E1;box-shadow:0 2px 8px rgba(0,0,0,.06)}
+
+/* Divider */
+hr.div{border:none;border-top:1px solid #F1F5F9;margin:18px 0}
+
+/* Monitor row */
+.monitor-row{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid #F8FAFC}
+.monitor-row:last-child{border-bottom:none}
+.active-dot{width:6px;height:6px;border-radius:50%;background:#10B981;flex-shrink:0}
+.paused-dot{width:6px;height:6px;border-radius:50%;background:#F59E0B;flex-shrink:0}
+
+/* Plan card */
+.plan-card{border:1px solid #E2E8F0;border-radius:10px;padding:16px;flex:1 1 180px;transition:border-color .15s}
+.plan-card:hover{border-color:#C9A84C66}
+.results-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:10px}
+.metric-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px}
+.metric-card{background:#fff;border:1px solid #E2E8F0;border-radius:10px;padding:14px 18px;flex:1 1 130px;min-width:120px}
+.metric-label{font-size:10px;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px}
+.metric-value{font-size:22px;font-weight:800;color:#0F172A;letter-spacing:-.5px;line-height:1}
+.settings-tile{padding:18px 20px}
+.tile-label{font-size:10px;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:.6px;margin-bottom:14px}
 </style>
 </head>
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const { useState, useEffect, useCallback } = React;
+const { useState, useEffect, useCallback, useRef } = React;
 
-// ── API helpers ─────────────────────────────────────────────────────────────
-const API_BASE = '';
-
-async function apiFetch(path, opts = {}, apiKey) {
-  const res = await fetch(`${API_BASE}${path}`, {
+async function apiFetch(path, opts={}, apiKey) {
+  const res = await fetch(path, {
     ...opts,
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}`, ...(opts.headers || {}) },
+    headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`, ...(opts.headers||{})},
   });
   const data = await res.json();
   return { ok: res.ok, status: res.status, data };
 }
 
-// ── API Key Modal ────────────────────────────────────────────────────────────
-function ApiKeyModal({ onSave }) {
-  const [mode, setMode] = useState('choose'); // choose | signup | login
+// ΓöÇΓöÇ Auth Modal ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+function AuthModal({ onSave }) {
   const [email, setEmail] = useState('');
-  const [name, setName] = useState('');
-  const [key, setKey] = useState('');
   const [loading, setLoading] = useState(false);
-  const [msg, setMsg] = useState('');
+  const [sent, setSent] = useState(false);
   const [err, setErr] = useState('');
 
-  const signup = async () => {
-    setErr(''); setMsg(''); setLoading(true);
-    const r = await fetch('/v1/auth/signup', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email, name }) });
+  const submit = async () => {
+    if (!email.includes('@')) return;
+    setErr(''); setLoading(true);
+    const r = await fetch('/v1/auth/signup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email})});
     const d = await r.json();
     setLoading(false);
-    if (d.success) {
-      // Branch 2: in-page key reveal kills the email round-trip
-      if (d.apiKey) { onSave(d.apiKey, { isNewUser: !!d.isNewUser }); return; }
-      setMsg(d.message || 'Check your email for your API key.');
-    } else {
-      setErr(d.error?.message || 'Signup failed.');
-    }
+    if (d.success) setSent(true);
+    else setErr(d.error?.message || 'Something went wrong.');
   };
 
-  if (mode === 'choose') return (
-    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.92)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:999}}>
-      <div className="card" style={{maxWidth:440,width:'90%',padding:36,textAlign:'center'}}>
-        <div style={{fontSize:22,fontWeight:800,marginBottom:8,color:'#c9a84c'}}>📡 Ebenova Insights</div>
-        <div style={{fontSize:14,color:'#666',marginBottom:32}}>Monitor Reddit, HN, Upwork, Fiverr & more for buying-intent posts.</div>
-        <button className="btn-gold" style={{width:'100%',marginBottom:12,fontSize:15}} onClick={()=>setMode('signup')}>Create free account</button>
-        <button className="btn-outline" style={{width:'100%',fontSize:15}} onClick={()=>setMode('login')}>I already have an API key</button>
+  return (
+    <div className="modal-bg">
+      <div className="card fade-up" style={{maxWidth:400,width:'100%',padding:36}}>
+        {!sent ? (
+          <>
+            <div style={{textAlign:'center',marginBottom:28}}>
+              <div style={{width:48,height:48,background:'linear-gradient(135deg,#C9A84C,#E8C96A)',borderRadius:12,display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px'}}>
+                <i className="ph-bold ph-broadcast" style={{fontSize:22,color:'#000'}}></i>
+              </div>
+              <div style={{fontSize:20,fontWeight:800,color:'#0F172A',marginBottom:6,letterSpacing:'-.4px'}}>Ebenova Insights</div>
+              <div style={{fontSize:13,color:'#64748B',lineHeight:1.6}}>Monitor 8 platforms for people actively<br/>looking for what you build.</div>
+            </div>
+            <div style={{display:'flex',flexDirection:'column',gap:10}}>
+              <input className="inp" type="email" placeholder="Enter your work email" value={email}
+                onChange={e=>setEmail(e.target.value)}
+                onKeyDown={e=>e.key==='Enter'&&email.includes('@')&&submit()}
+                style={{padding:'11px 14px',fontSize:14}} />
+              {err && <div className="alert alert-error"><i className="ph ph-warning-circle"></i>{err}</div>}
+              <button className="btn btn-primary" style={{width:'100%',padding:'11px',fontSize:14,marginTop:2}} onClick={submit} disabled={loading||!email.includes('@')}>
+                {loading
+                  ? <><i className="ph ph-circle-notch spin"></i> SendingΓÇª</>
+                  : <><i className="ph-bold ph-arrow-right"></i> Get started free</>}
+              </button>
+              <p style={{textAlign:'center',fontSize:12,color:'#94A3B8',marginTop:4}}>Free forever ┬╖ No credit card needed</p>
+            </div>
+          </>
+        ) : (
+          <div style={{textAlign:'center'}}>
+            <div style={{width:52,height:52,background:'#ECFDF5',border:'1px solid #A7F3D0',borderRadius:14,display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 18px'}}>
+              <i className="ph-bold ph-envelope-open" style={{fontSize:24,color:'#065F46'}}></i>
+            </div>
+            <div style={{fontSize:18,fontWeight:700,marginBottom:8}}>Check your inbox</div>
+            <div style={{fontSize:13,color:'#64748B',lineHeight:1.7,marginBottom:20}}>
+              We sent a magic link to<br/>
+              <strong style={{color:'#0F172A',fontWeight:600}}>{email}</strong>
+            </div>
+            <div className="alert alert-info" style={{textAlign:'left',marginBottom:16}}>
+              <i className="ph ph-info"></i>
+              Click the link in the email to open your dashboard ΓÇö no password needed.
+            </div>
+            <button onClick={()=>{setSent(false);setEmail('');}} style={{background:'none',border:'none',color:'#94A3B8',cursor:'pointer',fontSize:13,display:'inline-flex',alignItems:'center',gap:5}}>
+              <i className="ph ph-arrow-left"></i> Use a different email
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
+}
 
-  if (mode === 'signup') return (
-    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.92)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:999}}>
-      <div className="card" style={{maxWidth:440,width:'90%',padding:32}}>
-        <div style={{fontSize:18,fontWeight:700,marginBottom:20}}>Create free account</div>
-        <div style={{display:'flex',flexDirection:'column',gap:12}}>
-          <input placeholder="Your name (optional)" value={name} onChange={e=>setName(e.target.value)} />
-          <input type="email" placeholder="Email address" value={email} onChange={e=>setEmail(e.target.value)} onKeyDown={e=>e.key==='Enter'&&email&&signup()} />
-          {err && <div style={{color:'#ff8080',fontSize:13}}>{err}</div>}
-          {msg && <div style={{color:'#80ff80',fontSize:13,padding:'10px 14px',background:'#0a2a0a',borderRadius:6}}>{msg}</div>}
-          {!msg && <button className="btn-gold" onClick={signup} disabled={loading||!email}>{loading?'Sending…':'Get my free API key'}</button>}
-          <button onClick={()=>setMode('choose')} style={{background:'none',border:'none',color:'#555',cursor:'pointer',fontSize:13}}>← Back</button>
-        </div>
-      </div>
-    </div>
-  );
+// ΓöÇΓöÇ Sidebar ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+function Sidebar({ tab, setTab, userEmail, plan, monitorCount, onSignOut }) {
+  const planLabel = {starter:'Starter',growth:'Growth',scale:'Scale'}[plan]||'Starter';
+  const initial = (userEmail||'?')[0].toUpperCase();
+
+  const items = [
+    { id:'search', icon:'ph-magnifying-glass', label:'Search' },
+    { id:'feed',   icon:'ph-newspaper',        label:'Monitor Feed', count: monitorCount > 0 ? monitorCount : null },
+    { id:'create', icon:'ph-plus-circle',      label:'New Monitor' },
+  ];
 
   return (
-    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.92)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:999}}>
-      <div className="card" style={{maxWidth:440,width:'90%',padding:32}}>
-        <div style={{fontSize:18,fontWeight:700,marginBottom:8}}>Enter your API key</div>
-        <div style={{fontSize:13,color:'#888',marginBottom:20}}>Paste the key from your signup email.</div>
-        <input placeholder="ins_..." value={key} onChange={e=>setKey(e.target.value)} style={{marginBottom:16}} onKeyDown={e=>e.key==='Enter'&&key.trim()&&onSave(key.trim())} />
-        <button className="btn-gold" style={{width:'100%',marginBottom:12}} onClick={()=>key.trim()&&onSave(key.trim())}>Open dashboard</button>
-        <button onClick={()=>setMode('choose')} style={{background:'none',border:'none',color:'#555',cursor:'pointer',fontSize:13,display:'block',width:'100%'}}>← Back</button>
+    <aside className="sidebar">
+      <div className="sb-logo">
+        <div className="sb-logo-icon"><i className="ph-bold ph-broadcast"></i></div>
+        <div className="sb-logo-text">
+          <div className="sb-logo-name">Ebenova</div>
+          <div className="sb-logo-sub">Insights</div>
+        </div>
       </div>
-    </div>
+
+      <nav className="sb-nav">
+        <div className="sb-section">Product</div>
+        {items.map(({id,icon,label,count})=>(
+          <button key={id} className={`sb-item${tab===id?' active':''}`} onClick={()=>setTab(id)}>
+            <i className={`ph-bold ${icon}`}></i>
+            <span>{label}</span>
+            {count != null && <span className="badge-count">{count}</span>}
+          </button>
+        ))}
+
+        <div className="sb-section" style={{marginTop:8}}>Account</div>
+        <button className={`sb-item${tab==='settings'?' active':''}`} onClick={()=>setTab('settings')}>
+          <i className="ph-bold ph-gear"></i>
+          <span>Settings</span>
+        </button>
+      </nav>
+
+      <div className="sb-footer">
+        <div className="sb-user">
+          <div className="sb-avatar">{initial}</div>
+          <div className="sb-user-info">
+            <div className="sb-user-email">{userEmail||'ΓÇö'}</div>
+            <div style={{marginTop:3}}><span className="sb-plan">{planLabel}</span></div>
+          </div>
+          <button onClick={onSignOut} title="Sign out" style={{background:'none',border:'none',color:'#475569',cursor:'pointer',padding:4,borderRadius:5,flexShrink:0,display:'flex',alignItems:'center'}}>
+            <i className="ph ph-sign-out" style={{fontSize:16}}></i>
+          </button>
+        </div>
+      </div>
+    </aside>
   );
 }
 
-// ── Source badge ─────────────────────────────────────────────────────────────
+// ΓöÇΓöÇ Source Badge ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 function SourceBadge({ source, subreddit }) {
-  const map = { hackernews:['hn','HN'], medium:['medium','Medium'], substack:['substack','Substack'],
-    quora:['quora','Quora'], upwork:['upwork','Upwork'], fiverr:['fiverr','Fiverr'] };
+  const map = {
+    hackernews:['hn','HN'], medium:['medium','Medium'], substack:['substack','Substack'],
+    quora:['quora','Quora'], upwork:['upwork','Upwork'], fiverr:['fiverr','Fiverr'],
+    github:['github','GitHub'], producthunt:['producthunt','Product Hunt'],
+  };
   if (map[source]) {
-    const [cls, label] = map[source];
+    const [cls,label] = map[source];
     return <span className={`badge badge-${cls}`}>{label}</span>;
   }
-  return <span className="badge badge-reddit">r/{subreddit}</span>;
+  return <span className="badge badge-other">r/{subreddit}</span>;
 }
 
-// ── Match Card ───────────────────────────────────────────────────────────────
+function timeAgo(ts) {
+  if (!ts) return '';
+  const ms = Date.now() - new Date(ts).getTime();
+  const m = Math.floor(ms/60000), h = Math.floor(ms/3600000), d = Math.floor(ms/86400000);
+  if (h < 1) return `${m}m ago`;
+  if (h < 24) return `${h}h ago`;
+  return `${d}d ago`;
+}
+
+// ΓöÇΓöÇ Match Card (from monitors) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 function MatchCard({ match, monitorId, apiKey, onAction }) {
-  const [loading, setLoading] = useState(false);
-  const [done, setDone] = useState(false);
-  const [faded, setFaded] = useState(false);
+  const [drafting, setDrafting] = useState(false);
+  const [gone, setGone] = useState(false);
 
   const regenerate = async () => {
-    setLoading(true);
-    const r = await apiFetch('/v1/matches/draft', { method:'POST', body: JSON.stringify({ monitor_id: monitorId, match_id: match.id }) }, apiKey);
-    setLoading(false);
+    setDrafting(true);
+    const r = await apiFetch('/v1/matches/draft',{method:'POST',body:JSON.stringify({monitor_id:monitorId,match_id:match.id})},apiKey);
+    setDrafting(false);
     if (r.ok) onAction('draft', match.id, r.data.draft);
   };
 
   const feedback = async (fb) => {
-    await apiFetch('/v1/matches/feedback', { method:'POST', body: JSON.stringify({ monitor_id: monitorId, match_id: match.id, feedback: fb }) }, apiKey);
-    if (fb === 'up') { setDone(true); setTimeout(() => setFaded(true), 600); }
-    if (fb === 'down') setFaded(true);
+    await apiFetch('/v1/matches/feedback',{method:'POST',body:JSON.stringify({monitor_id:monitorId,match_id:match.id,feedback:fb})},apiKey);
+    setGone(true);
   };
 
-  if (faded) return null;
-
-  const age = match.createdAt ? (() => {
-    const ms = Date.now() - new Date(match.createdAt).getTime();
-    const h = Math.floor(ms / 3600000);
-    if (h < 1) return `${Math.floor(ms/60000)}m ago`;
-    if (h < 24) return `${h}h ago`;
-    return `${Math.floor(h/24)}d ago`;
-  })() : '';
+  if (gone) return null;
 
   return (
-    <div className="card" style={{padding:16,marginBottom:12,opacity:done?0.4:1,transition:'opacity 0.5s'}}>
-      <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8,flexWrap:'wrap'}}>
+    <div className="result-card fade-up">
+      <div style={{display:'flex',alignItems:'flex-start',gap:8,marginBottom:10,flexWrap:'wrap'}}>
         <SourceBadge source={match.source} subreddit={match.subreddit} />
-        {match.priority_score >= 8 && <span className="badge" style={{background:'#e07b00',color:'#fff'}}>🔥 HIGH PRIORITY</span>}
-        {match.approved === false && <span className="badge" style={{background:'#c0392b',color:'#fff'}}>⚠️ DO NOT POST</span>}
-        <span style={{fontSize:12,color:'#666',marginLeft:'auto'}}>{age}</span>
+        {match.priority_score >= 8 && <span className="badge badge-hot"><i className="ph-fill ph-lightning" style={{fontSize:10,marginRight:2}}></i>High priority</span>}
+        <span style={{marginLeft:'auto',fontSize:11,color:'#94A3B8'}}>{timeAgo(match.createdAt)}</span>
       </div>
-      <a href={match.url} target="_blank" rel="noreferrer" style={{fontSize:15,fontWeight:600,color:'#f0ece4',textDecoration:'none',display:'block',marginBottom:6}}>
+      <a href={match.url} target="_blank" rel="noreferrer"
+        style={{fontSize:14,fontWeight:600,color:'#0F172A',textDecoration:'none',display:'block',marginBottom:6,lineHeight:1.5}}>
         {match.title}
       </a>
-      {match.body && <div style={{fontSize:13,color:'#888',lineHeight:1.5,marginBottom:10}}>{match.body.slice(0,280)}{match.body.length>280?'…':''}</div>}
-      <div style={{fontSize:11,color:'#555',marginBottom:match.draft?12:0}}>
-        {match.author && `u/${match.author}`}{match.score!=null ? ` · ${match.score} pts` : ''}{match.comments!=null ? ` · ${match.comments} comments` : ''}
-        {match.keyword && <span style={{marginLeft:8,padding:'1px 6px',background:'#1a1a1a',borderRadius:3,color:'#666'}}>"{match.keyword}"</span>}
+      {match.body && <p style={{fontSize:13,color:'#64748B',lineHeight:1.65,marginBottom:10}}>{match.body.slice(0,260)}{match.body.length>260?'ΓÇª':''}</p>}
+      <div style={{display:'flex',gap:8,alignItems:'center',fontSize:12,color:'#94A3B8',marginBottom:match.draft?0:10,flexWrap:'wrap'}}>
+        {match.author && <span>u/{match.author}</span>}
+        {match.score!=null && <span>┬╖ {match.score} pts</span>}
+        {match.comments!=null && <span>┬╖ {match.comments} replies</span>}
+        {match.keyword && <span style={{padding:'1px 7px',background:'#F8FAFC',border:'1px solid #E2E8F0',borderRadius:4,color:'#64748B',marginLeft:4}}>"{match.keyword}"</span>}
       </div>
-      {match.matchedKeyword && match.intentType && (
-        <div style={{fontSize:11,color:'#666',marginTop:-4,marginBottom:8,fontStyle:'italic'}}>
-          Matched on "<span style={{color:'#aaa'}}>{match.matchedKeyword}</span>" — {
-            match.intentType==='buying'?'🎯 Buying intent':
-            match.intentType==='pain'?'💢 Pain point':
-            match.intentType==='comparison'?'⚖️ Comparison':
-            '❓ Question'
-          }
-        </div>
-      )}
       {match.draft && (
-        <div style={{padding:12,background:'#1a1600',border:'1px solid #4a3800',borderRadius:6,marginBottom:12}}>
-          <div style={{fontSize:10,fontWeight:700,textTransform:'uppercase',letterSpacing:'1px',color:'#c9a84c',marginBottom:6}}>✏️ Suggested reply</div>
-          <div style={{fontSize:13,color:'#e8d9a0',lineHeight:1.6,whiteSpace:'pre-wrap'}}>{match.draft}</div>
+        <div className="draft-box">
+          <div className="draft-header"><i className="ph-bold ph-robot"></i> AI draft reply</div>
+          <div className="draft-text">{match.draft}</div>
         </div>
       )}
-      <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-        <button className="btn-outline" style={{fontSize:12,padding:'5px 12px'}} onClick={()=>feedback('up')}>✓ Replied</button>
-        <button className="btn-outline" style={{fontSize:12,padding:'5px 12px'}} onClick={regenerate} disabled={loading}>{loading?'…':'↺ Regenerate'}</button>
-        <button className="btn-outline" style={{fontSize:12,padding:'5px 12px',borderColor:'#555',color:'#666'}} onClick={()=>feedback('down')}>✗ Not relevant</button>
-        <a href={match.url} target="_blank" rel="noreferrer" style={{fontSize:12,color:'#c9a84c',padding:'5px 0',marginLeft:'auto'}}>Open thread →</a>
+      <div style={{display:'flex',gap:6,flexWrap:'wrap',alignItems:'center',marginTop:12,paddingTop:12,borderTop:'1px solid #F8FAFC'}}>
+        <button className="btn btn-ghost btn-sm" onClick={()=>feedback('up')}>
+          <i className="ph ph-check"></i> Replied
+        </button>
+        <button className="btn btn-ghost btn-sm" onClick={regenerate} disabled={drafting}>
+          <i className={`ph ph-arrow-clockwise${drafting?' spin':''}`}></i> {drafting?'DraftingΓÇª':'New draft'}
+        </button>
+        <button className="btn btn-sm" style={{background:'transparent',border:'1px solid #F1F5F9',color:'#94A3B8',cursor:'pointer'}} onClick={()=>feedback('down')}>
+          <i className="ph ph-x"></i> Skip
+        </button>
+        <a href={match.url} target="_blank" rel="noreferrer" className="btn btn-sm" style={{marginLeft:'auto',background:'transparent',border:'none',color:'#C9A84C',fontWeight:600,padding:'6px 4px',gap:4}}>
+          Open thread <i className="ph ph-arrow-square-out"></i>
+        </a>
       </div>
     </div>
   );
 }
 
-// ── Onboarding Wizard ────────────────────────────────────────────────────────
-function OnboardingWizard({ apiKey, onComplete, onSkip }) {
-  const [step, setStep] = useState(0)  // 0=welcome, 1=describe, 2=pick, 3=review, 4=confirm
-  const [description, setDescription] = useState('')
-  const [suggestion, setSuggestion] = useState(null)
-  const [pickedKeywords, setPickedKeywords] = useState(new Set())
-  const [customKeyword, setCustomKeyword] = useState('')
-  const [monitorName, setMonitorName] = useState('')
-  const [sampleMatches, setSampleMatches] = useState([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+// ΓöÇΓöÇ Search Result Card ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+function SearchResultCard({ result, productContext, apiKey }) {
+  const [draft, setDraft] = useState(null);
+  const [drafting, setDrafting] = useState(false);
+  const [copied, setCopied] = useState(false);
 
-  const advance = () => setStep(s => Math.min(s + 1, 4))
-  const back = () => setStep(s => Math.max(s - 1, 0))
+  const getDraft = async () => {
+    setDrafting(true);
+    const r = await apiFetch('/v1/search/draft',{method:'POST',body:JSON.stringify({
+      title:result.title, body:result.body, subreddit:result.subreddit, source:result.source, productContext,
+    })},apiKey);
+    setDrafting(false);
+    if (r.ok) setDraft(r.data.draft);
+  };
 
-  const totalSteps = 3
-  const stepNumber = step >= 1 && step <= 3 ? step : 0
+  const copy = () => { navigator.clipboard.writeText(draft); setCopied(true); setTimeout(()=>setCopied(false),2000); };
 
-  const fetchSuggestions = async () => {
-    if (description.trim().length < 20) { setError('Tell us a bit more — at least 20 characters.'); return }
-    setError(''); setLoading(true)
-    const r = await apiFetch('/v1/onboarding/suggest', { method:'POST', body: JSON.stringify({ description }) }, apiKey)
-    setLoading(false)
-    if (!r.ok) { setError(r.data?.error?.message || 'Could not generate suggestions.'); return }
-    setSuggestion(r.data)
-    setMonitorName(r.data.suggestedName || 'My Monitor')
-    const preChecked = new Set((r.data.keywords || []).filter(k => k.confidence === 'high').map(k => k.keyword))
-    setPickedKeywords(preChecked)
-    advance()
-  }
-
-  const toggleKeyword = (kw) => {
-    const next = new Set(pickedKeywords)
-    if (next.has(kw)) next.delete(kw); else next.add(kw)
-    setPickedKeywords(next)
-  }
-
-  const addCustomKeyword = () => {
-    if (!customKeyword.trim()) return
-    const next = new Set([...pickedKeywords, customKeyword.trim()])
-    setPickedKeywords(next)
-    setCustomKeyword('')
-  }
-
-  const createMonitor = async () => {
-    setError(''); setLoading(true)
-    const allKeywords = [...pickedKeywords]
-    if (allKeywords.length === 0) { setError('Pick at least one keyword.'); setLoading(false); return }
-    const monitorBody = {
-      name: monitorName.trim() || 'My Monitor',
-      keywords: allKeywords.map(k => ({ keyword: k, subreddits: suggestion.subreddits, productContext: suggestion.productContext })),
-      productContext: suggestion.productContext,
-      includeMedium: suggestion.platforms.includes('medium'),
-      includeSubstack: suggestion.platforms.includes('substack'),
-      includeQuora: suggestion.platforms.includes('quora'),
-      includeUpworkForum: suggestion.platforms.includes('upwork'),
-      includeFiverrForum: suggestion.platforms.includes('fiverr'),
-    }
-    const m = await apiFetch('/v1/monitors', { method:'POST', body: JSON.stringify(monitorBody) }, apiKey)
-    if (!m.ok) { setError(m.data?.error?.message || 'Could not create monitor.'); setLoading(false); return }
-    const s = await apiFetch('/v1/onboarding/sample-matches', { method:'POST', body: JSON.stringify({
-      keywords: allKeywords, subreddits: suggestion.subreddits, platforms: suggestion.platforms, monitorId: m.data.id,
-    }) }, apiKey)
-    setSampleMatches(s.ok ? (s.data.matches || []) : [])
-    setLoading(false)
-    advance()
-    setTimeout(() => onComplete(), 4000)
-  }
-
-  const intentLabel = { buying: '🎯 Buying intent', pain: '💢 Pain point', comparison: '⚖️ Comparison', question: '❓ Question' }
-
-  const stepShell = (children) => (
-    <div style={{maxWidth:560,margin:'0 auto',padding:'48px 24px',position:'relative'}}>
-      {stepNumber > 0 && (
-        <div style={{marginBottom:32}}>
-          <div style={{fontSize:11,color:'#888',letterSpacing:1.5,textTransform:'uppercase',marginBottom:8}}>
-            Step {stepNumber} of {totalSteps}
-          </div>
-          <div style={{display:'flex',gap:6}}>
-            {Array.from({length:totalSteps}).map((_,i) => (
-              <div key={i} style={{flex:1,height:3,borderRadius:2,background:i < stepNumber ? '#c9a84c' : '#222'}} />
-            ))}
-          </div>
+  return (
+    <div className="result-card fade-up">
+      <div style={{display:'flex',alignItems:'flex-start',gap:8,marginBottom:10,flexWrap:'wrap'}}>
+        <SourceBadge source={result.source} subreddit={result.subreddit} />
+        <span style={{marginLeft:'auto',fontSize:11,color:'#94A3B8'}}>{timeAgo(result.createdAt)}</span>
+      </div>
+      <a href={result.url} target="_blank" rel="noreferrer"
+        style={{fontSize:14,fontWeight:600,color:'#0F172A',textDecoration:'none',display:'block',marginBottom:6,lineHeight:1.5}}>
+        {result.title}
+      </a>
+      {result.body && <p style={{fontSize:13,color:'#64748B',lineHeight:1.65,marginBottom:10}}>{result.body.slice(0,260)}{result.body.length>260?'ΓÇª':''}</p>}
+      <div style={{display:'flex',gap:8,alignItems:'center',fontSize:12,color:'#94A3B8',flexWrap:'wrap'}}>
+        {result.author&&result.author!=='medium'&&result.author!=='substack'&&<span>by {result.author}</span>}
+        {result.score>0 && <span>┬╖ {result.score} pts</span>}
+        {result.comments>0 && <span>┬╖ {result.comments} replies</span>}
+        {result.keyword && <span style={{padding:'1px 7px',background:'#F8FAFC',border:'1px solid #E2E8F0',borderRadius:4,color:'#64748B',marginLeft:4}}>"{result.keyword}"</span>}
+      </div>
+      {draft && (
+        <div className="draft-box">
+          <div className="draft-header"><i className="ph-bold ph-robot"></i> AI draft reply</div>
+          <div className="draft-text">{draft}</div>
         </div>
       )}
-      <button onClick={onSkip} style={{position:'absolute',top:24,right:24,background:'none',border:'none',color:'#666',cursor:'pointer',fontSize:13}}>I'll set it up myself →</button>
-      {children}
+      <div style={{display:'flex',gap:6,flexWrap:'wrap',alignItems:'center',marginTop:12,paddingTop:12,borderTop:'1px solid #F8FAFC'}}>
+        {!draft && (
+          <button className="btn btn-white btn-sm" onClick={getDraft} disabled={drafting}>
+            <i className={`ph${drafting?'-bold':''} ph-${drafting?'circle-notch':'robot'}${drafting?' spin':''}`}></i>
+            {drafting ? 'DraftingΓÇª' : 'Draft reply'}
+          </button>
+        )}
+        {draft && (
+          <button className="btn btn-primary btn-sm" onClick={copy}>
+            <i className={`ph-bold ph-${copied?'check':'copy'}`}></i>
+            {copied ? 'Copied!' : 'Copy reply'}
+          </button>
+        )}
+        {draft && (
+          <button className="btn btn-ghost btn-sm" onClick={getDraft} disabled={drafting}>
+            <i className={`ph ph-arrow-clockwise${drafting?' spin':''}`}></i> Regenerate
+          </button>
+        )}
+        <a href={result.url} target="_blank" rel="noreferrer" className="btn btn-sm" style={{marginLeft:'auto',background:'transparent',border:'none',color:'#C9A84C',fontWeight:600,padding:'6px 4px',gap:4}}>
+          Open thread <i className="ph ph-arrow-square-out"></i>
+        </a>
+      </div>
     </div>
-  )
-
-  if (step === 0) return stepShell(
-    <div style={{textAlign:'center',padding:'40px 0'}}>
-      <div style={{fontSize:48,marginBottom:24}}>📡</div>
-      <div style={{fontSize:22,fontWeight:700,marginBottom:12}}>Welcome to Ebenova Insights</div>
-      <div style={{color:'#888',marginBottom:32}}>We'll find the right keywords for your monitor in under 2 minutes.</div>
-      <button className="btn-gold" style={{padding:'12px 32px',fontSize:15}} onClick={advance}>Let's go →</button>
-    </div>
-  )
-
-  if (step === 1) return stepShell(
-    <>
-      <div style={{fontSize:22,fontWeight:600,marginBottom:8}}>What do you sell?</div>
-      <div style={{fontSize:13,color:'#888',marginBottom:20}}>2–3 sentences. Mention what you sell, who buys it, and what problem you solve.</div>
-      <textarea rows={6} value={description} onChange={e=>setDescription(e.target.value)} style={{fontSize:14,padding:14}}
-        placeholder="I run a small SEO agency. We help SaaS startups get their first 10k organic visitors. Most clients come to us frustrated with content agencies that didn't move the needle." />
-      {error && <div style={{color:'#ff8080',fontSize:13,marginTop:12}}>{error}</div>}
-      <div style={{display:'flex',gap:12,marginTop:24}}>
-        <button onClick={back} className="btn-outline">← Back</button>
-        <button className="btn-gold" style={{flex:1}} disabled={loading} onClick={fetchSuggestions}>{loading ? 'Finding keywords your customers actually use…' : 'Find my keywords →'}</button>
-      </div>
-    </>
-  )
-
-  if (step === 2) return stepShell(
-    <>
-      <div style={{fontSize:22,fontWeight:600,marginBottom:8}}>Pick the keywords to monitor</div>
-      <div style={{fontSize:13,color:'#888',marginBottom:20}}>Tap to toggle. We pre-checked the strongest matches.</div>
-      {['buying','pain','comparison','question'].map(intent => {
-        const items = (suggestion?.keywords || []).filter(k => k.intentType === intent)
-        if (items.length === 0) return null
-        return (
-          <div key={intent} style={{marginBottom:20}}>
-            <div style={{fontSize:11,color:'#c9a84c',letterSpacing:1,marginBottom:8}}>{intentLabel[intent]}</div>
-            <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
-              {items.map(k => {
-                const on = pickedKeywords.has(k.keyword)
-                return (
-                  <button key={k.keyword} onClick={()=>toggleKeyword(k.keyword)}
-                    style={{padding:'6px 12px',borderRadius:16,fontSize:13,cursor:'pointer',
-                      border:on?'1px solid #c9a84c':'1px solid #333',
-                      background:on?'rgba(201,168,76,0.15)':'#1a1a1a',
-                      color:on?'#f0ece4':'#888'}}>
-                    {on?'✓ ':''}{k.keyword}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        )
-      })}
-      <div style={{marginTop:20,paddingTop:20,borderTop:'1px solid #222'}}>
-        <div style={{fontSize:11,color:'#888',letterSpacing:1,marginBottom:8}}>+ ADD YOUR OWN</div>
-        <div style={{display:'flex',gap:8}}>
-          <input value={customKeyword} onChange={e=>setCustomKeyword(e.target.value)} placeholder="e.g. looking for accountant" onKeyDown={e=>e.key==='Enter'&&addCustomKeyword()} />
-          <button className="btn-outline" onClick={addCustomKeyword}>Add</button>
-        </div>
-      </div>
-      <div style={{display:'flex',gap:12,marginTop:24}}>
-        <button onClick={back} className="btn-outline">← Back</button>
-        <button className="btn-gold" style={{flex:1}} disabled={pickedKeywords.size===0} onClick={advance}>Looks good ({pickedKeywords.size}) →</button>
-      </div>
-      {suggestion?.fallback && <div style={{fontSize:11,color:'#888',marginTop:16,textAlign:'center',fontStyle:'italic'}}>Using a starter set — you can refine these any time.</div>}
-    </>
-  )
-
-  if (step === 3) return stepShell(
-    <>
-      <div style={{fontSize:22,fontWeight:600,marginBottom:20}}>Review your monitor</div>
-      <div style={{marginBottom:16}}>
-        <label>Name</label>
-        <input value={monitorName} onChange={e=>setMonitorName(e.target.value)} />
-      </div>
-      <div style={{marginBottom:16}}>
-        <div style={{fontSize:11,color:'#888',letterSpacing:1,textTransform:'uppercase',marginBottom:6}}>{pickedKeywords.size} KEYWORDS</div>
-        <div style={{padding:12,background:'#1a1a1a',borderRadius:6,fontSize:13,color:'#aaa'}}>{[...pickedKeywords].slice(0,5).join(', ')}{pickedKeywords.size > 5 ? `, +${pickedKeywords.size-5} more` : ''}</div>
-      </div>
-      <div style={{marginBottom:16}}>
-        <div style={{fontSize:11,color:'#888',letterSpacing:1,textTransform:'uppercase',marginBottom:6}}>SUBREDDITS (AI PICKED)</div>
-        <div style={{padding:12,background:'#1a1a1a',borderRadius:6,fontSize:13,color:'#aaa'}}>{(suggestion?.subreddits || []).map(s=>'r/'+s).join(', ')}</div>
-      </div>
-      <div style={{marginBottom:24}}>
-        <div style={{fontSize:11,color:'#888',letterSpacing:1,textTransform:'uppercase',marginBottom:6}}>PLATFORMS</div>
-        <div style={{padding:12,background:'#1a1a1a',borderRadius:6,fontSize:13,color:'#aaa'}}>{(suggestion?.platforms || []).join(' · ')}</div>
-      </div>
-      {error && <div style={{color:'#ff8080',fontSize:13,marginBottom:12}}>{error}</div>}
-      <div style={{display:'flex',gap:12}}>
-        <button onClick={back} className="btn-outline">← Back</button>
-        <button className="btn-gold" style={{flex:1}} disabled={loading} onClick={createMonitor}>{loading ? 'Creating…' : 'Create my monitor →'}</button>
-      </div>
-    </>
-  )
-
-  // step === 4: confirmation
-  return stepShell(
-    <>
-      <div style={{padding:14,background:'#0a2a0a',border:'1px solid #1a5a1a',borderRadius:8,color:'#80ff80',marginBottom:24,textAlign:'center'}}>
-        ✓ Monitor active. First scan in ~15 min.
-      </div>
-      {sampleMatches.length > 0 && (
-        <>
-          <div style={{fontSize:11,color:'#888',letterSpacing:1.5,textTransform:'uppercase',marginBottom:12}}>Recent posts that would have matched</div>
-          {sampleMatches.slice(0, 3).map(m => (
-            <div key={m.url} style={{padding:12,background:'#1a1a1a',borderRadius:6,marginBottom:8,borderLeft:'3px solid #c9a84c'}}>
-              <div style={{fontSize:10,color:'#c9a84c',fontWeight:700,marginBottom:4}}>{m.source==='reddit'?`r/${m.subreddit}`:m.source}</div>
-              <div style={{fontSize:13,color:'#f0ece4',lineHeight:1.4}}>{(m.title || '').slice(0, 140)}</div>
-            </div>
-          ))}
-        </>
-      )}
-      {sampleMatches.length === 0 && (
-        <div style={{padding:24,textAlign:'center',color:'#666',fontSize:13}}>
-          Nothing matched in the last 7 days — your monitor is active and will catch new posts as they arrive.
-        </div>
-      )}
-      <div style={{textAlign:'center',marginTop:24,fontSize:13,color:'#888'}}>Taking you to your dashboard…</div>
-    </>
-  )
+  );
 }
 
-// ── View 1: Create Monitor ───────────────────────────────────────────────────
-function CreateMonitor({ apiKey, onCreated }) {
-  const [form, setForm] = useState({
-    name: '', keywords: '', subreddits: '', productContext: '', alertEmail: '', slackWebhookUrl: '',
-    platforms: { reddit: true, hn: true, medium: true, substack: true, quora: true, upwork: true, fiverr: true },
-  });
+// ΓöÇΓöÇ Platform Toggles ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+const PLATFORMS = [
+  ['reddit','Reddit','ph-reddit-logo'],
+  ['medium','Medium','ph-medium-logo'],
+  ['substack','Substack','ph-envelope-simple'],
+  ['quora','Quora','ph-question'],
+  ['upwork','Upwork','ph-briefcase'],
+  ['fiverr','Fiverr','ph-storefront'],
+  ['github','GitHub','ph-github-logo'],
+  ['producthunt','Product Hunt','ph-rocket'],
+];
+
+const PLATFORM_COLORS = {
+  reddit:      {background:'#FEE2E2',borderColor:'#FECACA',color:'#991B1B'},
+  medium:      {background:'#D1FAE5',borderColor:'#A7F3D0',color:'#065F46'},
+  substack:    {background:'#FFF7ED',borderColor:'#FED7AA',color:'#9A3412'},
+  quora:       {background:'#FEE2E2',borderColor:'#FECACA',color:'#991B1B'},
+  upwork:      {background:'#DCFCE7',borderColor:'#BBF7D0',color:'#166534'},
+  fiverr:      {background:'#CCFBF1',borderColor:'#99F6E4',color:'#0F766E'},
+  github:      {background:'#F1F5F9',borderColor:'#CBD5E1',color:'#1E293B'},
+  producthunt: {background:'#FFF1F2',borderColor:'#FECDD3',color:'#9F1239'},
+};
+
+function PlatformToggles({ value, onChange }) {
+  const toggle = k => onChange({...value,[k]:!value[k]});
+  const allOn = PLATFORMS.every(([k])=>value[k]);
+  return (
+    <div className="pill-wrap">
+      <button className={`pill${allOn?' on':''}`} onClick={()=>{const v=!allOn;const n={};PLATFORMS.forEach(([k])=>n[k]=v);onChange(n);}}>
+        <i className="ph ph-squares-four"></i> All
+      </button>
+      {PLATFORMS.map(([k,label,icon])=>{
+        const isOn = value[k];
+        const activeStyle = isOn ? (PLATFORM_COLORS[k]||{}) : {};
+        return (
+          <button key={k} className={`pill${isOn?' on':''}`} style={activeStyle} onClick={()=>toggle(k)}>
+            <i className={`ph ${icon}`}></i> {label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ΓöÇΓöÇ Search Now ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+function SearchNow({ apiKey }) {
+  const [keywords, setKeywords] = useState('');
+  const [productCtx, setProductCtx] = useState('');
+  const [platforms, setPlatforms] = useState(Object.fromEntries(PLATFORMS.map(([k])=>[k,true])));
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [results, setResults] = useState([]);
+  const [searched, setSearched] = useState(false);
+  const [err, setErr] = useState('');
+  const resultsRef = useRef(null);
 
-  const set = (k,v) => setForm(f=>({...f,[k]:v}));
-  const setPlatform = (k,v) => setForm(f=>({...f,platforms:{...f.platforms,[k]:v}}));
-
-  const submit = async () => {
-    setError(''); setSuccess('');
-    if (!form.name.trim()) return setError('Monitor name is required.');
-    if (!form.keywords.trim()) return setError('At least one keyword is required.');
-    const keywords = form.keywords.split('\n').map(k=>k.trim()).filter(Boolean);
-    const subreddits = form.subreddits.split(',').map(s=>s.trim()).filter(Boolean);
-    const body = {
-      name: form.name.trim(),
-      keywords: keywords.map(k => ({ keyword: k, subreddits, productContext: form.productContext })),
-      productContext: form.productContext,
-      alertEmail: form.alertEmail || undefined,
-      slackWebhookUrl: form.slackWebhookUrl || undefined,
-      includeMedium: form.platforms.medium,
-      includeSubstack: form.platforms.substack,
-      includeQuora: form.platforms.quora,
-      includeUpworkForum: form.platforms.upwork,
-      includeFiverrForum: form.platforms.fiverr,
-    };
-    setLoading(true);
-    const r = await apiFetch('/v1/monitors', { method:'POST', body: JSON.stringify(body) }, apiKey);
-    setLoading(false);
-    if (r.ok) { setSuccess(`Monitor "${r.data.name}" created! First scan in ~15 minutes.`); onCreated(); }
-    else setError(r.data?.error?.message || 'Failed to create monitor.');
+  const search = async () => {
+    setErr(''); setLoading(true); setResults([]); setSearched(false);
+    const kws = keywords.split('\n').map(k=>k.trim()).filter(Boolean).slice(0,5);
+    if (!kws.length) { setErr('Enter at least one keyword.'); setLoading(false); return; }
+    const sel = Object.entries(platforms).filter(([,v])=>v).map(([k])=>k);
+    if (!sel.length) { setErr('Select at least one platform.'); setLoading(false); return; }
+    const r = await apiFetch('/v1/search',{method:'POST',body:JSON.stringify({keywords:kws,platforms:sel})},apiKey);
+    setLoading(false); setSearched(true);
+    if (r.ok) {
+      setResults(r.data.results||[]);
+      setTimeout(()=>resultsRef.current?.scrollIntoView({behavior:'smooth',block:'start'}),100);
+    } else setErr(r.data?.error?.message||'Search failed.');
   };
 
   return (
-    <div style={{maxWidth:620,margin:'0 auto',padding:'24px 0'}}>
-      <h2 style={{fontSize:20,fontWeight:700,marginBottom:24}}>Create Monitor</h2>
-      <div style={{display:'flex',flexDirection:'column',gap:16}}>
-        <div>
-          <label>Monitor name</label>
-          <input placeholder="My Freelance Leads" value={form.name} onChange={e=>set('name',e.target.value)} />
+    <>
+      <div className="page-header">
+        <div className="page-header-text">
+          <h1 className="page-title">Search Now</h1>
+          <p className="page-subtitle">Find buying-intent conversations across 8 platforms in real time</p>
         </div>
-        <div>
-          <label>Keywords <span style={{color:'#666'}}>(one per line)</span></label>
-          <textarea rows={5} placeholder={"client won't pay\nscope creep\nunpaid invoice"} value={form.keywords} onChange={e=>set('keywords',e.target.value)} />
-        </div>
-        <div>
-          <label>Subreddits to search <span style={{color:'#666'}}>(comma-separated, leave blank to search all)</span></label>
-          <input placeholder="freelance, smallbusiness, Upwork" value={form.subreddits} onChange={e=>set('subreddits',e.target.value)} />
-        </div>
-        <div>
-          <label>Platforms</label>
-          <div style={{display:'flex',gap:16,flexWrap:'wrap',paddingTop:4}}>
-            {[['reddit','Reddit'],['hn','Hacker News'],['medium','Medium'],['substack','Substack'],['quora','Quora'],['upwork','Upwork Forums'],['fiverr','Fiverr Forums']].map(([k,label])=>(
-              <label key={k} style={{display:'flex',alignItems:'center',gap:6,color:'#bbb',cursor:'pointer'}}>
-                <input type="checkbox" checked={form.platforms[k]} onChange={e=>setPlatform(k,e.target.checked)} style={{width:'auto'}} />
-                {label}
-              </label>
-            ))}
+      </div>
+      <div className="page-body">
+        <div className="card card-p" style={{marginBottom:20}}>
+          <div style={{display:'flex',flexDirection:'column',gap:18}}>
+            <div className="field">
+              <label className="label">Keywords <span style={{fontWeight:400,color:'#94A3B8'}}>ΓÇö one per line ┬╖ max 5</span></label>
+              <textarea className="inp" rows={4}
+                placeholder={"just launched my SaaS\nlooking for a freelancer\nclient won't pay\nneed a tool forΓÇª"}
+                value={keywords} onChange={e=>setKeywords(e.target.value)} />
+              <span className="hint">Use phrases people actually type, not product categories</span>
+            </div>
+            <div className="field">
+              <label className="label">Your product <span style={{fontWeight:400,color:'#94A3B8'}}>ΓÇö optional, helps AI write relevant replies</span></label>
+              <textarea className="inp" rows={2}
+                placeholder="e.g. Ebenova monitors Reddit for buying-intent posts and drafts outreach repliesΓÇª"
+                value={productCtx} onChange={e=>setProductCtx(e.target.value)} />
+            </div>
+            <div className="field">
+              <label className="label" style={{marginBottom:8}}>Platforms</label>
+              <PlatformToggles value={platforms} onChange={setPlatforms} />
+            </div>
+            {err && <div className="alert alert-error"><i className="ph ph-warning-circle"></i>{err}</div>}
+            <div>
+              <button className="btn btn-primary btn-lg" onClick={search} disabled={loading||!keywords.trim()}>
+                {loading
+                  ? <><i className="ph ph-circle-notch spin"></i> Scanning platformsΓÇª</>
+                  : <><i className="ph-bold ph-magnifying-glass"></i> Search Now</>}
+              </button>
+            </div>
           </div>
         </div>
-        <div>
-          <label>Product description <span style={{color:'#666'}}>(AI uses this to draft replies)</span></label>
-          <textarea rows={4} placeholder="Describe your product so the AI can draft relevant replies…" value={form.productContext} onChange={e=>set('productContext',e.target.value)} />
+
+        {loading && (
+          <div style={{textAlign:'center',padding:'52px 0'}}>
+            <div style={{width:52,height:52,background:'#FFFBEB',border:'1px solid #FDE68A',borderRadius:14,display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px'}}>
+              <i className="ph-bold ph-magnifying-glass spin" style={{fontSize:24,color:'#92400E'}}></i>
+            </div>
+            <div style={{fontSize:15,fontWeight:600,color:'#0F172A',marginBottom:4}}>Scanning 8 platformsΓÇª</div>
+            <div style={{fontSize:13,color:'#64748B',marginBottom:24}}>Usually takes 10ΓÇô20 seconds</div>
+            <div style={{display:'flex',flexDirection:'column',gap:8,maxWidth:560,margin:'0 auto'}}>
+              {[100,88,72].map((w,i)=><div key={i} className="shimmer" style={{height:76,maxWidth:w+'%'}} />)}
+            </div>
+          </div>
+        )}
+
+        <div ref={resultsRef}>
+          {!loading && searched && (
+            <div style={{display:'flex',alignItems:'center',marginBottom:14,paddingBottom:12,borderBottom:'1px solid #E2E8F0'}}>
+              <span style={{fontSize:13,fontWeight:600,color:'#374151'}}>{results.length} result{results.length!==1?'s':''} found</span>
+              {results.length>0 && <span style={{fontSize:12,color:'#94A3B8',marginLeft:8}}>sorted by most recent</span>}
+            </div>
+          )}
+          <div className="results-grid">
+            {results.map(r=><SearchResultCard key={r.id} result={r} productContext={productCtx} apiKey={apiKey} />)}
+          </div>
+          {!loading && searched && !results.length && (
+            <div className="card">
+              <div className="empty">
+                <div className="empty-icon"><i className="ph ph-binoculars"></i></div>
+                <div className="empty-title">No results found</div>
+                <div className="empty-desc">Try broader keywords or select more platforms.</div>
+              </div>
+            </div>
+          )}
         </div>
-        <div>
-          <label>Alert email</label>
-          <input type="email" placeholder="you@example.com" value={form.alertEmail} onChange={e=>set('alertEmail',e.target.value)} />
-        </div>
-        <div>
-          <label>Slack webhook URL <span style={{color:'#666'}}>(optional)</span></label>
-          <input placeholder="https://hooks.slack.com/services/…" value={form.slackWebhookUrl} onChange={e=>set('slackWebhookUrl',e.target.value)} />
-        </div>
-        {error && <div style={{padding:'10px 14px',background:'#2a0a0a',border:'1px solid #5a1a1a',borderRadius:6,color:'#ff8080',fontSize:13}}>{error}</div>}
-        {success && <div style={{padding:'10px 14px',background:'#0a2a0a',border:'1px solid #1a5a1a',borderRadius:6,color:'#80ff80',fontSize:13}}>{success}</div>}
-        <button className="btn-gold" style={{alignSelf:'flex-start'}} onClick={submit} disabled={loading}>{loading?'Creating…':'Create Monitor'}</button>
       </div>
-    </div>
+    </>
   );
 }
 
-// ── View 2: Matches Feed ─────────────────────────────────────────────────────
+// ΓöÇΓöÇ Monitor Feed ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 function MatchesFeed({ apiKey, monitors }) {
-  const [selectedId, setSelectedId] = useState('');
+  const [selId, setSelId] = useState('');
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => { if (monitors.length && !selectedId) setSelectedId(monitors[0].id); }, [monitors]);
+  useEffect(()=>{ if (monitors.length && !selId) setSelId(monitors[0].id); },[monitors]);
 
-  const load = useCallback(async (id) => {
+  const load = useCallback(async id => {
     if (!id) return;
     setLoading(true);
-    const r = await apiFetch(`/v1/matches?monitor_id=${id}&limit=50`, {}, apiKey);
+    const r = await apiFetch(`/v1/matches?monitor_id=${id}&limit=50`,{},apiKey);
     setLoading(false);
-    if (r.ok) setMatches(r.data.matches || []);
-  }, [apiKey]);
+    if (r.ok) setMatches(r.data.matches||[]);
+  },[apiKey]);
 
-  useEffect(() => { if (selectedId) load(selectedId); }, [selectedId, load]);
+  useEffect(()=>{ if (selId) load(selId); },[selId,load]);
 
-  const handleAction = (type, matchId, newDraft) => {
-    if (type === 'draft') setMatches(ms => ms.map(m => m.id === matchId ? {...m,draft:newDraft} : m));
+  const handleAction = (type, mid, newDraft) => {
+    if (type==='draft') setMatches(ms=>ms.map(m=>m.id===mid?{...m,draft:newDraft}:m));
+  };
+
+  const selMonitor = monitors.find(m=>m.id===selId);
+
+  if (!monitors.length) return (
+    <>
+      <div className="page-header">
+        <div><h1 className="page-title">Monitor Feed</h1><p className="page-subtitle">Continuous background monitoring results</p></div>
+      </div>
+      <div className="page-body">
+        <div className="card">
+          <div className="empty">
+            <div className="empty-icon"><i className="ph ph-broadcast"></i></div>
+            <div className="empty-title">No monitors yet</div>
+            <div className="empty-desc">Create a monitor to get automatic alerts whenever someone posts a buying-intent signal.</div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+
+  return (
+    <>
+      <div className="page-header">
+        <div><h1 className="page-title">Monitor Feed</h1><p className="page-subtitle">Real-time matches from your background monitors</p></div>
+        <div style={{display:'flex',gap:8,alignItems:'center',marginTop:4}}>
+          <select className="inp" value={selId} onChange={e=>setSelId(e.target.value)} style={{width:'auto',minWidth:180}}>
+            {monitors.map(m=><option key={m.id} value={m.id}>{m.name}</option>)}
+          </select>
+          <button className="btn btn-white btn-sm" onClick={()=>load(selId)} disabled={loading}>
+            <i className={`ph ph-arrow-clockwise${loading?' spin':''}`}></i> Refresh
+          </button>
+        </div>
+      </div>
+      <div className="page-body">
+        {selMonitor && !loading && matches.length>0 && (
+          <div className="metric-row">
+            <div className="metric-card"><div className="metric-label">Matches loaded</div><div className="metric-value">{matches.length}</div></div>
+            <div className="metric-card"><div className="metric-label">All-time found</div><div className="metric-value">{selMonitor.total_matches_found||0}</div></div>
+            <div className="metric-card"><div className="metric-label">Keywords</div><div className="metric-value">{selMonitor.keyword_count||0}</div></div>
+            <div className="metric-card"><div className="metric-label">Monitor status</div><div className="metric-value" style={{fontSize:13,display:'flex',alignItems:'center',gap:7,marginTop:6}}><div className={selMonitor.active?'active-dot':'paused-dot'}></div>{selMonitor.active?'Active':'Paused'}</div></div>
+          </div>
+        )}
+        {loading && <div style={{display:'flex',flexDirection:'column',gap:8}}>{[1,2,3].map(i=><div key={i} className="shimmer" style={{height:120}} />)}</div>}
+        {!loading && !matches.length && (
+          <div className="card">
+            <div className="empty">
+              <div className="empty-icon"><i className="ph ph-clock"></i></div>
+              <div className="empty-title">Waiting for matches</div>
+              <div className="empty-desc">Your monitor scans every 10 minutes. First results will appear shortly.</div>
+            </div>
+          </div>
+        )}
+        {!loading && matches.map(m=>(
+          <MatchCard key={m.id} match={m} monitorId={selId} apiKey={apiKey} onAction={handleAction} />
+        ))}
+      </div>
+    </>
+  );
+}
+
+// ΓöÇΓöÇ Create Monitor ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+function CreateMonitor({ apiKey, onCreated }) {
+  const [form, setForm] = useState({
+    name:'', keywords:'', subreddits:'', productContext:'', alertEmail:'', slackWebhookUrl:'',
+    platforms:Object.fromEntries(PLATFORMS.map(([k])=>[k,true])),
+  });
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState('');
+  const [ok, setOk] = useState('');
+
+  const set = (k,v) => setForm(f=>({...f,[k]:v}));
+
+  const submit = async () => {
+    setErr(''); setOk('');
+    if (!form.name.trim()) return setErr('Monitor name is required.');
+    if (!form.keywords.trim()) return setErr('At least one keyword is required.');
+    const keywords = form.keywords.split('\n').map(k=>k.trim()).filter(Boolean);
+    const subreddits = form.subreddits.split(',').map(s=>s.trim()).filter(Boolean);
+    const body = {
+      name:form.name.trim(),
+      keywords:keywords.map(k=>({keyword:k,subreddits,productContext:form.productContext})),
+      productContext:form.productContext,
+      alertEmail:form.alertEmail||undefined,
+      slackWebhookUrl:form.slackWebhookUrl||undefined,
+      includeMedium:form.platforms.medium,
+      includeSubstack:form.platforms.substack,
+      includeQuora:form.platforms.quora,
+      includeUpworkForum:form.platforms.upwork,
+      includeFiverrForum:form.platforms.fiverr,
+    };
+    setLoading(true);
+    const r = await apiFetch('/v1/monitors',{method:'POST',body:JSON.stringify(body)},apiKey);
+    setLoading(false);
+    if (r.ok) { setOk(`Monitor "${r.data.name}" is live. First scan within 10 minutes.`); onCreated(); }
+    else setErr(r.data?.error?.message||'Failed to create monitor.');
   };
 
   return (
-    <div style={{padding:'24px 0'}}>
-      <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:20,flexWrap:'wrap'}}>
-        <h2 style={{fontSize:20,fontWeight:700,margin:0}}>Matches Feed</h2>
-        <select value={selectedId} onChange={e=>setSelectedId(e.target.value)} style={{width:'auto',minWidth:180}}>
-          {monitors.map(m=><option key={m.id} value={m.id}>{m.name}</option>)}
-        </select>
-        <button className="btn-outline" style={{fontSize:13}} onClick={()=>load(selectedId)} disabled={loading}>↺ Refresh</button>
-        <span style={{fontSize:12,color:'#555',marginLeft:'auto'}}>{matches.length} matches</span>
+    <>
+      <div className="page-header">
+        <div><h1 className="page-title">New Monitor</h1><p className="page-subtitle">Set up a continuous background scan with email alerts</p></div>
       </div>
-      {loading && <div style={{color:'#666',textAlign:'center',padding:40}}>Loading…</div>}
-      {!loading && matches.length === 0 && (
-        <div className="card" style={{padding:32,textAlign:'center',color:'#666'}}>
-          No matches yet. The monitor scans every 15 minutes — check back soon.
-        </div>
-      )}
-      {matches.map(m => (
-        <MatchCard key={m.id} match={m} monitorId={selectedId} apiKey={apiKey} onAction={handleAction} />
-      ))}
-    </div>
-  );
-}
-
-// ── View 3: Settings (split into 3 sub-tabs) ─────────────────────────────────
-function Settings({ apiKey, onChangeKey, monitors, onRefresh }) {
-  const [subTab, setSubTab] = useState('account');
-  return (
-    <div style={{padding:'24px 0'}}>
-      <h2 style={{fontSize:20,fontWeight:700,marginBottom:20}}>Settings</h2>
-      <div style={{display:'flex',gap:0,marginBottom:24,borderBottom:'1px solid #222'}}>
-        {[['account','Account'],['billing','Billing'],['monitors','Monitors']].map(([id,label])=>(
-          <button key={id} className={`tab${subTab===id?' active':''}`} onClick={()=>setSubTab(id)}>{label}</button>
-        ))}
-      </div>
-      {subTab==='account' && <SettingsAccount apiKey={apiKey} onChangeKey={onChangeKey} />}
-      {subTab==='billing' && <SettingsBilling apiKey={apiKey} monitors={monitors} />}
-      {subTab==='monitors' && <SettingsMonitors apiKey={apiKey} monitors={monitors} onRefresh={onRefresh} />}
-    </div>
-  );
-}
-
-function SettingsAccount({ apiKey, onChangeKey }) {
-  const [copied, setCopied] = useState(false);
-  const copyKey = () => { navigator.clipboard.writeText(apiKey); setCopied(true); setTimeout(()=>setCopied(false),1500); };
-  return (
-    <div style={{maxWidth:580}}>
-      <div className="card" style={{padding:20}}>
-        <div style={{fontSize:13,color:'#888',marginBottom:8}}>API Key</div>
-        <div style={{display:'flex',gap:8,alignItems:'center'}}>
-          <div style={{fontFamily:'monospace',fontSize:13,background:'#0a0a0a',padding:'7px 12px',borderRadius:6,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
-            {apiKey.slice(0,8)}{'•'.repeat(Math.max(0,apiKey.length-12))}{apiKey.slice(-4)}
+      <div className="page-body" style={{maxWidth:660}}>
+        <div className="card card-p">
+          <div style={{display:'flex',flexDirection:'column',gap:20}}>
+            <div className="field">
+              <label className="label">Monitor name</label>
+              <input className="inp" placeholder="e.g. Freelance Leads, SaaS Mentions" value={form.name} onChange={e=>set('name',e.target.value)} />
+            </div>
+            <div className="field">
+              <label className="label">Keywords <span style={{fontWeight:400,color:'#94A3B8'}}>ΓÇö one per line</span></label>
+              <textarea className="inp" rows={5}
+                placeholder={"client won't pay\nscope creep\nunpaid invoice\nneed contract template"}
+                value={form.keywords} onChange={e=>set('keywords',e.target.value)} />
+            </div>
+            <div className="field">
+              <label className="label" style={{marginBottom:8}}>Platforms to monitor</label>
+              <PlatformToggles value={form.platforms} onChange={v=>set('platforms',v)} />
+            </div>
+            <div className="field">
+              <label className="label">Subreddits <span style={{fontWeight:400,color:'#94A3B8'}}>ΓÇö comma-separated, blank = all</span></label>
+              <input className="inp" placeholder="freelance, smallbusiness, Upwork" value={form.subreddits} onChange={e=>set('subreddits',e.target.value)} />
+            </div>
+            <div className="field">
+              <label className="label">Product description <span style={{fontWeight:400,color:'#94A3B8'}}>ΓÇö AI uses this to draft replies</span></label>
+              <textarea className="inp" rows={3}
+                placeholder="Describe your product so the AI can write relevant, natural-sounding repliesΓÇª"
+                value={form.productContext} onChange={e=>set('productContext',e.target.value)} />
+            </div>
+            <hr className="div" />
+            <div className="field">
+              <label className="label">Alert email <span style={{fontWeight:400,color:'#94A3B8'}}>ΓÇö defaults to your signup email</span></label>
+              <input className="inp" type="email" placeholder="you@example.com" value={form.alertEmail} onChange={e=>set('alertEmail',e.target.value)} />
+            </div>
+            <div className="field">
+              <label className="label">Slack webhook <span style={{fontWeight:400,color:'#94A3B8'}}>ΓÇö optional</span></label>
+              <input className="inp" placeholder="https://hooks.slack.com/services/ΓÇª" value={form.slackWebhookUrl} onChange={e=>set('slackWebhookUrl',e.target.value)} />
+            </div>
+            {err && <div className="alert alert-error"><i className="ph ph-warning-circle"></i>{err}</div>}
+            {ok  && <div className="alert alert-success"><i className="ph ph-check-circle"></i>{ok}</div>}
+            <div>
+              <button className="btn btn-primary" style={{minWidth:160}} onClick={submit} disabled={loading}>
+                {loading ? <><i className="ph ph-circle-notch spin"></i> CreatingΓÇª</> : <><i className="ph-bold ph-plus"></i> Create Monitor</>}
+              </button>
+            </div>
           </div>
-          <button className="btn-outline" style={{fontSize:12,whiteSpace:'nowrap'}} onClick={copyKey}>{copied?'Copied!':'Copy'}</button>
-          <button className="btn-outline" style={{fontSize:12,whiteSpace:'nowrap',borderColor:'#555',color:'#888'}} onClick={onChangeKey}>Change</button>
         </div>
       </div>
-    </div>
+    </>
   );
 }
 
-function SettingsBilling({ apiKey, monitors }) {
+// ΓöÇΓöÇ Settings ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+function Settings({ apiKey, userEmail, plan, onSignOut, monitors, onRefresh }) {
+  const [copied, setCopied] = useState(false);
+  const [showKey, setShowKey] = useState(false);
+  const [deleting, setDeleting] = useState('');
+  const [upgradeMsg, setUpgradeMsg] = useState('');
+  const planLabel = {starter:'Starter',growth:'Growth',scale:'Scale'}[plan]||'Starter';
+
+  const copyKey = () => { navigator.clipboard.writeText(apiKey); setCopied(true); setTimeout(()=>setCopied(false),2000); };
+
+  const del = async (id, name) => {
+    if (!confirm(`Delete monitor "${name}"?`)) return;
+    setDeleting(id);
+    await apiFetch(`/v1/monitors/${id}`,{method:'DELETE'},apiKey);
+    setDeleting(''); onRefresh();
+  };
+
   return (
-    <div style={{maxWidth:580}}>
-      <div className="card" style={{padding:20}}>
-        <div style={{fontSize:13,color:'#888',marginBottom:12}}>Upgrade Plan</div>
-        <div style={{display:'flex',gap:12,flexWrap:'wrap'}}>
-          {[{plan:'growth',label:'Growth — $29/mo',desc:'20 monitors · 100 keywords · Slack'},
-            {plan:'scale', label:'Scale — $99/mo', desc:'100 monitors · 500 keywords · Webhooks'}].map(({plan,label,desc})=>(
-            <div key={plan} className="card" style={{padding:16,flex:'1 1 200px',minWidth:180}}>
-              <div style={{fontWeight:700,marginBottom:4}}>{label}</div>
-              <div style={{fontSize:12,color:'#666',marginBottom:12}}>{desc}</div>
-              <button className="btn-gold" style={{width:'100%',fontSize:13}} onClick={async ()=>{
-                const r = await apiFetch('/v1/billing/checkout',{method:'POST',body:JSON.stringify({plan,successUrl:window.location.href+'?upgrade=success',cancelUrl:window.location.href})},apiKey);
-                if(r.ok && r.data.checkoutUrl) window.location.href=r.data.checkoutUrl;
-                else alert(r.data?.error?.message || r.data?.error || 'Checkout unavailable');
-              }}>Upgrade to {plan.charAt(0).toUpperCase()+plan.slice(1)}</button>
+    <>
+      <div className="page-header">
+        <div><h1 className="page-title">Settings</h1><p className="page-subtitle">Manage your account, plan, and monitors</p></div>
+      </div>
+      <div className="page-body" style={{maxWidth:580,display:'flex',flexDirection:'column',gap:14}}>
+
+        {/* Account */}
+        <div className="card settings-tile">
+          <div className="tile-label">Account</div>
+          <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:16}}>
+            <div style={{width:40,height:40,borderRadius:'50%',background:'#FFFBEB',border:'1px solid #FDE68A',display:'flex',alignItems:'center',justifyContent:'center',fontSize:15,fontWeight:700,color:'#92400E',flexShrink:0}}>
+              {(userEmail||'?')[0].toUpperCase()}
+            </div>
+            <div style={{flex:1}}>
+              <div style={{fontSize:14,fontWeight:600,color:'#0F172A'}}>{userEmail||'ΓÇö'}</div>
+              <div style={{fontSize:12,color:'#64748B',marginTop:2}}>{planLabel} plan</div>
+            </div>
+            <span style={{fontSize:11,fontWeight:700,color:'#92400E',background:'#FFFBEB',border:'1px solid #FDE68A',padding:'3px 9px',borderRadius:5}}>{planLabel}</span>
+          </div>
+          {plan === 'starter' && (
+            <div style={{fontSize:12,color:'#64748B',background:'#F8FAFC',border:'1px solid #E2E8F0',borderRadius:7,padding:'8px 12px',marginBottom:14,lineHeight:1.7}}>
+              <strong style={{color:'#374151'}}>Free tier includes:</strong> 1 monitor ┬╖ 10 keywords ┬╖ Email alerts only<br/>
+              <span style={{color:'#94A3B8'}}>Upgrade for Slack alerts, more monitors, and unlimited keywords.</span>
+            </div>
+          )}
+          <button className="btn btn-ghost btn-sm" onClick={onSignOut}>
+            <i className="ph ph-sign-out"></i> Sign out
+          </button>
+        </div>
+
+        {/* Upgrade */}
+        {plan === 'starter' && (
+          <div className="card settings-tile">
+            <div className="tile-label">Upgrade plan</div>
+            <div style={{display:'flex',gap:10,flexWrap:'wrap'}}>
+              {[
+                {p:'growth',label:'Growth',price:'$29/mo',desc:'20 monitors ┬╖ 100 keywords ┬╖ Slack alerts'},
+                {p:'scale',label:'Scale',price:'$199/mo',desc:'100 monitors ┬╖ 500 keywords ┬╖ Webhooks + API'},
+              ].map(({p,label,price,desc})=>(
+                <div key={p} className="plan-card">
+                  <div style={{fontWeight:700,fontSize:15,marginBottom:2}}>{label}</div>
+                  <div style={{fontSize:18,fontWeight:800,color:'#C9A84C',marginBottom:6}}>{price}</div>
+                  <div style={{fontSize:12,color:'#64748B',marginBottom:14}}>{desc}</div>
+                  {upgradeMsg === p
+                    ? <div style={{fontSize:12,background:'#ECFDF5',border:'1px solid #A7F3D0',borderRadius:6,padding:'9px 10px',textAlign:'center',lineHeight:1.6,color:'#065F46'}}>
+                        <i className="ph ph-check-circle" style={{marginRight:4}}></i>
+                        Email <a href="mailto:info@ebenova.net" style={{color:'#065F46',fontWeight:600}}>info@ebenova.net</a> to upgrade
+                      </div>
+                    : <button className="btn btn-primary btn-sm" style={{width:'100%'}} onClick={async()=>{
+                        const r = await apiFetch('/v1/billing/checkout',{method:'POST',body:JSON.stringify({plan:p,successUrl:location.href+'?upgrade=success',cancelUrl:location.href})},apiKey);
+                        if(r.ok&&r.data.checkoutUrl) location.href=r.data.checkoutUrl;
+                        else setUpgradeMsg(p);
+                      }}>Upgrade to {label}</button>
+                  }
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Monitors */}
+        <div className="card settings-tile">
+          <div className="tile-label">Active monitors ({monitors.length})</div>
+          {!monitors.length && <p style={{fontSize:13,color:'#94A3B8'}}>No monitors yet.</p>}
+          {monitors.map(m=>(
+            <div key={m.id} className="monitor-row">
+              <div className={m.active?'active-dot':'paused-dot'}></div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:13,fontWeight:600,color:'#0F172A',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{m.name}</div>
+                <div style={{fontSize:12,color:'#94A3B8',marginTop:2}}>{m.keyword_count} keywords ┬╖ {m.total_matches_found||0} matches found</div>
+              </div>
+              <button className="btn btn-danger btn-sm" onClick={()=>del(m.id,m.name)} disabled={deleting===m.id}>
+                {deleting===m.id ? <i className="ph ph-circle-notch spin"></i> : <i className="ph ph-trash"></i>}
+              </button>
             </div>
           ))}
         </div>
-      </div>
-    </div>
-  );
-}
 
-function SettingsMonitors({ apiKey, monitors, onRefresh }) {
-  const [deletingId, setDeletingId] = useState('');
-  const deleteMonitor = async (id, name) => {
-    if (!confirm(`Delete monitor "${name}"?`)) return;
-    setDeletingId(id);
-    await apiFetch(`/v1/monitors/${id}`, { method:'DELETE' }, apiKey);
-    setDeletingId('');
-    onRefresh();
-  };
-  return (
-    <div style={{maxWidth:580}}>
-      <div className="card" style={{padding:20}}>
-        <div style={{fontSize:13,color:'#888',marginBottom:12}}>Active Monitors</div>
-        {monitors.length === 0 && <div style={{color:'#555',fontSize:13}}>No monitors yet.</div>}
-        {monitors.map(m=>(
-          <div key={m.id} style={{display:'flex',alignItems:'center',gap:12,padding:'10px 0',borderBottom:'1px solid #1a1a1a'}}>
-            <div style={{flex:1}}>
-              <div style={{fontSize:14,fontWeight:600}}>{m.name}</div>
-              <div style={{fontSize:12,color:'#555'}}>{m.keyword_count} keywords · {m.total_matches_found||0} matches found</div>
+        {/* Developer key */}
+        <div className="card settings-tile">
+          <button onClick={()=>setShowKey(v=>!v)} style={{background:'none',border:'none',cursor:'pointer',color:'#64748B',fontSize:12,fontWeight:600,padding:0,display:'flex',alignItems:'center',gap:6,fontFamily:'inherit'}}>
+            <i className={`ph ph-caret-${showKey?'down':'right'}`}></i>
+            <i className="ph ph-key"></i> Developer API key
+          </button>
+          {showKey && (
+            <div style={{marginTop:14,display:'flex',flexDirection:'column',gap:8}}>
+              <div style={{fontFamily:'monospace',fontSize:12,background:'#F8FAFC',border:'1px solid #E2E8F0',padding:'10px 12px',borderRadius:8,color:'#475569',wordBreak:'break-all',lineHeight:1.6}}>
+                {apiKey}
+              </div>
+              <div>
+                <button className="btn btn-ghost btn-sm" onClick={copyKey}>
+                  <i className={`ph-bold ph-${copied?'check':'copy'}`}></i>
+                  {copied ? 'Copied!' : 'Copy key'}
+                </button>
+              </div>
             </div>
-            <span style={{fontSize:11,padding:'2px 8px',borderRadius:4,background:m.active?'#0a2a0a':'#2a0a0a',color:m.active?'#4caf50':'#f44336'}}>{m.active?'active':'paused'}</span>
-            <button onClick={()=>deleteMonitor(m.id,m.name)} disabled={deletingId===m.id}
-              style={{background:'transparent',border:'1px solid #3a1a1a',color:'#c0392b',padding:'4px 10px',borderRadius:4,cursor:'pointer',fontSize:12}}>
-              {deletingId===m.id?'…':'Delete'}
-            </button>
-          </div>
-        ))}
+          )}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
-// ── App Shell ────────────────────────────────────────────────────────────────
+// ΓöÇΓöÇ App ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 function App() {
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('insights_api_key') || '');
-  const [showKeyModal, setShowKeyModal] = useState(!localStorage.getItem('insights_api_key'));
-  const [tab, setTab] = useState('feed');
+  const [apiKey] = useState(() => {
+    const p = new URLSearchParams(location.search);
+    const k = p.get('key');
+    if (k) { localStorage.setItem('ebi_key', k); history.replaceState({},'',' /dashboard'); return k; }
+    return localStorage.getItem('ebi_key') || '';
+  });
+  const [tab, setTab] = useState('search');
   const [monitors, setMonitors] = useState([]);
-  const [showWizard, setShowWizard] = useState(false);
+  const [userEmail, setUserEmail] = useState('');
+  const [plan, setPlan] = useState('starter');
+  const [showAuth, setShowAuth] = useState(!localStorage.getItem('ebi_key'));
 
-  const saveKey = (k, opts = {}) => {
-    localStorage.setItem('insights_api_key', k);
-    setApiKey(k);
-    setShowKeyModal(false);
-    // Branch 2: route first-time users to the wizard
-    if (opts.isNewUser && !localStorage.getItem('insights_onboarding_complete')) {
-      setShowWizard(true);
-    }
-  };
-  const changeKey = () => { localStorage.removeItem('insights_api_key'); setApiKey(''); setShowKeyModal(true); };
-
-  const completeWizard = () => {
-    localStorage.setItem('insights_onboarding_complete', '1');
-    setShowWizard(false);
-    loadMonitors();
-    setTab('feed');
-  };
-  const skipWizard = () => {
-    localStorage.setItem('insights_onboarding_complete', '1');
-    setShowWizard(false);
-    setTab('create');
-  };
+  const signOut = () => { localStorage.removeItem('ebi_key'); location.reload(); };
 
   const loadMonitors = useCallback(async () => {
     if (!apiKey) return;
-    const r = await apiFetch('/v1/monitors', {}, apiKey);
-    if (r.ok) setMonitors(r.data.monitors || []);
-  }, [apiKey]);
+    const r = await apiFetch('/v1/monitors',{},apiKey);
+    if (r.ok) setMonitors(r.data.monitors||[]);
+  },[apiKey]);
 
-  useEffect(() => { if (apiKey) loadMonitors(); }, [apiKey, loadMonitors]);
+  useEffect(()=>{
+    if (!apiKey) return;
+    loadMonitors();
+    apiFetch('/v1/me',{},apiKey).then(r=>{
+      if (r.ok) { setUserEmail(r.data.email||''); setPlan(r.data.plan||'starter'); }
+      else if (r.status===401||r.status===403) signOut();
+    });
+  },[apiKey]);
 
-  // Returning users with monitors: never show wizard again
-  useEffect(() => {
-    if (monitors.length > 0) localStorage.setItem('insights_onboarding_complete', '1');
-  }, [monitors.length]);
+  const handleSave = (k) => {
+    localStorage.setItem('ebi_key',k);
+    location.reload();
+  };
+
+  if (!apiKey || showAuth) return <AuthModal onSave={handleSave} />;
 
   return (
-    <div style={{minHeight:'100vh'}}>
-      {showKeyModal && <ApiKeyModal onSave={saveKey} />}
-      {showWizard && <OnboardingWizard apiKey={apiKey} onComplete={completeWizard} onSkip={skipWizard} />}
-      {!showWizard && (
-        <>
-          <header style={{background:'#0e0e0e',borderBottom:'1px solid #1a1a1a',padding:'0 24px',display:'flex',alignItems:'center',gap:24,height:56}}>
-            <div style={{fontWeight:700,fontSize:16,color:'#c9a84c',letterSpacing:'-0.5px'}}>📡 Ebenova Insights</div>
-            <nav style={{display:'flex',gap:0,marginLeft:16}}>
-              {[['feed','Matches'],['create','Create Monitor'],['settings','Settings']].map(([id,label])=>(
-                <button key={id} className={`tab${tab===id?' active':''}`} onClick={()=>setTab(id)}>{label}</button>
-              ))}
-            </nav>
-            <div style={{marginLeft:'auto',fontSize:12,color:'#555'}}>{monitors.length} monitor{monitors.length!==1?'s':''}</div>
-          </header>
-          <main style={{maxWidth:760,margin:'0 auto',padding:'0 24px'}}>
-            {tab==='feed' && <MatchesFeed apiKey={apiKey} monitors={monitors} />}
-            {tab==='create' && <CreateMonitor apiKey={apiKey} onCreated={loadMonitors} />}
-            {tab==='settings' && <Settings apiKey={apiKey} onChangeKey={changeKey} monitors={monitors} onRefresh={loadMonitors} />}
-          </main>
-        </>
-      )}
+    <div className="layout">
+      <Sidebar tab={tab} setTab={setTab} userEmail={userEmail} plan={plan} monitorCount={monitors.length} onSignOut={signOut} />
+      <div className="main">
+        {tab==='search'   && <SearchNow apiKey={apiKey} />}
+        {tab==='feed'     && <MatchesFeed apiKey={apiKey} monitors={monitors} />}
+        {tab==='create'   && <CreateMonitor apiKey={apiKey} onCreated={()=>{ loadMonitors(); setTab('feed'); }} />}
+        {tab==='settings' && <Settings apiKey={apiKey} userEmail={userEmail} plan={plan} onSignOut={signOut} monitors={monitors} onRefresh={loadMonitors} />}
+      </div>
     </div>
   );
 }
