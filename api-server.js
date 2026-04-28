@@ -16,6 +16,7 @@ import { join } from 'path'
 import { fileURLToPath } from 'url'
 import { dirname } from 'path'
 import stripeRoutes, { webhookHandler } from './routes/stripe.js'
+import { createRouter as createOnboardingRouter } from './routes/onboarding.js'
 import { loadEnv } from './lib/env.js'
 import { makeCorsMiddleware } from './lib/cors.js'
 import helmet from 'helmet'
@@ -122,6 +123,20 @@ app.use(makeCorsMiddleware(ALLOWED_ORIGINS))
 // Note: /v1/billing/webhook is mounted above, before express.json().
 // stripeRoutes (the router) only contains /checkout and /portal now.
 app.use('/v1/billing', stripeRoutes)
+
+// Onboarding wizard endpoints (/v1/onboarding/suggest + /sample-matches).
+// Lazy-mounted so missing Redis env at boot doesn't crash the process.
+let _onboardingRouter
+app.use('/v1/onboarding', (req, res, next) => {
+  if (!_onboardingRouter) {
+    try {
+      _onboardingRouter = createOnboardingRouter({ redis: getRedis() })
+    } catch (err) {
+      return res.status(503).json({ success: false, error: { code: 'NOT_CONFIGURED', message: err.message } })
+    }
+  }
+  _onboardingRouter(req, res, next)
+})
 
 // ── GET /health ────────────────────────────────────────────────────────────
 app.get('/health', async (req, res) => {
