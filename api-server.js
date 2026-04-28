@@ -37,6 +37,20 @@ try {
 
 import { Redis } from '@upstash/redis'
 import { randomBytes } from 'crypto'
+import { makeRateLimiter } from './lib/rate-limit.js'
+
+// F5: Rate limit + email validation for signup abuse prevention.
+// Lazy-init the limiter so we don't call getRedis() before .env is loaded.
+let _signupLimiter
+function signupLimiter() {
+  if (!_signupLimiter) _signupLimiter = makeRateLimiter(getRedis(), { max: 3, windowSeconds: 3600 })
+  return _signupLimiter
+}
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const DISPOSABLE_DOMAINS = new Set([
+  'mailinator.com','guerrillamail.com','10minutemail.com','tempmail.com',
+  'sharklasers.com','trashmail.com','yopmail.com','throwawaymail.com',
+])
 
 const PORT = parseInt(process.env.API_PORT || process.env.PORT || '3001')
 const ADMIN_KEY = process.env.MONITOR_ADMIN_KEY   // for internal provisioning
@@ -316,20 +330,46 @@ app.post('/v1/subscribe', async (req, res) => {
 // Creates an API key, stores it in Redis, and emails it to the user.
 // Starter plan is assigned automatically. Upgrade via /v1/billing/checkout.
 app.post('/v1/auth/signup', async (req, res) => {
-  const { email, name: userName } = req.body
-  if (!email?.includes('@')) {
-    return res.status(400).json({ success: false, error: { code: 'MISSING_EMAIL', message: 'Valid email required' } })
+  // F5: per-IP rate limit (3/hour). Trust X-Forwarded-For from Railway's proxy.
+  const ip = req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress || 'unknown'
+  try {
+    const limited = await signupLimiter()(`signup:ip:${ip}`)
+    if (!limited.allowed) {
+      return res.status(429).json({
+        success: false,
+        error: { code: 'RATE_LIMITED', message: `Too many signup attempts. Try again in ${Math.ceil(limited.retryAfterSeconds/60)} minutes.` },
+      })
+    }
+  } catch (err) {
+    // If Redis is down, don't block signups — log and continue
+    console.error('[signup] rate limiter error:', err.message)
+  }
+
+  const { email, name: userName } = req.body || {}
+
+  // F5: strict email validation
+  if (!email || typeof email !== 'string' || !EMAIL_RE.test(email)) {
+    return res.status(400).json({ success: false, error: { code: 'INVALID_EMAIL', message: 'A valid email address is required.' } })
   }
   const norm = email.toLowerCase().trim()
+  const domain = norm.split('@')[1]
+  if (DISPOSABLE_DOMAINS.has(domain)) {
+    return res.status(400).json({ success: false, error: { code: 'INVALID_EMAIL', message: 'Please use a non-disposable email address.' } })
+  }
 
   try {
     const redis = getRedis()
 
-    // Idempotent — return existing key if already signed up
+    // F5: Neutral response — don't leak whether email is already signed up.
+    // Existing users still receive their original key via the email already on file.
     const existing = await redis.get(`insights:signup:${norm}`)
     if (existing) {
-      const d = typeof existing === 'string' ? JSON.parse(existing) : existing
-      return res.json({ success: true, already_exists: true, message: `Welcome back. Check your original signup email for your API key, or contact support.` })
+      console.log(`[signup] repeat signup attempt: ${norm}`)
+      return res.status(201).json({
+        success: true,
+        message: 'Account ready. Check your email for your API key.',
+        plan: 'starter',
+      })
     }
 
     // Generate key: ins_{32 random hex chars}
