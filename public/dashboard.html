@@ -23,7 +23,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:#F1F5F9;color:#0F172A;-
 
 /* Sidebar */
 .sb-logo{padding:18px 16px 14px;border-bottom:1px solid #1E293B;display:flex;align-items:center;gap:10px}
-.sb-logo-icon{width:34px;height:34px;background:linear-gradient(135deg,#C9A84C,#E8C96A);border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.sb-logo-icon{width:34px;height:34px;background:linear-gradient(135deg,#FF6B35,#FF8C42);border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .sb-logo-icon i{color:#000;font-size:18px}
 .sb-logo-text{line-height:1.2}
 .sb-logo-name{font-size:14px;font-weight:700;color:#F8FAFC;letter-spacing:-0.3px}
@@ -33,16 +33,16 @@ body{font-family:'Inter',system-ui,sans-serif;background:#F1F5F9;color:#0F172A;-
 .sb-item{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;cursor:pointer;border:none;background:transparent;color:#64748B;font-size:13px;font-weight:500;width:100%;text-align:left;transition:all .15s;font-family:inherit}
 .sb-item i{font-size:17px;flex-shrink:0;width:20px;text-align:center}
 .sb-item:hover{background:#1E293B;color:#CBD5E1}
-.sb-item.active{background:rgba(201,168,76,.12);color:#C9A84C}
+.sb-item.active{background:rgba(255,107,53,.12);color:#FF6B35}
 .sb-item .badge-count{margin-left:auto;background:#1E293B;color:#64748B;font-size:10px;font-weight:600;padding:1px 6px;border-radius:10px}
-.sb-item.active .badge-count{background:rgba(201,168,76,.15);color:#C9A84C}
+.sb-item.active .badge-count{background:rgba(255,107,53,.15);color:#FF6B35}
 .sb-footer{padding:12px;border-top:1px solid #1E293B}
 .sb-user{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:8px;cursor:pointer;transition:background .15s}
 .sb-user:hover{background:#1E293B}
 .sb-avatar{width:28px;height:28px;border-radius:50%;background:rgba(201,168,76,.12);border:1px solid rgba(201,168,76,.25);color:#C9A84C;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .sb-user-info{flex:1;min-width:0}
 .sb-user-email{font-size:11.5px;color:#94A3B8;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.sb-plan{font-size:9px;font-weight:700;color:#C9A84C;background:rgba(201,168,76,.1);border:1px solid rgba(201,168,76,.2);padding:1px 5px;border-radius:4px;text-transform:uppercase;letter-spacing:0.5px}
+.sb-plan{font-size:9px;font-weight:700;color:#FF6B35;background:rgba(255,107,53,.1);border:1px solid rgba(255,107,53,.2);padding:1px 5px;border-radius:4px;text-transform:uppercase;letter-spacing:0.5px}
 
 /* Page */
 .page-header{background:#fff;border-bottom:1px solid #E2E8F0;padding:22px 32px 18px;display:flex;align-items:flex-start;justify-content:space-between;gap:12;flex-wrap:wrap}
@@ -60,7 +60,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:#F1F5F9;color:#0F172A;-
 .label{font-size:12px;font-weight:600;color:#374151;letter-spacing:.1px}
 .hint{font-size:11.5px;color:#94A3B8;line-height:1.5}
 input.inp,textarea.inp,select.inp{background:#fff;border:1px solid #D1D5DB;color:#0F172A;border-radius:8px;padding:9px 12px;width:100%;outline:none;font-size:13.5px;font-family:inherit;transition:border-color .15s,box-shadow .15s;line-height:1.5}
-input.inp:focus,textarea.inp:focus,select.inp:focus{border-color:#C9A84C;box-shadow:0 0 0 3px rgba(201,168,76,.1)}
+input.inp:focus,textarea.inp:focus,select.inp:focus{border-color:#FF6B35;box-shadow:0 0 0 3px rgba(255,107,53,.1)}
 input.inp::placeholder,textarea.inp::placeholder{color:#9CA3AF}
 textarea.inp{resize:vertical}
 select.inp{cursor:pointer}
@@ -72,8 +72,8 @@ select.inp{cursor:pointer}
 .btn-sm i{font-size:14px}
 .btn-lg{font-size:15px;padding:12px 22px;border-radius:9px}
 .btn-lg i{font-size:18px}
-.btn-primary{background:#C9A84C;color:#000;box-shadow:0 1px 3px rgba(201,168,76,.3)}
-.btn-primary:hover{background:#D4B560;box-shadow:0 2px 6px rgba(201,168,76,.35)}
+.btn-primary{background:#FF6B35;color:#000;box-shadow:0 1px 3px rgba(255,107,53,.3)}
+.btn-primary:hover{background:#FF7E47;box-shadow:0 2px 6px rgba(255,107,53,.35)}
 .btn-primary:disabled{opacity:.5;cursor:not-allowed}
 .btn-white{background:#fff;color:#374151;border:1px solid #D1D5DB;box-shadow:0 1px 2px rgba(0,0,0,.04)}
 .btn-white:hover{background:#F9FAFB;border-color:#9CA3AF}
@@ -87,21 +87,21 @@ select.inp{cursor:pointer}
 .pill{display:inline-flex;align-items:center;gap:4px;padding:5px 12px;border-radius:20px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid #E2E8F0;background:#fff;color:#64748B;transition:all .15s;user-select:none;font-family:inherit}
 .pill i{font-size:13px}
 .pill:hover{border-color:#CBD5E1;color:#374151;background:#F8FAFC}
-.pill.on{background:#FFFBEB;border-color:#FCD34D;color:#92400E;font-weight:600}
+.pill.on{background:#FFF7F2;border-color:#FCD34D;color:#9A3412;font-weight:600}
 
 /* Source badges */
 .badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:5px;font-size:11px;font-weight:600;letter-spacing:.1px}
 .badge-reddit{background:#FEE2E2;color:#991B1B}
-.badge-hn{background:#FEF3C7;color:#92400E}
+.badge-hn{background:#FFEDD5;color:#9A3412}
 .badge-medium{background:#D1FAE5;color:#065F46}
-.badge-substack{background:#FEF3C7;color:#92400E}
+.badge-substack{background:#FFEDD5;color:#9A3412}
 .badge-quora{background:#FEE2E2;color:#991B1B}
 .badge-upwork{background:#D1FAE5;color:#065F46}
 .badge-fiverr{background:#D1FAE5;color:#065F46}
 .badge-github{background:#F3F4F6;color:#1F2937;border:1px solid #E5E7EB}
 .badge-producthunt{background:#FEE2E2;color:#991B1B}
 .badge-other{background:#F3F4F6;color:#6B7280}
-.badge-hot{background:#FEF3C7;color:#92400E}
+.badge-hot{background:#FFEDD5;color:#9A3412}
 
 /* Alerts */
 .alert{padding:10px 14px;border-radius:8px;font-size:13px;line-height:1.5;display:flex;align-items:flex-start;gap:8px}
@@ -111,8 +111,8 @@ select.inp{cursor:pointer}
 .alert-info{background:#EFF6FF;border:1px solid #BFDBFE;color:#1E40AF}
 
 /* Draft box */
-.draft-box{background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;padding:14px 16px;margin-top:12px}
-.draft-header{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#92400E;margin-bottom:8px;display:flex;align-items:center;gap:5px}
+.draft-box{background:#FFF7F2;border:1px solid #FED7AA;border-radius:8px;padding:14px 16px;margin-top:12px}
+.draft-header{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#9A3412;margin-bottom:8px;display:flex;align-items:center;gap:5px}
 .draft-header i{font-size:13px}
 .draft-text{font-size:13px;color:#451A03;line-height:1.75;white-space:pre-wrap}
 
@@ -138,8 +138,8 @@ select.inp{cursor:pointer}
 
 /* Terminal-themed Auth modal — extends the landing page intel-terminal aesthetic
    to first sign-in. Once authenticated, dashboard returns to its light/Inter UI. */
-.term-bg{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:999;padding:16px;background:#0a0907;background-image:radial-gradient(circle at 18% 12%,rgba(201,168,76,.06),transparent 50%),radial-gradient(circle at 82% 88%,rgba(201,168,76,.04),transparent 60%)}
-.term-card{width:100%;max-width:440px;background:#14110d;border:1px solid #2a2419;border-radius:8px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.5),0 0 0 1px rgba(201,168,76,.05);font-family:'Inter',system-ui,sans-serif;color:#f5efe0}
+.term-bg{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:999;padding:16px;background:#0a0907;background-image:radial-gradient(circle at 18% 12%,rgba(255,107,53,.06),transparent 50%),radial-gradient(circle at 82% 88%,rgba(255,107,53,.04),transparent 60%)}
+.term-card{width:100%;max-width:440px;background:#14110d;border:1px solid #2a2419;border-radius:8px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.5),0 0 0 1px rgba(255,107,53,.05);font-family:'Inter',system-ui,sans-serif;color:#f5efe0}
 .term-head{background:linear-gradient(to bottom,#1f1a13,#14110d);border-bottom:1px solid #2a2419;padding:11px 14px;display:flex;align-items:center;gap:12px}
 .term-dots{display:flex;gap:6px}
 .term-dots span{width:10px;height:10px;border-radius:50%;background:#3a3328}
@@ -148,16 +148,16 @@ select.inp{cursor:pointer}
 .term-status::before{content:'';width:6px;height:6px;border-radius:50%;background:#34d058;box-shadow:0 0 6px #34d058;animation:term-pulse 1.6s infinite}
 @keyframes term-pulse{0%,100%{opacity:1}50%{opacity:.35}}
 .term-body{padding:36px 32px}
-.term-eyebrow{font-family:'JetBrains Mono',monospace;font-size:10px;color:#c9a84c;letter-spacing:3px;margin-bottom:14px;display:inline-flex;align-items:center;gap:10px}
-.term-eyebrow::before{content:'';width:6px;height:6px;border-radius:50%;background:#c9a84c;animation:term-pulse 1.6s infinite}
+.term-eyebrow{font-family:'JetBrains Mono',monospace;font-size:10px;color:#FF6B35;letter-spacing:3px;margin-bottom:14px;display:inline-flex;align-items:center;gap:10px}
+.term-eyebrow::before{content:'';width:6px;height:6px;border-radius:50%;background:#FF6B35;animation:term-pulse 1.6s infinite}
 .term-h{font-family:'Crimson Pro',Georgia,serif;font-size:32px;font-weight:700;line-height:1.05;letter-spacing:-1px;margin-bottom:14px}
-.term-h em{font-style:italic;font-weight:400;background:linear-gradient(135deg,#c9a84c,#e8c96a);-webkit-background-clip:text;background-clip:text;color:transparent}
+.term-h em{font-style:italic;font-weight:400;background:linear-gradient(135deg,#FF6B35,#FF8C42);-webkit-background-clip:text;background-clip:text;color:transparent}
 .term-sub{font-size:13.5px;color:#b9b09f;line-height:1.6;margin-bottom:24px}
 .term-input{width:100%;background:#0a0907;border:1px solid #2a2419;color:#f5efe0;border-radius:6px;padding:14px 14px;font-size:14px;font-family:'JetBrains Mono',monospace;outline:none;transition:border-color .15s,box-shadow .15s}
-.term-input:focus{border-color:#c9a84c;box-shadow:0 0 0 3px rgba(201,168,76,.12)}
+.term-input:focus{border-color:#FF6B35;box-shadow:0 0 0 3px rgba(255,107,53,.12)}
 .term-input::placeholder{color:#6f6757}
-.term-btn{width:100%;margin-top:10px;padding:14px 18px;border-radius:6px;font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;letter-spacing:.5px;background:#c9a84c;color:#000;border:none;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:50px;transition:all .18s}
-.term-btn:hover:not(:disabled){background:#e8c96a;transform:translateY(-1px);box-shadow:0 8px 24px rgba(201,168,76,.25)}
+.term-btn{width:100%;margin-top:10px;padding:14px 18px;border-radius:6px;font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;letter-spacing:.5px;background:#FF6B35;color:#000;border:none;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:50px;transition:all .18s}
+.term-btn:hover:not(:disabled){background:#FF8C42;transform:translateY(-1px);box-shadow:0 8px 24px rgba(255,107,53,.25)}
 .term-btn:disabled{opacity:.4;cursor:not-allowed}
 .term-meta{font-family:'JetBrains Mono',monospace;font-size:10px;color:#6f6757;letter-spacing:1.5px;text-align:center;margin-top:18px}
 .term-meta b{color:#34d058}
@@ -185,7 +185,7 @@ hr.div{border:none;border-top:1px solid #F1F5F9;margin:18px 0}
 
 /* Plan card */
 .plan-card{border:1px solid #E2E8F0;border-radius:10px;padding:16px;flex:1 1 180px;transition:border-color .15s}
-.plan-card:hover{border-color:#C9A84C66}
+.plan-card:hover{border-color:#FF6B3566}
 .results-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:10px}
 .metric-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px}
 .metric-card{background:#fff;border:1px solid #E2E8F0;border-radius:10px;padding:14px 18px;flex:1 1 130px;min-width:120px}
@@ -406,7 +406,7 @@ function MatchCard({ match, monitorId, apiKey, onAction }) {
         <button className="btn btn-sm" style={{background:'transparent',border:'1px solid #F1F5F9',color:'#94A3B8',cursor:'pointer'}} onClick={()=>feedback('down')}>
           <i className="ph ph-x"></i> Skip
         </button>
-        <a href={match.url} target="_blank" rel="noreferrer" className="btn btn-sm" style={{marginLeft:'auto',background:'transparent',border:'none',color:'#C9A84C',fontWeight:600,padding:'6px 4px',gap:4}}>
+        <a href={match.url} target="_blank" rel="noreferrer" className="btn btn-sm" style={{marginLeft:'auto',background:'transparent',border:'none',color:'#FF6B35',fontWeight:600,padding:'6px 4px',gap:4}}>
           Open thread <i className="ph ph-arrow-square-out"></i>
         </a>
       </div>
@@ -472,7 +472,7 @@ function SearchResultCard({ result, productContext, apiKey }) {
             <i className={`ph ph-arrow-clockwise${drafting?' spin':''}`}></i> Regenerate
           </button>
         )}
-        <a href={result.url} target="_blank" rel="noreferrer" className="btn btn-sm" style={{marginLeft:'auto',background:'transparent',border:'none',color:'#C9A84C',fontWeight:600,padding:'6px 4px',gap:4}}>
+        <a href={result.url} target="_blank" rel="noreferrer" className="btn btn-sm" style={{marginLeft:'auto',background:'transparent',border:'none',color:'#FF6B35',fontWeight:600,padding:'6px 4px',gap:4}}>
           Open thread <i className="ph ph-arrow-square-out"></i>
         </a>
       </div>
@@ -590,8 +590,8 @@ function SearchNow({ apiKey }) {
 
         {loading && (
           <div style={{textAlign:'center',padding:'52px 0'}}>
-            <div style={{width:52,height:52,background:'#FFFBEB',border:'1px solid #FDE68A',borderRadius:14,display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px'}}>
-              <i className="ph-bold ph-magnifying-glass spin" style={{fontSize:24,color:'#92400E'}}></i>
+            <div style={{width:52,height:52,background:'#FFF7F2',border:'1px solid #FED7AA',borderRadius:14,display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px'}}>
+              <i className="ph-bold ph-magnifying-glass spin" style={{fontSize:24,color:'#9A3412'}}></i>
             </div>
             <div style={{fontSize:15,fontWeight:600,color:'#0F172A',marginBottom:4}}>Scanning 8 platforms…</div>
             <div style={{fontSize:13,color:'#64748B',marginBottom:24}}>Usually takes 10–20 seconds</div>
@@ -827,14 +827,14 @@ function Settings({ apiKey, userEmail, plan, onSignOut, monitors, onRefresh }) {
         <div className="card settings-tile">
           <div className="tile-label">Account</div>
           <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:16}}>
-            <div style={{width:40,height:40,borderRadius:'50%',background:'#FFFBEB',border:'1px solid #FDE68A',display:'flex',alignItems:'center',justifyContent:'center',fontSize:15,fontWeight:700,color:'#92400E',flexShrink:0}}>
+            <div style={{width:40,height:40,borderRadius:'50%',background:'#FFF7F2',border:'1px solid #FED7AA',display:'flex',alignItems:'center',justifyContent:'center',fontSize:15,fontWeight:700,color:'#9A3412',flexShrink:0}}>
               {(userEmail||'?')[0].toUpperCase()}
             </div>
             <div style={{flex:1}}>
               <div style={{fontSize:14,fontWeight:600,color:'#0F172A'}}>{userEmail||'—'}</div>
               <div style={{fontSize:12,color:'#64748B',marginTop:2}}>{planLabel} plan</div>
             </div>
-            <span style={{fontSize:11,fontWeight:700,color:'#92400E',background:'#FFFBEB',border:'1px solid #FDE68A',padding:'3px 9px',borderRadius:5}}>{planLabel}</span>
+            <span style={{fontSize:11,fontWeight:700,color:'#9A3412',background:'#FFF7F2',border:'1px solid #FED7AA',padding:'3px 9px',borderRadius:5}}>{planLabel}</span>
           </div>
           {plan === 'starter' && (
             <div style={{fontSize:12,color:'#64748B',background:'#F8FAFC',border:'1px solid #E2E8F0',borderRadius:7,padding:'8px 12px',marginBottom:14,lineHeight:1.7}}>
@@ -858,7 +858,7 @@ function Settings({ apiKey, userEmail, plan, onSignOut, monitors, onRefresh }) {
               ].map(({p,label,price,desc})=>(
                 <div key={p} className="plan-card">
                   <div style={{fontWeight:700,fontSize:15,marginBottom:2}}>{label}</div>
-                  <div style={{fontSize:18,fontWeight:800,color:'#C9A84C',marginBottom:6}}>{price}</div>
+                  <div style={{fontSize:18,fontWeight:800,color:'#FF6B35',marginBottom:6}}>{price}</div>
                   <div style={{fontSize:12,color:'#64748B',marginBottom:14}}>{desc}</div>
                   {upgradeMsg === p
                     ? <div style={{fontSize:12,background:'#ECFDF5',border:'1px solid #A7F3D0',borderRadius:6,padding:'9px 10px',textAlign:'center',lineHeight:1.6,color:'#065F46'}}>
