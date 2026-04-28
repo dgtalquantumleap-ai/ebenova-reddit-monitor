@@ -1,0 +1,13 @@
+# scripts/testers.example.csv — copy to scripts/testers.csv and edit.
+# Format: "Name, email" per line. Name is optional (used for "Hi {first},").
+# Lines starting with # are ignored.
+#
+# Usage:
+#   cp scripts/testers.example.csv scripts/testers.csv
+#   <edit scripts/testers.csv with real tester emails>
+#   railway run node scripts/send-demo-invites.js scripts/testers.csv --dry-run
+#   railway run node scripts/send-demo-invites.js scripts/testers.csv
+
+Jane Doe, jane@example.com
+John Smith, john@example.com
+plain@example.com
