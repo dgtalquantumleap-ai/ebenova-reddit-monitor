@@ -22,6 +22,7 @@ import searchUpwork        from './lib/scrapers/upwork.js'
 import searchFiverr        from './lib/scrapers/fiverr.js'
 import { escapeHtml }      from './lib/html-escape.js'
 import { sanitizeForPrompt } from './lib/llm-safe-prompt.js'
+import { embeddingCacheKey } from './lib/embedding-cache.js'
 
 const RESEND_API_KEY   = process.env.RESEND_API_KEY
 const GROQ_API_KEY     = process.env.GROQ_API_KEY
@@ -120,8 +121,21 @@ const APPROVED_SUBREDDITS = new Set([
 
 const embeddingCache = new Map() // cache embeddings to save API calls
 
+function setCacheWithSoftCap(key, vec) {
+  // F12: soft LRU — drop oldest 1000 entries when cache exceeds 5000.
+  // Map iterates in insertion order, so the first keys are the oldest.
+  embeddingCache.set(key, vec)
+  if (embeddingCache.size > 5000) {
+    let i = 0
+    for (const k of embeddingCache.keys()) {
+      if (i++ >= 1000) break
+      embeddingCache.delete(k)
+    }
+  }
+}
+
 async function getEmbedding(text) {
-  const key = text.slice(0, 100)
+  const key = embeddingCacheKey(text)  // F12: hash full text, not slice(0, 100)
   if (embeddingCache.has(key)) return embeddingCache.get(key)
 
   try {
@@ -134,7 +148,7 @@ async function getEmbedding(text) {
       if (!res.ok) return null
       const data = await res.json()
       const vec = data?.data?.[0]?.embedding || null
-      if (vec) embeddingCache.set(key, vec)
+      if (vec) setCacheWithSoftCap(key, vec)
       return vec
     }
 
@@ -147,7 +161,7 @@ async function getEmbedding(text) {
       if (!res.ok) return null
       const data = await res.json()
       const vec = data?.data?.[0]?.embedding || null
-      if (vec) embeddingCache.set(key, vec)
+      if (vec) setCacheWithSoftCap(key, vec)
       return vec
     }
   } catch (err) {
