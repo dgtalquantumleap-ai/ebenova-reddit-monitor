@@ -193,6 +193,40 @@ hr.div{border:none;border-top:1px solid #F1F5F9;margin:18px 0}
 .metric-value{font-size:22px;font-weight:800;color:#0F172A;letter-spacing:-.5px;line-height:1}
 .settings-tile{padding:18px 20px}
 .tile-label{font-size:10px;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:.6px;margin-bottom:14px}
+
+/* Feedback Widget */
+.fb-fab{position:fixed;bottom:20px;right:20px;z-index:200;background:linear-gradient(135deg,#FF6B35,#FF8C42);color:#fff;border:none;border-radius:50px;padding:13px 18px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 8px 24px rgba(255,107,53,.35);display:flex;align-items:center;gap:8px;transition:transform .15s,box-shadow .15s}
+.fb-fab:hover{transform:translateY(-2px);box-shadow:0 12px 28px rgba(255,107,53,.45)}
+.fb-fab i{font-size:16px}
+.fb-overlay{position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:300;display:flex;align-items:center;justify-content:center;padding:20px;animation:fb-fade .15s ease-out}
+@keyframes fb-fade{from{opacity:0}to{opacity:1}}
+.fb-modal{background:#fff;border-radius:14px;padding:24px;max-width:480px;width:100%;box-shadow:0 24px 60px rgba(0,0,0,.25);max-height:90vh;overflow-y:auto}
+.fb-title{font-size:18px;font-weight:700;color:#0F172A;margin-bottom:4px}
+.fb-sub{font-size:13px;color:#64748B;margin-bottom:18px}
+.fb-label{font-size:11px;font-weight:700;color:#334155;text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;display:block;margin-top:14px}
+.fb-nps{display:grid;grid-template-columns:repeat(11,1fr);gap:4px}
+.fb-nps-btn{background:#F1F5F9;border:1px solid #E2E8F0;border-radius:6px;padding:8px 0;font-size:12px;font-weight:600;color:#475569;cursor:pointer;font-family:inherit;transition:all .1s}
+.fb-nps-btn:hover{background:#E2E8F0}
+.fb-nps-btn.selected{background:#FF6B35;color:#fff;border-color:#FF6B35}
+.fb-nps-scale{display:flex;justify-content:space-between;font-size:10px;color:#94A3B8;margin-top:4px;font-weight:500;letter-spacing:.3px}
+.fb-cats{display:flex;flex-wrap:wrap;gap:6px}
+.fb-cat{background:#F1F5F9;border:1px solid #E2E8F0;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:500;color:#475569;cursor:pointer;font-family:inherit;text-transform:capitalize}
+.fb-cat:hover{background:#E2E8F0}
+.fb-cat.selected{background:rgba(255,107,53,.12);color:#FF6B35;border-color:#FF6B35}
+.fb-textarea{width:100%;min-height:90px;padding:10px;border:1px solid #E2E8F0;border-radius:8px;font-family:inherit;font-size:13px;resize:vertical;outline:none;color:#0F172A;line-height:1.5}
+.fb-textarea:focus{border-color:#FF6B35;box-shadow:0 0 0 3px rgba(255,107,53,.1)}
+.fb-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
+.fb-cancel{background:transparent;border:1px solid #E2E8F0;color:#64748B;border-radius:8px;padding:9px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit}
+.fb-cancel:hover{background:#F1F5F9}
+.fb-submit{background:#FF6B35;border:none;color:#fff;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit}
+.fb-submit:hover{background:#E55A24}
+.fb-submit:disabled{background:#CBD5E1;cursor:not-allowed}
+.fb-success{text-align:center;padding:24px 0}
+.fb-success-icon{width:56px;height:56px;background:rgba(34,197,94,.12);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 12px}
+.fb-success-icon i{font-size:28px;color:#22C55E}
+.fb-success-title{font-size:16px;font-weight:700;color:#0F172A;margin-bottom:4px}
+.fb-success-sub{font-size:13px;color:#64748B}
+.fb-error{font-size:12px;color:#EF4444;margin-top:10px;font-weight:500}
 </style>
 </head>
 <body>
@@ -215,11 +249,20 @@ function AuthModal({ onSave }) {
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
   const [err, setErr] = useState('');
+  // Read invite code from URL on first render, persist in sessionStorage
+  // so a refresh or magic-link bounce doesn't lose it.
+  const [inviteCode] = useState(() => {
+    const p = new URLSearchParams(location.search);
+    const fromUrl = p.get('invite');
+    if (fromUrl) sessionStorage.setItem('ebi_invite', fromUrl);
+    return sessionStorage.getItem('ebi_invite') || '';
+  });
 
   const submit = async () => {
     if (!email.includes('@')) return;
     setErr(''); setLoading(true);
-    const r = await fetch('/v1/auth/signup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email})});
+    const body = inviteCode ? { email, inviteCode } : { email };
+    const r = await fetch('/v1/auth/signup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     const d = await r.json();
     setLoading(false);
     if (d.success) setSent(true);
@@ -239,6 +282,11 @@ function AuthModal({ onSave }) {
             <>
               <div className="term-eyebrow">SECURE SIGN-IN // MAGIC LINK</div>
               <h2 className="term-h" id="term-h">Open the <em>terminal.</em></h2>
+              {inviteCode && (
+                <div style={{background:'rgba(255,107,53,.08)',border:'1px solid rgba(255,107,53,.3)',color:'#FF6B35',padding:'10px 14px',borderRadius:6,fontSize:12,fontWeight:600,letterSpacing:'.5px',marginBottom:14,fontFamily:"'JetBrains Mono',monospace"}}>
+                  ✦ DEMO INVITE ACTIVE · GROWTH PLAN · 30 DAYS
+                </div>
+              )}
               <p className="term-sub">Enter your email — we send you a magic link. No password, no setup, no credit card. You're inside the live feed in under a minute.</p>
               <input
                 className="term-input"
@@ -391,7 +439,7 @@ function MatchCard({ match, monitorId, apiKey, onAction }) {
       </div>
       {match.draft && (
         <div className="draft-box">
-          <div className="draft-header"><i className="ph-bold ph-robot"></i> AI draft reply</div>
+          <div className="draft-header"><i className="ph-bold ph-pencil-line"></i> Suggested reply</div>
           <div className="draft-text">{match.draft}</div>
         </div>
       )}
@@ -449,7 +497,7 @@ function SearchResultCard({ result, productContext, apiKey }) {
       </div>
       {draft && (
         <div className="draft-box">
-          <div className="draft-header"><i className="ph-bold ph-robot"></i> AI draft reply</div>
+          <div className="draft-header"><i className="ph-bold ph-pencil-line"></i> Suggested reply</div>
           <div className="draft-text">{draft}</div>
         </div>
       )}
@@ -556,8 +604,8 @@ function MatchesFeed({ apiKey, monitors }) {
         <div className="card">
           <div className="empty">
             <div className="empty-icon"><i className="ph ph-broadcast"></i></div>
-            <div className="empty-title">No monitors yet</div>
-            <div className="empty-desc">Create a monitor to get automatic alerts whenever someone posts a buying-intent signal.</div>
+            <div className="empty-title">Your first monitor will appear here</div>
+            <div className="empty-desc">Head to Find Customers to set one up — takes about a minute.</div>
           </div>
         </div>
       </div>
@@ -591,8 +639,8 @@ function MatchesFeed({ apiKey, monitors }) {
           <div className="card">
             <div className="empty">
               <div className="empty-icon"><i className="ph ph-clock"></i></div>
-              <div className="empty-title">Waiting for matches</div>
-              <div className="empty-desc">Your monitor scans every 10 minutes. First results will appear shortly.</div>
+              <div className="empty-title">Scanning 9 platforms for buying signals</div>
+              <div className="empty-desc">First matches usually land within 15 minutes. You'll get an email and Slack alert the moment one arrives.</div>
             </div>
           </div>
         )}
@@ -702,7 +750,7 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
         <div className="page-header">
           <div>
             <h1 className="page-title">Find <em style={{fontStyle:'italic',color:'#FF6B35',fontWeight:400}}>customers</em></h1>
-            <p className="page-subtitle">Describe what you sell. The AI suggests keywords, runs them live, and shows you what's worth replying to.</p>
+            <p className="page-subtitle">Tell me about your business in a sentence or two. I'll find Reddit threads where buyers are talking — right now.</p>
           </div>
           <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:'#9A3412',background:'#FFF7F2',border:'1px solid #FED7AA',padding:'5px 10px',borderRadius:999,letterSpacing:1.5,display:'inline-flex',alignItems:'center',gap:6}}>
             <span style={{width:5,height:5,borderRadius:'50%',background:'#FF6B35'}}></span> STEP 1 OF 3 · INPUT
@@ -763,7 +811,7 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
             </div>
             <div style={{padding:'18px 20px',lineHeight:1.85}}>
               <div style={{marginBottom:4}}><span style={{color:'#FF6B35'}}>$</span> analyze --input "{description.slice(0, 50)}…"</div>
-              <div style={{marginBottom:4,color:'#6f6757'}}># model: anthropic-haiku-4-5 · streaming</div>
+              <div style={{marginBottom:4,color:'#6f6757'}}># engine: signal-v2 · streaming</div>
               <div style={{marginBottom:4}}><span style={{color:'#34d058'}}>✓</span> parsed product context</div>
               <div style={{marginBottom:4}}><span style={{color:'#34d058'}}>✓</span> categorizing intent…</div>
               <div style={{marginBottom:4}}><span style={{color:'#FF6B35'}}>$</span> render --output review-screen</div>
@@ -782,7 +830,7 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
         <div className="page-header">
           <div>
             <h1 className="page-title">Self review · <em style={{fontStyle:'italic',color:'#FF6B35',fontWeight:400}}>verify before you commit</em></h1>
-            <p className="page-subtitle">The AI suggests. The data confirms. Toggle keywords, edit, then save.</p>
+            <p className="page-subtitle">Suggested keywords on the left. Live match counts on the right. Toggle, edit, then save.</p>
           </div>
           <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:'#9A3412',background:'#FFF7F2',border:'1px solid #FED7AA',padding:'5px 10px',borderRadius:999,letterSpacing:1.5,display:'inline-flex',alignItems:'center',gap:6}}>
             <span style={{width:5,height:5,borderRadius:'50%',background:'#FF6B35'}}></span> STEP 3 OF 3 · REVIEW
@@ -1047,7 +1095,103 @@ function Settings({ apiKey, userEmail, plan, onSignOut, monitors, onRefresh }) {
   );
 }
 
-// ΓöÇΓöÇ App ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+// ── Feedback Widget ────────────────────────────────────────────────────
+function FeedbackWidget({ apiKey }) {
+  const [open, setOpen] = useState(false);
+  const [nps, setNps] = useState(null);
+  const [category, setCategory] = useState('');
+  const [message, setMessage] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [err, setErr] = useState('');
+
+  const reset = () => { setNps(null); setCategory(''); setMessage(''); setSuccess(false); setErr(''); };
+  const close = () => { setOpen(false); setTimeout(reset, 300); };
+
+  useEffect(() => {
+    if (!success) return;
+    const t = setTimeout(close, 3000);
+    return () => clearTimeout(t);
+  }, [success]);
+
+  const submit = async () => {
+    if (nps === null) { setErr('Pick a score 0-10.'); return; }
+    if (!category) { setErr('Pick a category.'); return; }
+    if (message.trim().length === 0) { setErr('Tell us something.'); return; }
+    setErr('');
+    setSubmitting(true);
+    const r = await apiFetch('/v1/feedback', {
+      method: 'POST',
+      body: JSON.stringify({ npsScore: nps, message: message.trim(), category }),
+    }, apiKey);
+    setSubmitting(false);
+    if (r.ok) setSuccess(true);
+    else setErr(r.data?.error?.message || 'Could not send. Try again.');
+  };
+
+  if (!apiKey) return null;
+
+  return (
+    <>
+      <button className="fb-fab" onClick={() => setOpen(true)} aria-label="Send feedback">
+        <i className="ph-bold ph-chat-circle-text"></i>
+        <span>Feedback</span>
+      </button>
+      {open && (
+        <div className="fb-overlay" onClick={close}>
+          <div className="fb-modal" onClick={(e) => e.stopPropagation()}>
+            {success ? (
+              <div className="fb-success">
+                <div className="fb-success-icon"><i className="ph-bold ph-check"></i></div>
+                <div className="fb-success-title">That's gold. Thanks.</div>
+                <div className="fb-success-sub">Closing in a moment…</div>
+              </div>
+            ) : (
+              <>
+                <div className="fb-title">Tell us what you think</div>
+                <div className="fb-sub">Bugs, ideas, anything. We read every one.</div>
+
+                <label className="fb-label">How likely to recommend?</label>
+                <div className="fb-nps">
+                  {[0,1,2,3,4,5,6,7,8,9,10].map(n => (
+                    <button key={n} className={`fb-nps-btn${nps===n?' selected':''}`} onClick={() => setNps(n)}>{n}</button>
+                  ))}
+                </div>
+                <div className="fb-nps-scale"><span>Not at all</span><span>Very likely</span></div>
+
+                <label className="fb-label">Category</label>
+                <div className="fb-cats">
+                  {['bug','idea','praise','pricing','other'].map(c => (
+                    <button key={c} className={`fb-cat${category===c?' selected':''}`} onClick={() => setCategory(c)}>{c}</button>
+                  ))}
+                </div>
+
+                <label className="fb-label">What's on your mind?</label>
+                <textarea
+                  className="fb-textarea"
+                  placeholder="A bug? An idea? Just want to say hello? All welcome."
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  maxLength={2000}
+                />
+                {err && <div className="fb-error">{err}</div>}
+
+                <div className="fb-actions">
+                  <button className="fb-cancel" onClick={close}>Cancel</button>
+                  <button className="fb-submit" onClick={submit} disabled={submitting}>
+                    {submitting ? 'Sending…' : 'Send'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+// ── App ────────────────────────────────────────────────────────────────
 function App() {
   const [apiKey] = useState(() => {
     const p = new URLSearchParams(location.search);
@@ -1088,6 +1232,7 @@ function App() {
   return (
     <div className="layout">
       <Sidebar tab={tab} setTab={setTab} userEmail={userEmail} plan={plan} monitorCount={monitors.length} onSignOut={signOut} />
+      <FeedbackWidget apiKey={apiKey} />
       <div className="main">
         {tab==='find'     && <FindCustomers apiKey={apiKey} onMonitorCreated={()=>{ loadMonitors(); setTab('feed'); }} />}
         {tab==='feed'     && <MatchesFeed apiKey={apiKey} monitors={monitors} />}
