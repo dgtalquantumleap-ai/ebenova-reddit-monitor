@@ -17,6 +17,14 @@ import searchSubstack from './lib/scrapers/substack.js'
 import searchQuora    from './lib/scrapers/quora.js'
 import searchUpwork   from './lib/scrapers/upwork.js'
 import searchFiverr   from './lib/scrapers/fiverr.js'
+import {
+  isRedditAuthConfigured,
+  redditAuthHeaders,
+  redditOAuthHost,
+  redditPublicHost,
+  redditUserAgent,
+  invalidateRedditToken,
+} from './lib/reddit-auth.js'
 import { sendSlackAlert } from './lib/slack.js'
 import { escapeHtml } from './lib/html-escape.js'
 import { sanitizeForPrompt } from './lib/llm-safe-prompt.js'
@@ -416,23 +424,46 @@ const HN_KEYWORDS = [
 const seenIds = new Set()
 const seenHnIds = new Set()
 
-// ── Reddit search — public JSON endpoint, no auth needed ─────────────────────
+// ── Reddit search — OAuth client-credentials when configured, anon fallback ──
+// Same auth strategy as monitor-v2.js (see lib/reddit-auth.js).
 async function searchReddit(keyword, subreddits) {
   const results = []
   const encodedKeyword = encodeURIComponent(keyword)
+  const useOAuth = isRedditAuthConfigured()
+  const HOST = useOAuth ? redditOAuthHost() : redditPublicHost()
 
-  const urls = subreddits && subreddits.length > 0
+  const paths = subreddits && subreddits.length > 0
     ? subreddits.map(sr =>
-        `https://www.reddit.com/r/${sr}/search.json?q=${encodedKeyword}&sort=new&limit=10&t=day&restrict_sr=1`
+        `/r/${sr}/search.json?q=${encodedKeyword}&sort=new&limit=10&t=day&restrict_sr=1`
       )
-    : [`https://www.reddit.com/search.json?q=${encodedKeyword}&sort=new&limit=10&t=day`]
+    : [`/search.json?q=${encodedKeyword}&sort=new&limit=10&t=day`]
 
-  for (const url of urls) {
+  async function buildHeaders() {
+    if (useOAuth) {
+      try { return await redditAuthHeaders() }
+      catch (err) {
+        console.warn(`[monitor] Reddit OAuth token fetch failed (${err.message}) — anon fallback this cycle`)
+        return { 'User-Agent': redditUserAgent() }
+      }
+    }
+    return { 'User-Agent': redditUserAgent() }
+  }
+  let headers = await buildHeaders()
+
+  for (const path of paths) {
+    const url = HOST + path
     try {
-      const res = await fetch(url, {
-        headers: { 'User-Agent': 'reddit-monitor/1.0 (keyword alert bot)' }
-      })
-      if (!res.ok) continue
+      let res = await fetch(url, { headers })
+      if (res.status === 401 && useOAuth) {
+        console.warn(`[monitor] Reddit 401 — refreshing token and retrying once`)
+        invalidateRedditToken()
+        try { headers = await buildHeaders(); res = await fetch(url, { headers }) }
+        catch (err) { console.warn(`[monitor] retry failed: ${err.message}`) }
+      }
+      if (!res.ok) {
+        console.warn(`[monitor] Reddit ${res.status} for "${keyword}" → ${url.slice(0, 100)}…`)
+        continue
+      }
       const data = await res.json()
       const posts = data?.data?.children || []
 
