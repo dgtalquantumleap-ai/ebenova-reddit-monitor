@@ -20,6 +20,7 @@ import searchFiverr   from './lib/scrapers/fiverr.js'
 import { sendSlackAlert } from './lib/slack.js'
 import { escapeHtml } from './lib/html-escape.js'
 import { sanitizeForPrompt } from './lib/llm-safe-prompt.js'
+import { buildDraftPrompt, validateDraft } from './lib/draft-prompt.js'
 
 // ── Redis client (optional — seenIds fallback when process restarts) ──────────
 function getRedis() {
@@ -385,64 +386,15 @@ async function generateReplyDraft(post) {
   }
 
   // F8: Sanitize all untrusted inputs before they enter the prompt. Reddit
-  // post fields are user-controlled and could contain injection payloads
-  // ("Ignore previous instructions..."). Sanitization strips control chars
-  // and role tokens but preserves normal text. ctx.description is internal,
-  // also sanitized as defense-in-depth in case it's ever made tenant-editable.
-  const safeTitle = sanitizeForPrompt(post.title)
-  const safeSubreddit = sanitizeForPrompt(post.subreddit)
-  const safeBody = sanitizeForPrompt(post.body || '(no body text)')
-  const safeProduct = sanitizeForPrompt(post.product)
-  const safeContext = sanitizeForPrompt(ctx.description)
-
-  const prompt = `You are a Reddit community member who helps people with real problems. You have genuine expertise in the topic area below. You are NOT a marketer — you are a helpful person who occasionally mentions tools when they directly solve someone's exact problem.
-
-YOUR EXPERTISE AREA: ${safeContext}
-
-REDDIT POST:
-Title: ${safeTitle}
-Subreddit: r/${safeSubreddit}
-Body: ${safeBody}
-
-━━━ STEP 1: SKIP FILTER (check ALL of these) ━━━
-Respond ONLY with the word SKIP if ANY are true:
-- Post is emotional, relational, or about a person — not a task or tool problem
-- Person is venting, celebrating, joking, or seeking validation
-- Keyword matched incidentally (e.g. "share" in social sense, not tech sense)
-- Post is in a subreddit where self-promotion causes bans (r/Teachers, r/freelance)
-  AND the post does not explicitly ask "what tool/app/software should I use"
-- The problem is already solved in the thread
-- The post is more than 48 hours old (likely buried)
-
-━━━ STEP 2: CHOOSE YOUR REPLY STRATEGY ━━━
-If the post passes Step 1, choose ONE strategy based on the post type:
-
-STRATEGY A — "Genuine Advice First, Tool Optional"
-Use when: Person has a problem, not asking for a tool specifically.
-Structure: Give 2-3 sentences of real, actionable advice. Only mention ${safeProduct} if it's the single most natural solution — phrase it as "I've used [product] for this" not "check out [product]". If mentioning feels forced, don't mention it at all.
-
-STRATEGY B — "Direct Answer to Tool Request"  
-Use when: Person explicitly asks "what app/tool/software" for this.
-Structure: Answer directly. Name ${safeProduct} as one option among others if relevant. Include one specific reason why it fits their situation. Keep it under 4 sentences.
-
-STRATEGY C — "Helpful Comment, No Product Mention"
-Use when: Post is in a sensitive subreddit (Teachers, freelance) OR product mention would feel like an ad.
-Structure: Write a genuinely helpful 2-3 sentence reply with real advice. Do NOT mention ${safeProduct} at all. This builds account credibility and is sometimes the right call.
-
-STRATEGY D — "Empathy Then Practical Step"
-Use when: Person is frustrated (client won't pay, landlord problem, scope creep).
-Structure: One sentence acknowledging the frustration. Then one concrete next step they can take right now. Only mention ${safeProduct} if it directly enables that next step.
-
-━━━ REPLY RULES (apply to all strategies) ━━━
-- Write like a real Reddit user: casual, direct, no corporate language
-- Never use phrases like "check out", "I recommend", "great tool", "you should try"
-- If mentioning ${safeProduct}: use "I use" or "there's a thing called" or "someone built"
-- Never mention the URL unless the person asked for links
-- Never use bullet points, headers, or markdown formatting
-- Maximum 4 sentences total
-- Do not start with "I" — vary your opening
-
-Respond with SKIP or the reply text only. No labels, no strategy name, no explanation.`
+  // post fields are user-controlled and could contain injection payloads.
+  // buildDraftPrompt sanitizes every field internally (defense in depth).
+  const prompt = buildDraftPrompt({
+    title: post.title,
+    body: post.body,
+    subreddit: post.subreddit,
+    productContext: ctx.description,
+    productName: post.product,
+  })
 
   try {
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -453,7 +405,8 @@ Respond with SKIP or the reply text only. No labels, no strategy name, no explan
       },
       body: JSON.stringify({
         model: 'llama-3.3-70b-versatile',
-        max_tokens: 300,
+        max_tokens: 320,
+        temperature: 0.8,
         messages: [{ role: 'user', content: prompt }],
       }),
     })
@@ -461,6 +414,22 @@ Respond with SKIP or the reply text only. No labels, no strategy name, no explan
     const data = await res.json()
     const text = data.choices?.[0]?.message?.content?.trim() || null
     if (!text || text === 'SKIP') return null
+    const v = validateDraft(text)
+    if (!v.ok && v.reason === 'ai_tell') {
+      // One regen attempt with a stricter nudge
+      const stricter = prompt + `\n\nIMPORTANT: Your last attempt used the phrase "${v.matched}" which is forbidden. Rewrite without it.`
+      const res2 = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${groqKey}` },
+        body: JSON.stringify({ model: 'llama-3.3-70b-versatile', max_tokens: 320, temperature: 0.7, messages: [{ role: 'user', content: stricter }] }),
+      })
+      if (res2.ok) {
+        const data2 = await res2.json()
+        const text2 = data2.choices?.[0]?.message?.content?.trim() || null
+        if (text2 && text2 !== 'SKIP') return text2
+      }
+      return null
+    }
     return text
   } catch {
     return null

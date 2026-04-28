@@ -47,6 +47,7 @@ import { makeRateLimiter } from './lib/rate-limit.js'
 import { makeCostCap } from './lib/cost-cap.js'
 import { verifyCaptcha } from './lib/captcha.js'
 import { applyInviteToUser } from './lib/invite.js'
+import { buildDraftPrompt, validateDraft } from './lib/draft-prompt.js'
 
 const PORT = parseInt(process.env.API_PORT || process.env.PORT || '3001')
 const ADMIN_KEY = process.env.MONITOR_ADMIN_KEY
@@ -389,16 +390,40 @@ app.post('/v1/matches/draft', async (req, res) => {
     const monitor = monRaw ? (typeof monRaw === 'string' ? JSON.parse(monRaw) : monRaw) : {}
     if (monitor.owner !== auth.owner) return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'Not your monitor' } })
     const productContext = match.productContext || monitor.productContext || ''
-    const prompt = `You are a Reddit community member. Write a helpful 2-4 sentence reply to this post. Casual tone. No marketing language. If your product (described below) is genuinely relevant, mention it naturally as "I use" or "there's a thing called".\n\nProduct context: ${productContext.slice(0,1200)}\n\nPost title: ${match.title}\nSubreddit: r/${match.subreddit}\nBody: ${match.body || '(none)'}\n\nReply with SKIP if not relevant, else just the reply text.`
+    const prompt = buildDraftPrompt({
+      title: match.title,
+      body: match.body,
+      subreddit: match.subreddit,
+      productContext: productContext.slice(0, 1200),
+      productName: monitor.productName || monitor.name,
+    })
     const gr = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${groqKey}` },
-      body: JSON.stringify({ model: 'llama-3.3-70b-versatile', max_tokens: 300, messages: [{ role: 'user', content: prompt }] }),
+      body: JSON.stringify({ model: 'llama-3.3-70b-versatile', max_tokens: 320, temperature: 0.8, messages: [{ role: 'user', content: prompt }] }),
     })
-    if (!gr.ok) return res.status(502).json({ success: false, error: { code: 'AI_ERROR', message: 'Groq request failed' } })
+    if (!gr.ok) return res.status(502).json({ success: false, error: { code: 'DRAFT_ERROR', message: 'Reply drafting failed' } })
     const gd = await gr.json()
     const draft = gd.choices?.[0]?.message?.content?.trim() || null
-    const finalDraft = (!draft || draft === 'SKIP') ? null : draft
+    // Run quick AI-tell sanity check; if it trips, try a single regen with a stricter nudge
+    let finalDraft = (!draft || draft === 'SKIP') ? null : draft
+    if (finalDraft) {
+      const v = validateDraft(finalDraft)
+      if (!v.ok && v.reason === 'ai_tell') {
+        console.log(`[matches/draft] regen due to AI tell: ${v.matched}`)
+        const stricter = prompt + `\n\nIMPORTANT: Your last attempt used the phrase "${v.matched}" which is forbidden. Rewrite without it.`
+        const gr2 = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${groqKey}` },
+          body: JSON.stringify({ model: 'llama-3.3-70b-versatile', max_tokens: 320, temperature: 0.7, messages: [{ role: 'user', content: stricter }] }),
+        })
+        if (gr2.ok) {
+          const gd2 = await gr2.json()
+          const draft2 = gd2.choices?.[0]?.message?.content?.trim() || null
+          if (draft2 && draft2 !== 'SKIP') finalDraft = draft2
+        }
+      }
+    }
     await redis.set(key, JSON.stringify({ ...match, draft: finalDraft, draftRegeneratedAt: new Date().toISOString() }))
     res.json({ success: true, match_id, draft: finalDraft })
   } catch (err) {
