@@ -4,6 +4,7 @@ export function createMockRedis() {
   const store = new Map()
   const sets  = new Map()  // key -> Set
   const hashes = new Map() // key -> Map
+  const lists  = new Map() // key -> Array (head at index 0, like Redis lpush)
 
   const client = {
     async get(key) {
@@ -55,10 +56,58 @@ export function createMockRedis() {
       if (!h) return null
       return Object.fromEntries(h)
     },
+    // ── List ops (for matches list, alert digests, etc.) ──────────────────
+    async lpush(key, ...values) {
+      const arr = lists.get(key) || []
+      // Real Redis lpush prepends each value in order; preserve that semantic.
+      for (const v of values) arr.unshift(v)
+      lists.set(key, arr)
+      return arr.length
+    },
+    async rpush(key, ...values) {
+      const arr = lists.get(key) || []
+      for (const v of values) arr.push(v)
+      lists.set(key, arr)
+      return arr.length
+    },
+    async lrange(key, start, stop) {
+      const arr = lists.get(key) || []
+      // Redis range is inclusive; stop=-1 means last element.
+      const s = start < 0 ? Math.max(0, arr.length + start) : start
+      const e = stop  < 0 ? arr.length + stop : stop
+      return arr.slice(s, e + 1)
+    },
+    async ltrim(key, start, stop) {
+      const arr = lists.get(key)
+      if (!arr) return 'OK'
+      const s = start < 0 ? Math.max(0, arr.length + start) : start
+      const e = stop  < 0 ? arr.length + stop : stop
+      lists.set(key, arr.slice(s, e + 1))
+      return 'OK'
+    },
+    // setex (set with TTL) — TTL ignored in mock; tests don't care
+    async setex(key, _seconds, value) {
+      store.set(key, value)
+      return 'OK'
+    },
+    // Override del to also clean up list/set/hash entries for the key
+    // (covers the deleteMonitorAndData paths)
     // Test helper: inspect store contents
     _store: store,
     _sets: sets,
     _hashes: hashes,
+    _lists: lists,
+  }
+  // Patch del to also clear lists (needed by deleteMonitorAndData)
+  const baseDel = client.del.bind(client)
+  client.del = async (...keys) => {
+    let n = await baseDel(...keys)
+    for (const k of keys) {
+      if (lists.delete(k)) n++
+      if (sets.delete(k)) n++
+      if (hashes.delete(k)) n++
+    }
+    return n
   }
   return client
 }

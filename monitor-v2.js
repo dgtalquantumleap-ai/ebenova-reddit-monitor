@@ -33,6 +33,7 @@ import {
   redditUserAgent,
   invalidateRedditToken,
 } from './lib/reddit-auth.js'
+import { generateUnsubscribeToken, buildEmailFooter } from './lib/account-deletion.js'
 
 // F14: lazy daily cost caps. Soft-fail so the worker degrades gracefully
 // (skip-draft / skip-email / skip-embedding) rather than crashing.
@@ -455,7 +456,7 @@ function buildAlertEmail(monitor, matches) {
       <div style="margin-top:10px;">${platformBadges}</div>
     </div>
     ${keywordSections}
-    <div style="margin-top:24px;font-size:11px;color:#aaa;text-align:center;">Ebenova Insights · monitor your buying signals</div>
+    ${buildEmailFooter(monitor.unsubscribeToken)}
   </body></html>`
 }
 
@@ -478,11 +479,38 @@ async function storeMatches(redis, monitor, matches) {
 
 // ── Send alert email to monitor owner ────────────────────────────────────────
 async function sendMonitorAlert(monitor, matches) {
+  // Per-monitor email opt-out. The matches still get scanned, drafted, and
+  // stored in Redis (dashboard still surfaces them) — only the email send
+  // is skipped. Slack alerts continue if a webhook is configured.
+  if (monitor.emailEnabled === false) {
+    console.log(`[v2][${monitor.id}] email disabled for monitor ${monitor.id} — skipping alert`)
+    return
+  }
   if (!resend) {
     console.log(`[v2][${monitor.id}] No resend key — printing ${matches.length} matches to console`)
     matches.forEach(m => console.log(`  [${m.keyword}] ${m.title} — ${m.url}`))
     return
   }
+
+  // Backfill: monitors created before the unsubscribe-token feature shipped
+  // don't have a token. Generate one lazily here so every alert email has a
+  // working unsub link from the first send forward.
+  if (!monitor.unsubscribeToken && redis) {
+    try {
+      const token = generateUnsubscribeToken()
+      monitor.unsubscribeToken = token
+      await redis.set(`unsubscribe:${token}`, monitor.id)
+      const fresh = await redis.get(`insights:monitor:${monitor.id}`)
+      if (fresh) {
+        const parsed = typeof fresh === 'string' ? JSON.parse(fresh) : fresh
+        await redis.set(`insights:monitor:${monitor.id}`, JSON.stringify({ ...parsed, unsubscribeToken: token }))
+      }
+      console.log(`[v2][${monitor.id}] backfilled unsubscribeToken`)
+    } catch (err) {
+      console.warn(`[v2][${monitor.id}] token backfill failed: ${err.message}`)
+    }
+  }
+
   const keywords = [...new Set(matches.map(m => m.keyword))]
   const subject  = `Insights: ${matches.length} new mention${matches.length !== 1 ? 's' : ''} — ${keywords.slice(0, 3).join(', ')}${keywords.length > 3 ? '…' : ''}`
 
