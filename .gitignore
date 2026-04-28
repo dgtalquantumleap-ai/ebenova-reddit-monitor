@@ -1,3 +1,7 @@
 node_modules/
 .env
 .superpowers/
+
+# Real tester contact lists — never commit
+scripts/testers.csv
+scripts/testers-*.csv
