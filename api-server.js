@@ -368,14 +368,14 @@ app.post('/v1/matches/draft', async (req, res) => {
   if (!monitor_id || !match_id)
     return res.status(400).json({ success: false, error: { code: 'MISSING_PARAM', message: 'monitor_id and match_id required' } })
   const groqKey = process.env.GROQ_API_KEY
-  if (!groqKey) return res.status(503).json({ success: false, error: { code: 'NO_AI', message: 'AI drafts not configured' } })
+  if (!groqKey) return res.status(503).json({ success: false, error: { code: 'NO_AI', message: 'Reply drafting unavailable' } })
 
   // F14: daily Groq cost cap — return 429 instead of crashing on overload.
   try {
     const cap = await getGroqCap()()
     if (!cap.allowed) {
       console.warn(`[matches/draft] Groq daily cap hit (${cap.used}/${cap.max}) — refusing draft`)
-      return res.status(429).json({ success: false, error: { code: 'DAILY_CAP', message: 'Daily AI draft quota reached. Try again tomorrow.' } })
+      return res.status(429).json({ success: false, error: { code: 'DAILY_CAP', message: 'Daily draft quota reached. Try again tomorrow.' } })
     }
   } catch (_) { /* if redis unavailable, allow through */ }
 
@@ -673,14 +673,14 @@ app.post('/v1/search/draft', async (req, res) => {
   if (!title) return res.status(400).json({ success: false, error: { code: 'MISSING_FIELD', message: 'title required' } })
 
   const groqKey = process.env.GROQ_API_KEY
-  if (!groqKey) return res.status(503).json({ success: false, error: { code: 'NO_AI', message: 'AI drafts not configured' } })
+  if (!groqKey) return res.status(503).json({ success: false, error: { code: 'NO_AI', message: 'Reply drafting unavailable' } })
 
   // F14: daily Groq cost cap
   try {
     const cap = await getGroqCap()()
     if (!cap.allowed) {
       console.warn(`[search/draft] Groq daily cap hit (${cap.used}/${cap.max}) — refusing draft`)
-      return res.status(429).json({ success: false, error: { code: 'DAILY_CAP', message: 'Daily AI draft quota reached. Try again tomorrow.' } })
+      return res.status(429).json({ success: false, error: { code: 'DAILY_CAP', message: 'Daily draft quota reached. Try again tomorrow.' } })
     }
   } catch (_) { /* redis unavailable — allow */ }
 
