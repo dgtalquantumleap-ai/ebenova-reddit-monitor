@@ -14,6 +14,7 @@
     "test": "node --test --test-reporter=spec test/",
     "test:integration": "node test-reddit-monitor.js",
     "test:mcp": "node test-apify-actor.js",
+    "test:scrapers": "node scripts/test-new-scrapers.js",
     "provision": "node scripts/provision-client.js",
     "provision:dry": "node scripts/provision-client.js --dry-run"
   },
