@@ -962,6 +962,88 @@
 })();
 </script>
 
+<script>
+(function () {
+  var feed = document.getElementById('selector-feed');
+  if (!feed) return;
+
+  var pool = window.__ebnvFeedPool || [];
+  if (pool.length === 0) return; // hero script didn't load
+
+  function pad(n) { return n < 10 ? '0' + n : '' + n; }
+  function nowStamp() {
+    var d = new Date();
+    return pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+  }
+  function rowMarkup(item) {
+    var titleClass = item.score >= 8 ? 'feed-title' : 'feed-title-low';
+    var summary = item.summary
+      ? '<span class="feed-summary">' + item.summary + '</span>'
+      : '';
+    return ''
+      + '<div class="feed-row">'
+      +   '<span class="feed-time">' + nowStamp() + '</span>'
+      +   '<span class="feed-source ' + item.cls + '">' + item.src.toUpperCase().replace('PRODUCTHUNT', 'PH').replace('HACKERNEWS', 'HN') + '</span>'
+      +   '<span class="' + titleClass + '">' + item.title + '</span>'
+      +   '<span class="feed-score">' + item.score.toFixed(1) + '</span>'
+      +   summary
+      + '</div>';
+  }
+
+  function activeSet() {
+    return new Set(window.__ebnvSelection || []);
+  }
+  function filteredPool() {
+    var s = activeSet();
+    return pool.filter(function (it) { return s.has(it.src); });
+  }
+  function renderInitial() {
+    var pool2 = filteredPool();
+    var pick = pool2.slice(0, 6);
+    feed.innerHTML = pick.map(rowMarkup).join('');
+    if (pick.length === 0) {
+      feed.innerHTML = '<div style="padding:32px 14px;color:var(--ink-3);font-family:var(--mono);font-size:11px;letter-spacing:1px;text-align:center;">// NO PLATFORMS SELECTED</div>';
+    }
+  }
+
+  renderInitial();
+
+  var reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var smallViewport = window.matchMedia && window.matchMedia('(max-width: 480px)').matches;
+
+  var timer = null;
+  function tick() {
+    if (document.hidden) return;
+    var pool2 = filteredPool();
+    if (pool2.length === 0) return; // selector-feed already shows the empty state
+    var item = pool2[Math.floor(Math.random() * pool2.length)];
+    var temp = document.createElement('div');
+    temp.innerHTML = rowMarkup(item);
+    var newRow = temp.firstChild;
+    feed.insertBefore(newRow, feed.firstChild);
+    while (feed.children.length > 6) feed.removeChild(feed.lastChild);
+  }
+  function schedule() {
+    var delay = 5000 + Math.floor(Math.random() * 3000); // 5–8 s
+    timer = setTimeout(function () { tick(); schedule(); }, delay);
+  }
+  if (!reducedMotion && !smallViewport) schedule();
+
+  // Re-render fully when the selection changes.
+  window.addEventListener('ebnv:selection-change', function () {
+    renderInitial();
+  });
+
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) {
+      if (timer) { clearTimeout(timer); timer = null; }
+    } else if (!timer && !reducedMotion && !smallViewport) {
+      schedule();
+    }
+  });
+})();
+</script>
+
 <!-- Invite-code propagation: if landed via ?invite=CODE, rewrite /dashboard
      links to carry the code through to the AuthModal signup flow. -->
 <script>
