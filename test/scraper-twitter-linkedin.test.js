@@ -73,20 +73,22 @@ test('linkedin: result items have required shape fields when present', async () 
   }
 })
 
-// ── Platform registry now includes new platforms ──────────────────────────
+// ── Platform registry includes Twitter (LinkedIn intentionally parked) ────
 
-test('platforms: VALID_PLATFORMS includes twitter and linkedin', () => {
+test('platforms: VALID_PLATFORMS includes twitter', () => {
   assert.ok(VALID_PLATFORMS.includes('twitter'))
-  assert.ok(VALID_PLATFORMS.includes('linkedin'))
 })
 
-test('platforms: PLATFORM_LABELS has entries for twitter and linkedin', () => {
-  assert.equal(PLATFORM_LABELS.twitter,  'Twitter/X')
-  assert.equal(PLATFORM_LABELS.linkedin, 'LinkedIn')
+test('platforms: VALID_PLATFORMS does NOT include linkedin (parked)', () => {
+  assert.equal(VALID_PLATFORMS.includes('linkedin'), false)
 })
 
-test('platforms: validatePlatforms accepts twitter and linkedin', () => {
+test('platforms: PLATFORM_LABELS has entry for twitter', () => {
+  assert.equal(PLATFORM_LABELS.twitter, 'Twitter/X')
+})
+
+test('platforms: validatePlatforms accepts twitter, rejects linkedin', () => {
   assert.equal(validatePlatforms(['twitter']).ok, true)
-  assert.equal(validatePlatforms(['linkedin']).ok, true)
-  assert.equal(validatePlatforms(['reddit', 'twitter', 'linkedin']).ok, true)
+  assert.equal(validatePlatforms(['linkedin']).ok, false)
+  assert.equal(validatePlatforms(['reddit', 'twitter']).ok, true)
 })

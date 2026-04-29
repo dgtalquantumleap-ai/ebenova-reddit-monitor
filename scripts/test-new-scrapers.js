@@ -1,12 +1,14 @@
 #!/usr/bin/env node
-// scripts/test-new-scrapers.js — manual verification for the Twitter + LinkedIn
-// scrapers. Run after deploy (or locally with creds in .env) to confirm both
-// platforms return real results.
+// scripts/test-new-scrapers.js — manual verification for the new scrapers.
+// Run after deploy (or locally with creds in .env) to confirm Twitter is
+// functional. Also probes LinkedIn so we can re-enable it the moment a
+// search backend cooperates — but LinkedIn is parked (see lib/scrapers/linkedin.js)
+// and is NOT counted toward the success exit code.
 //
 // Usage:
 //   npm run test:scrapers
 //
-// Exits 0 if at least one scraper returned results, 1 if both returned 0.
+// Exits 0 if Twitter returned results, 1 otherwise.
 
 import { loadEnv } from '../lib/env.js'
 loadEnv()
@@ -44,14 +46,13 @@ async function main() {
   } catch (err) {
     console.warn(`LinkedIn threw: ${err.message}`)
   }
-  summarize('LinkedIn', linkedinResults)
+  summarize('LinkedIn (parked — informational)', linkedinResults)
 
-  const total = twitterResults.length + linkedinResults.length
-  if (total === 0) {
-    console.warn('\nBoth scrapers returned 0 results — check credentials, IP rep, and scraper logs.')
+  if (twitterResults.length === 0) {
+    console.warn('\nTwitter returned 0 results — check TWITTER_USERNAME / TWITTER_PASSWORD and scraper logs.')
     process.exit(1)
   }
-  console.log(`\nOK — ${total} total results across both platforms.`)
+  console.log(`\nOK — Twitter returned ${twitterResults.length} results.`)
   process.exit(0)
 }
 
