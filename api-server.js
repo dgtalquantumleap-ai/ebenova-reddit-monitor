@@ -39,6 +39,8 @@ import searchUpwork      from './lib/scrapers/upwork.js'
 import searchFiverr      from './lib/scrapers/fiverr.js'
 import searchGitHub      from './lib/scrapers/github.js'
 import searchProductHunt from './lib/scrapers/producthunt.js'
+import searchTwitter     from './lib/scrapers/twitter.js'
+import searchLinkedIn    from './lib/scrapers/linkedin.js'
 import { loadEnv } from './lib/env.js'
 import { makeCorsMiddleware } from './lib/cors.js'
 import helmet from 'helmet'
@@ -841,7 +843,7 @@ app.post('/v1/search', async (req, res) => {
     }
   } catch (_) { /* redis unavailable — allow */ }
 
-  const { keywords = [], platforms = ['reddit','medium','substack','quora','upwork','fiverr','github','producthunt'] } = req.body
+  const { keywords = [], platforms = ['reddit','medium','substack','quora','upwork','fiverr','github','producthunt','twitter','linkedin'] } = req.body
   if (!Array.isArray(keywords) || keywords.length === 0)
     return res.status(400).json({ success: false, error: { code: 'MISSING_FIELD', message: 'keywords array required' } })
 
@@ -868,6 +870,8 @@ app.post('/v1/search', async (req, res) => {
       if (platformSet.has('fiverr'))      tasks.push(searchFiverr(kwEntry, opts).catch(() => []))
       if (platformSet.has('github'))      tasks.push(searchGitHub(kwEntry, opts).catch(() => []))
       if (platformSet.has('producthunt')) tasks.push(searchProductHunt(kwEntry, opts).catch(() => []))
+      if (platformSet.has('twitter'))     tasks.push(searchTwitter(kwEntry, opts).catch(() => []))
+      if (platformSet.has('linkedin'))    tasks.push(searchLinkedIn(kwEntry, opts).catch(() => []))
       const batches = await Promise.all(tasks)
       for (const batch of batches) {
         for (const item of (batch || [])) {
