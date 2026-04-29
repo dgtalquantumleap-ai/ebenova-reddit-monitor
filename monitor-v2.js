@@ -24,7 +24,10 @@ import searchHackerNews    from './lib/scrapers/hackernews.js'
 import searchGitHub        from './lib/scrapers/github.js'
 import searchProductHunt   from './lib/scrapers/producthunt.js'
 import searchTwitter       from './lib/scrapers/twitter.js'
-import searchLinkedIn      from './lib/scrapers/linkedin.js'
+// LinkedIn scraper exists at lib/scrapers/linkedin.js but is parked: no
+// reliable open search backend indexes linkedin.com/posts/ from a server.
+// Re-import + re-add to platformRunners and SOURCE_RANK once we wire up
+// a real source.
 import { migrateLegacyPlatforms, PLATFORM_LABELS, PLATFORM_EMOJIS } from './lib/platforms.js'
 import { escapeHtml }      from './lib/html-escape.js'
 import { sanitizeForPrompt } from './lib/llm-safe-prompt.js'
@@ -617,7 +620,6 @@ async function runMonitor(monitor) {
     { key: 'github',      scraper: searchGitHub,      delayMs: 2000 },
     { key: 'producthunt', scraper: searchProductHunt, delayMs: 2000 },
     { key: 'twitter',     scraper: searchTwitter,     delayMs: 2500 },
-    { key: 'linkedin',    scraper: searchLinkedIn,    delayMs: 3000 },
   ]
 
   for (const { key, scraper, delayMs } of platformRunners) {
@@ -690,7 +692,7 @@ async function runMonitor(monitor) {
     recommending:    4,
     venting:         5,
   }
-  const SOURCE_RANK = { reddit: 0, hackernews: 1, quora: 2, medium: 3, substack: 4, upwork: 5, fiverr: 6, twitter: 7, linkedin: 8 }
+  const SOURCE_RANK = { reddit: 0, hackernews: 1, quora: 2, medium: 3, substack: 4, upwork: 5, fiverr: 6, twitter: 7 }
   allMatches.sort((a, b) => {
     const ia = INTENT_BOOST[a.intent] ?? 6
     const ib = INTENT_BOOST[b.intent] ?? 6
