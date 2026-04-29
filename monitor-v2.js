@@ -31,6 +31,7 @@ import { makeCostCap } from './lib/cost-cap.js'
 import { draftCall }   from './lib/draft-call.js'
 import { parseRedditRSS, buildRedditSearchUrl, parseRetryAfter } from './lib/reddit-rss.js'
 import { generateUnsubscribeToken, buildEmailFooter } from './lib/account-deletion.js'
+import { classifyMatch, intentPriority, isHighPriority } from './lib/classify.js'
 
 // F14: lazy daily cost caps. Soft-fail so the worker degrades gracefully
 // (skip-draft / skip-email / skip-embedding) rather than crashing.
@@ -368,6 +369,27 @@ async function generateReplyDraft(post, productContext, tone) {
   })
 }
 
+// ── Sentiment + intent badges (rendered next to source line) ────────────────
+const SENTIMENT_BADGE = {
+  positive:    { bg: '#dcfce7', color: '#166534', label: '😊 Positive' },
+  negative:    { bg: '#fee2e2', color: '#991b1b', label: '😠 Negative' },
+  neutral:     { bg: '#f1f5f9', color: '#475569', label: '😐 Neutral' },
+  frustrated:  { bg: '#fff7ed', color: '#9a3412', label: '😤 Frustrated' },
+  questioning: { bg: '#eff6ff', color: '#1d4ed8', label: '🤔 Questioning' },
+}
+const INTENT_BADGE = {
+  asking_for_tool: { bg: '#fef3c7', color: '#92400e', label: '🎯 Wants a Tool' },
+  buying:          { bg: '#fef3c7', color: '#92400e', label: '💰 Buying Intent' },
+  complaining:     { bg: '#fee2e2', color: '#991b1b', label: '⚠️ Complaint' },
+  researching:     { bg: '#eff6ff', color: '#1d4ed8', label: '🔍 Researching' },
+  venting:         { bg: '#f5f3ff', color: '#5b21b6', label: '💬 Venting' },
+  recommending:    { bg: '#dcfce7', color: '#166534', label: '👍 Recommending' },
+}
+function renderBadge(spec) {
+  if (!spec) return ''
+  return `<span style="display:inline-block;padding:2px 8px;margin-left:6px;background:${spec.bg};color:${spec.color};border-radius:10px;font-size:10px;font-weight:700;letter-spacing:.2px;">${spec.label}</span>`
+}
+
 // ── Email builder — per-monitor, minimal ─────────────────────────────────────
 function buildAlertEmail(monitor, matches) {
   const byKeyword = {}
@@ -377,10 +399,26 @@ function buildAlertEmail(monitor, matches) {
   }
 
   const keywordSections = Object.entries(byKeyword).map(([kw, posts]) => {
-    const items = posts.map(p => `
+    const items = posts.map(p => {
+      const sourceLabel =
+        p.source === 'hackernews'  ? '🟠 HN'
+      : p.source === 'medium'      ? '📰 Medium'
+      : p.source === 'substack'    ? '📧 Substack'
+      : p.source === 'quora'       ? '💬 Quora'
+      : p.source === 'upwork'      ? '💼 Upwork'
+      : p.source === 'fiverr'      ? '🟢 Fiverr'
+      : p.source === 'github'      ? '🐙 GitHub'
+      : p.source === 'producthunt' ? '🚀 Product Hunt'
+      : `r/${escapeHtml(p.subreddit)}`
+      const sentimentBadge = renderBadge(SENTIMENT_BADGE[p.sentiment])
+      const intentBadge    = renderBadge(INTENT_BADGE[p.intent])
+      const highPriBadge   = isHighPriority(p)
+        ? `<span style="display:inline-block;padding:2px 8px;margin-left:6px;background:#fee2e2;color:#991b1b;border-radius:10px;font-size:10px;font-weight:800;letter-spacing:.3px;">🔥 HIGH PRIORITY</span>`
+        : ''
+      return `
       <div style="margin-bottom:18px;padding:14px;background:#f9f9f9;border-left:4px solid #FF6B35;border-radius:4px;">
         <div style="font-size:12px;color:#888;margin-bottom:5px;">
-          ${p.source === 'hackernews' ? 'HN' : p.source === 'medium' ? '📰 Medium' : p.source === 'substack' ? '📧 Substack' : p.source === 'quora' ? '💬 Quora' : p.source === 'upwork' ? '💼 Upwork' : p.source === 'fiverr' ? '🟢 Fiverr' : `r/${escapeHtml(p.subreddit)}`} · u/${escapeHtml(p.author)} · ${escapeHtml(p.score)} upvotes
+          ${sourceLabel} · u/${escapeHtml(p.author)} · ${escapeHtml(p.score)} upvotes${sentimentBadge}${intentBadge}${highPriBadge}
         </div>
         <a href="${escapeHtml(p.url)}" style="font-size:15px;font-weight:600;color:#1a1a1a;text-decoration:none;">${escapeHtml(p.title)}</a>
         ${p.body ? `<p style="font-size:13px;color:#555;margin:7px 0 0;line-height:1.5;">${escapeHtml(p.body)}${p.body.length >= 300 ? '…' : ''}</p>` : ''}
@@ -394,7 +432,8 @@ function buildAlertEmail(monitor, matches) {
           <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#a08c00;margin-bottom:6px;">✏️ Suggested reply</div>
           <div style="font-size:13px;color:#333;line-height:1.6;white-space:pre-wrap;">${escapeHtml(p.draft)}</div>
         </div>` : ''}
-      </div>`).join('')
+      </div>`
+    }).join('')
     return `
       <div style="margin-bottom:28px;">
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:#aaa;margin-bottom:10px;">"${escapeHtml(kw)}" (${posts.length})</div>
@@ -476,7 +515,15 @@ async function sendMonitorAlert(monitor, matches) {
   }
 
   const keywords = [...new Set(matches.map(m => m.keyword))]
-  const subject  = `Insights: ${matches.length} new mention${matches.length !== 1 ? 's' : ''} — ${keywords.slice(0, 3).join(', ')}${keywords.length > 3 ? '…' : ''}`
+  // Subject signals high-value intent so the operator sees the best matches
+  // before opening the email. 🎯 prefix when any match is asking_for_tool /
+  // buying; otherwise plain.
+  const highValueCount = matches.filter(m => m.intent === 'asking_for_tool' || m.intent === 'buying').length
+  const prefix = highValueCount > 0 ? '🎯 ' : ''
+  const intentNote = highValueCount > 0
+    ? ` (${highValueCount} buying intent)`
+    : ''
+  const subject = `${prefix}Insights: ${matches.length} new mention${matches.length !== 1 ? 's' : ''}${intentNote} — ${keywords.slice(0, 3).join(', ')}${keywords.length > 3 ? '…' : ''}`
 
   // F14: daily Resend cost cap — skip send (matches still stored in Redis,
   // dashboard still shows them, Slack alert if configured still fires).
@@ -585,6 +632,34 @@ async function runMonitor(monitor) {
     return
   }
 
+  // ── Classify sentiment + intent (best-effort, before drafting) ───────────
+  // Why before drafting: priority sort uses intent. Why best-effort: classify
+  // failure must never block storage or email. Cap-aware via shared groq cap.
+  const CLASSIFY_CONCURRENCY = 5
+  const groqCapForClassify = getGroqCap()
+  for (let i = 0; i < allMatches.length; i += CLASSIFY_CONCURRENCY) {
+    const batch = allMatches.slice(i, i + CLASSIFY_CONCURRENCY)
+    await Promise.all(batch.map(async m => {
+      const result = await classifyMatch({
+        title: m.title,
+        body: m.body,
+        source: m.source,
+        costCapCheck: groqCapForClassify || undefined,
+      })
+      if (result) {
+        m.sentiment = result.sentiment
+        m.intent = result.intent
+        m.intentConfidence = result.confidence
+      }
+    }))
+    if (i + CLASSIFY_CONCURRENCY < allMatches.length) await delay(300)
+  }
+  // Cycle summary so operator can see the intent mix at a glance
+  const highValue = allMatches.filter(m => m.intent === 'asking_for_tool' || m.intent === 'buying').length
+  const complaining = allMatches.filter(m => m.intent === 'complaining').length
+  const otherClassified = allMatches.filter(m => m.intent && m.intent !== 'asking_for_tool' && m.intent !== 'buying' && m.intent !== 'complaining').length
+  console.log(`${label} Classified ${allMatches.length} matches: ${highValue} buying/asking_for_tool, ${complaining} complaining, ${otherClassified} other`)
+
   console.log(`${label} ${allMatches.length} total matches — generating drafts…`)
 
   // Generate drafts (max 3 concurrent to avoid rate limits)
@@ -600,14 +675,26 @@ async function runMonitor(monitor) {
     if (i + CONCURRENCY < allMatches.length) await delay(1000)
   }
 
-  // Source priority — Reddit ranks first because it's the highest-traffic
-  // platform with the strongest buying-intent signal. Lower = higher priority.
+  // Priority sort — intent first, then source rank, then recency.
+  // INTENT_BOOST puts 'asking_for_tool' at the top because it's the most
+  // explicit "I need a solution" signal. Unclassified matches go last.
+  const INTENT_BOOST = {
+    asking_for_tool: 0,
+    buying:          1,
+    researching:     2,
+    complaining:     3,
+    recommending:    4,
+    venting:         5,
+  }
   const SOURCE_RANK = { reddit: 0, hackernews: 1, quora: 2, medium: 3, substack: 4, upwork: 5, fiverr: 6 }
   allMatches.sort((a, b) => {
+    const ia = INTENT_BOOST[a.intent] ?? 6
+    const ib = INTENT_BOOST[b.intent] ?? 6
+    if (ia !== ib) return ia - ib
     const ra = SOURCE_RANK[a.source] ?? 99
     const rb = SOURCE_RANK[b.source] ?? 99
     if (ra !== rb) return ra - rb
-    // Within the same source, newer first
+    // Within the same intent + source, newer first
     return new Date(b.createdAt) - new Date(a.createdAt)
   })
 

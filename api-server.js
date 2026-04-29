@@ -57,6 +57,7 @@ import { verifyCaptcha } from './lib/captcha.js'
 import { applyInviteToUser } from './lib/invite.js'
 import { draftCall } from './lib/draft-call.js'
 import { validatePlatforms, migrateLegacyPlatforms, VALID_PLATFORMS } from './lib/platforms.js'
+import { classifyMatch, intentPriority } from './lib/classify.js'
 
 const PORT = parseInt(process.env.API_PORT || process.env.PORT || '3001')
 const ADMIN_KEY = process.env.MONITOR_ADMIN_KEY
@@ -441,16 +442,76 @@ app.get('/v1/matches', async (req, res) => {
       const mr = await redis.get(`insights:match:${monitor_id}:${matchId}`)
       if (mr) matches.push(typeof mr === 'string' ? JSON.parse(mr) : mr)
     }
-    // Source priority — Reddit always surfaces first because it's the
-    // highest-traffic, highest-intent platform. Within source, newer first.
+    // Priority sort — intent first (asking_for_tool > buying > researching >
+    // ...), then source rank (Reddit first), then recency. Mirrors the same
+    // sort applied in monitor-v2.js runMonitor() so the dashboard order
+    // matches what testers see in their alert emails.
     const SOURCE_RANK = { reddit: 0, hackernews: 1, quora: 2, medium: 3, substack: 4, upwork: 5, fiverr: 6 }
     matches.sort((a, b) => {
+      const ia = intentPriority(a.intent)
+      const ib = intentPriority(b.intent)
+      if (ia !== ib) return ia - ib
       const ra = SOURCE_RANK[a.source] ?? 99
       const rb = SOURCE_RANK[b.source] ?? 99
       if (ra !== rb) return ra - rb
       return new Date(b.createdAt || 0) - new Date(a.createdAt || 0)
     })
     res.json({ success: true, monitor_id, matches, count: matches.length, offset: off, limit: lim })
+  } catch (err) {
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
+  }
+})
+
+// ── GET /v1/matches/intent-summary ─────────────────────────────────────────
+// 7-day breakdown of intent + sentiment across a monitor's matches. Used
+// for marketer-facing rollups ("how many high-value signals this week?").
+// Reads the same matches list that powers the feed; classifications come
+// from the records as-stored in Redis.
+app.get('/v1/matches/intent-summary', async (req, res) => {
+  const auth = await authenticate(req)
+  if (!auth.ok) return res.status(auth.status).json({ success: false, error: auth.error })
+  const { monitor_id } = req.query
+  if (!monitor_id) return res.status(400).json({ success: false, error: { code: 'MISSING_PARAM', message: 'monitor_id is required' } })
+  try {
+    const redis = getRedis()
+    const monRaw = await redis.get(`insights:monitor:${monitor_id}`)
+    if (!monRaw) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Monitor not found' } })
+    const m = typeof monRaw === 'string' ? JSON.parse(monRaw) : monRaw
+    if (m.owner !== auth.owner) return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'Not your monitor' } })
+
+    const ids = await redis.lrange(`insights:matches:${monitor_id}`, 0, 499) || []
+    const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000
+    const by_intent = {
+      asking_for_tool: 0, buying: 0, complaining: 0, researching: 0,
+      venting: 0, recommending: 0, unclassified: 0,
+    }
+    const by_sentiment = {
+      positive: 0, negative: 0, neutral: 0, frustrated: 0, questioning: 0,
+    }
+    let total = 0
+    for (const matchId of ids) {
+      const mr = await redis.get(`insights:match:${monitor_id}:${matchId}`)
+      if (!mr) continue
+      const match = typeof mr === 'string' ? JSON.parse(mr) : mr
+      const ts = new Date(match.createdAt || match.storedAt || 0).getTime()
+      if (!Number.isFinite(ts) || ts < cutoff) continue
+      total++
+      if (match.intent && Object.prototype.hasOwnProperty.call(by_intent, match.intent)) {
+        by_intent[match.intent]++
+      } else {
+        by_intent.unclassified++
+      }
+      if (match.sentiment && Object.prototype.hasOwnProperty.call(by_sentiment, match.sentiment)) {
+        by_sentiment[match.sentiment]++
+      }
+    }
+    const high_value_count = by_intent.asking_for_tool + by_intent.buying
+    res.json({
+      success: true,
+      monitor_id,
+      period: '7d',
+      summary: { total, by_intent, by_sentiment, high_value_count },
+    })
   } catch (err) {
     res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
   }
@@ -526,8 +587,38 @@ app.post('/v1/matches/draft', async (req, res) => {
       productName: monitor.productName || monitor.name,
       tone: monitor.replyTone, // monitor's saved tone — falls back to 'conversational' inside buildDraftPrompt
     })
-    await redis.set(key, JSON.stringify({ ...match, draft: finalDraft, draftedBy, draftRegeneratedAt: new Date().toISOString() }))
-    res.json({ success: true, match_id, draft: finalDraft, draftedBy })
+
+    // Backfill classification if this is a legacy match (no sentiment/intent
+    // stored yet). Best-effort: failure does not block the draft response.
+    // Cost-cap aware — same getGroqCap() that gates the draft above, so a
+    // hot regen-loop on legacy matches can't blow through the daily budget.
+    let backfill = {}
+    if (!match.intent || !match.sentiment) {
+      const r = await classifyMatch({
+        title: match.title,
+        body: match.body,
+        source: match.source,
+        costCapCheck: getGroqCap(),
+      })
+      if (r) {
+        backfill = { sentiment: r.sentiment, intent: r.intent, intentConfidence: r.confidence }
+      }
+    }
+
+    await redis.set(key, JSON.stringify({
+      ...match,
+      ...backfill,
+      draft: finalDraft,
+      draftedBy,
+      draftRegeneratedAt: new Date().toISOString(),
+    }))
+    res.json({
+      success: true,
+      match_id,
+      draft: finalDraft,
+      draftedBy,
+      ...(backfill.intent ? { sentiment: backfill.sentiment, intent: backfill.intent } : {}),
+    })
   } catch (err) {
     res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
   }
