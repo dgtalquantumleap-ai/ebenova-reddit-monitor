@@ -115,6 +115,8 @@ select.inp{cursor:pointer}
 .draft-header{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#9A3412;margin-bottom:8px;display:flex;align-items:center;gap:5px}
 .draft-header i{font-size:13px}
 .draft-text{font-size:13px;color:#451A03;line-height:1.75;white-space:pre-wrap}
+.draft-textarea{width:100%;background:rgba(255,255,255,0.6);border:1px dashed #FED7AA;border-radius:6px;padding:10px 12px;font-family:inherit;font-size:13px;color:#451A03;line-height:1.75;resize:vertical;min-height:96px;outline:none;box-sizing:border-box}
+.draft-textarea:focus{border-color:#FB923C;border-style:solid;background:#fff;box-shadow:inset 0 0 0 1px rgba(251,146,60,0.25)}
 
 /* Empty state */
 .empty{display:flex;flex-direction:column;align-items:center;text-align:center;padding:56px 32px}
@@ -445,6 +447,12 @@ function ClassificationBadge({ spec }) {
 function MatchCard({ match, monitorId, apiKey, onAction }) {
   const [drafting, setDrafting] = useState(false);
   const [gone, setGone] = useState(false);
+  // Editable copy of the draft. Stays local so the user can tweak before
+  // copying. Resets whenever the upstream draft changes (initial load,
+  // regenerate, etc.).
+  const [draftText, setDraftText] = useState(match.draft || '');
+  const [copied, setCopied] = useState(false);
+  useEffect(() => { setDraftText(match.draft || ''); setCopied(false); }, [match.draft]);
 
   const regenerate = async () => {
     setDrafting(true);
@@ -456,6 +464,14 @@ function MatchCard({ match, monitorId, apiKey, onAction }) {
   const feedback = async (fb) => {
     await apiFetch('/v1/matches/feedback',{method:'POST',body:JSON.stringify({monitor_id:monitorId,match_id:match.id,feedback:fb})},apiKey);
     setGone(true);
+  };
+
+  const copyDraft = () => {
+    if (!draftText) return;
+    navigator.clipboard.writeText(draftText).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }).catch(() => {});
   };
 
   if (gone) return null;
@@ -483,13 +499,23 @@ function MatchCard({ match, monitorId, apiKey, onAction }) {
       {match.draft && (
         <div className="draft-box">
           <div className="draft-header" style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-            <span><i className="ph-bold ph-pencil-line"></i> Suggested reply</span>
+            <span><i className="ph-bold ph-pencil-line"></i> Suggested reply <span style={{fontWeight:500,opacity:.6,marginLeft:4}}>· edit before copy</span></span>
             {match.draftedBy && <span style={{fontSize:9,fontWeight:600,opacity:.55,letterSpacing:'.5px'}}>[{match.draftedBy}]</span>}
           </div>
-          <div className="draft-text">{match.draft}</div>
+          <textarea
+            className="draft-textarea"
+            value={draftText}
+            onChange={e => setDraftText(e.target.value)}
+            placeholder="Edit your reply…"
+          />
         </div>
       )}
       <div style={{display:'flex',gap:6,flexWrap:'wrap',alignItems:'center',marginTop:12,paddingTop:12,borderTop:'1px solid #F8FAFC'}}>
+        {match.draft && (
+          <button className="btn btn-primary btn-sm" onClick={copyDraft} disabled={!draftText}>
+            <i className={`ph-bold ph-${copied?'check':'copy'}`}></i> {copied ? 'Copied' : 'Copy'}
+          </button>
+        )}
         <button className="btn btn-ghost btn-sm" onClick={()=>feedback('up')}>
           <i className="ph ph-check"></i> Replied
         </button>
