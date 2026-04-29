@@ -17,6 +17,49 @@ test('returns null draft when no provider env vars set', async () => {
   assert.equal(r.model, null)
 })
 
+test('PR #28: competitor-mode prompt addendum exists and matches the spec', () => {
+  const text = _internals.COMPETITOR_PROMPT_ADDITION
+  assert.match(text, /unhappy with or evaluating a competitor product/)
+  assert.match(text, /Acknowledge their frustration without naming competitors/)
+  assert.match(text, /Position an alternative naturally and helpfully/)
+  assert.match(text, /Never say "our product"/)
+  assert.match(text, /founder or power user who switched/)
+  assert.match(text, /Maximum 3 sentences/)
+})
+
+test('PR #28: competitorMode=true appends the addendum to the prompt sent to providers', async () => {
+  // Capture what prompt the provider receives by injecting a mock provider
+  process.env.GROQ_API_KEY = 'k'
+  delete process.env.DEEPSEEK_API_KEY
+  delete process.env.DRAFT_PRIMARY
+  const captured = { promptCompetitor: null, promptNormal: null }
+  const origGroq = _internals.PROVIDERS.groq
+  _internals.PROVIDERS.groq = {
+    name: 'groq',
+    available: () => true,
+    call: async ({ prompt }) => {
+      // Stash whichever flavor we got and return a clean draft so validateDraft passes
+      if (prompt.includes('unhappy with or evaluating a competitor product')) captured.promptCompetitor = prompt
+      else captured.promptNormal = prompt
+      return 'A short helpful reply with no banned phrases or markdown formatting.'
+    },
+  }
+  try {
+    await draftCall({ ...SAMPLE, competitorMode: true })
+    await draftCall({ ...SAMPLE, competitorMode: false })
+    assert.ok(captured.promptCompetitor, 'competitor-mode call should reach the provider')
+    assert.ok(captured.promptNormal,     'non-competitor call should also reach the provider')
+    // Same SAMPLE input — the only differing slice should be the addendum.
+    assert.equal(captured.promptCompetitor.startsWith(captured.promptNormal), true,
+      'competitor prompt should be the normal prompt + the addendum suffix')
+    assert.match(captured.promptCompetitor, /Maximum 3 sentences/)
+    assert.equal(/Maximum 3 sentences/.test(captured.promptNormal), false)
+  } finally {
+    _internals.PROVIDERS.groq = origGroq
+    delete process.env.GROQ_API_KEY
+  }
+})
+
 test('buildChain respects DRAFT_PRIMARY=groq (default)', () => {
   process.env.GROQ_API_KEY = 'k1'
   process.env.DEEPSEEK_API_KEY = 'k2'

@@ -754,6 +754,9 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
   const [suggestion, setSuggestion] = useState(null)
   const [counts, setCounts] = useState({})
   const [picked, setPicked] = useState(new Set())
+  // PR #28 — per-keyword type ('keyword' | 'competitor'). Map<string, type>.
+  // Default 'keyword' for any picked keyword not in the map.
+  const [keywordTypes, setKeywordTypes] = useState(new Map())
   const [customKw, setCustomKw] = useState('')
   const [monitorName, setMonitorName] = useState('')
   const [replyTone, setReplyTone] = useState('conversational')
@@ -852,7 +855,11 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
     const allKws = [...picked];
     const body = {
       name: monitorName.trim() || 'My Monitor',
-      keywords: allKws.map(k => ({ keyword: k, productContext: suggestion?.productContext || description })),
+      keywords: allKws.map(k => ({
+        keyword: k,
+        type: keywordTypes.get(k) || 'keyword',  // PR #28
+        productContext: suggestion?.productContext || description,
+      })),
       productContext: suggestion?.productContext || description,
       replyTone,
       platforms,
@@ -991,14 +998,36 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
                       {items.map(k => {
                         const on = picked.has(k.keyword);
                         const c = counts[k.keyword];
+                        // PR #28 — per-keyword type toggle. Visual: gold outline
+                        // for 'keyword' (default), red/orange outline for 'competitor'.
+                        const kwType = keywordTypes.get(k.keyword) || 'keyword';
+                        const isCompetitor = kwType === 'competitor';
+                        const flipType = (e) => {
+                          e.stopPropagation();
+                          const next = new Map(keywordTypes);
+                          next.set(k.keyword, isCompetitor ? 'keyword' : 'competitor');
+                          setKeywordTypes(next);
+                        };
                         return (
                           <div key={k.keyword} onClick={()=>togglePick(k.keyword)}
                             style={{display:'flex',alignItems:'center',gap:14,padding:'11px 14px',borderRadius:8,cursor:'pointer',
-                              background:on?'#FFF7F2':'transparent',border:on?'1px solid #FED7AA':'1px solid transparent',opacity:on?1:0.7}}>
-                            <div style={{width:18,height:18,borderRadius:4,border:on?'1.5px solid #FF6B35':'1.5px solid #CBD5E1',background:on?'#FF6B35':'transparent',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,color:'#fff',flexShrink:0}}>
+                              background:on?(isCompetitor?'#FEF2F2':'#FFF7F2'):'transparent',
+                              border:on?(isCompetitor?'1px solid #FCA5A5':'1px solid #FED7AA'):'1px solid transparent',
+                              opacity:on?1:0.7}}>
+                            <div style={{width:18,height:18,borderRadius:4,
+                              border:on?(isCompetitor?'1.5px solid #DC2626':'1.5px solid #FF6B35'):'1.5px solid #CBD5E1',
+                              background:on?(isCompetitor?'#DC2626':'#FF6B35'):'transparent',
+                              display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,color:'#fff',flexShrink:0}}>
                               {on?'✓':''}
                             </div>
                             <div style={{flex:1,fontSize:14,color:'#0F172A',fontWeight:500}}>{k.keyword}</div>
+                            {on && (
+                              <button type="button" onClick={flipType} title={isCompetitor ? 'Currently a competitor keyword — click to switch to your-own' : 'Currently your-own — click to switch to competitor'}
+                                style={{padding:'3px 9px',borderRadius:10,fontSize:10,fontWeight:700,letterSpacing:'.3px',textTransform:'uppercase',cursor:'pointer',fontFamily:'inherit',border:'none',
+                                  background:isCompetitor?'#DC2626':'#FF6B35',color:'#fff',flexShrink:0}}>
+                                {isCompetitor ? '⚔ Competitor' : '◆ Keyword'}
+                              </button>
+                            )}
                             <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:c?(c.count > 5 ? '#16A34A' : c.count > 0 ? '#D97706' : '#94A3B8'):'#94A3B8',fontWeight:600,flexShrink:0}}>
                               {c ? `${c.count} matches/wk` : '…'}
                             </div>
