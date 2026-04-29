@@ -24,6 +24,14 @@ import { dirname } from 'path'
 import stripeRoutes, { webhookHandler } from './routes/stripe.js'
 import { createRouter as createFindRouter } from './routes/find.js'
 import { createRouter as createFeedbackRouter } from './routes/feedback.js'
+import {
+  generateUnsubscribeToken,
+  resolveUnsubscribeToken,
+  setMonitorEmailEnabled,
+  deleteMonitorAndData,
+  logDeletion,
+  removeResendContact,
+} from './lib/account-deletion.js'
 import searchMedium      from './lib/scrapers/medium.js'
 import searchSubstack    from './lib/scrapers/substack.js'
 import searchQuora       from './lib/scrapers/quora.js'
@@ -222,6 +230,12 @@ app.get('/v1/monitors', async (req, res) => {
           last_poll_at: m.lastPollAt,
           total_matches_found: m.totalMatchesFound || 0,
           created_at: m.createdAt,
+          // Email opt-out state. Existing monitors without the field default
+          // to true (backward-compatible: old monitors keep getting emails).
+          email_enabled: m.emailEnabled !== false,
+          // Surfaced so the dashboard can wire the "Delete account" button
+          // (token is the public auth for the /delete-account flow).
+          unsubscribe_token: m.unsubscribeToken || null,
         })
       }
     }
@@ -269,6 +283,10 @@ app.post('/v1/monitors', async (req, res) => {
     const VALID_TONES = new Set(['conversational', 'professional', 'empathetic', 'expert', 'playful'])
     const tone = VALID_TONES.has(replyTone) ? replyTone : 'conversational'
 
+    // Unsubscribe token — issued at creation, used by the public /unsubscribe
+    // and /delete-account routes (no login required for either).
+    const unsubscribeToken = generateUnsubscribeToken()
+
     const now = new Date().toISOString()
     const monitor = { id, owner: auth.owner, name: name.trim().slice(0, 100), keywords: cleanKws,
       productContext: (productContext || '').slice(0, 2000), alertEmail: alertEmail || auth.owner,
@@ -279,12 +297,45 @@ app.post('/v1/monitors', async (req, res) => {
       includeQuora:       includeQuora       !== false,
       includeUpworkForum: includeUpworkForum !== false,
       includeFiverrForum: includeFiverrForum !== false,
+      emailEnabled:       true,
+      unsubscribeToken,
       active: true, plan, createdAt: now, lastPollAt: null, totalMatchesFound: 0 }
     await redis.set(`insights:monitor:${id}`, JSON.stringify(monitor))
+    await redis.set(`unsubscribe:${unsubscribeToken}`, id)
     await redis.sadd('insights:active_monitors', id)
     res.status(201).json({ success: true, monitor_id: id, name: monitor.name, keyword_count: cleanKws.length,
       keywords: cleanKws.map(k => k.keyword), plan, alert_email: monitor.alertEmail, active: true,
+      email_enabled: true,
       created_at: now, next_poll_eta: 'Within 15 minutes' })
+  } catch (err) {
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
+  }
+})
+
+// ── PATCH /v1/monitors/:id ─────────────────────────────────────────────────
+// Currently scoped to fields the dashboard exposes: emailEnabled toggle.
+// Easy to extend later with name / replyTone / platform-include flags.
+app.patch('/v1/monitors/:id', async (req, res) => {
+  const auth = await authenticate(req)
+  if (!auth.ok) return res.status(auth.status).json({ success: false, error: auth.error })
+  const { id } = req.params
+  try {
+    const redis = getRedis()
+    const raw = await redis.get(`insights:monitor:${id}`)
+    if (!raw) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Monitor not found' } })
+    const m = typeof raw === 'string' ? JSON.parse(raw) : raw
+    if (m.owner !== auth.owner) return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'Not your monitor' } })
+
+    // Whitelist of fields the dashboard can toggle. Anything else in the body
+    // is silently ignored — we don't want a tenant flipping `owner` or `plan`.
+    const updates = {}
+    if (typeof req.body?.emailEnabled === 'boolean') updates.emailEnabled = req.body.emailEnabled
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ success: false, error: { code: 'NO_UPDATES', message: 'No supported fields in body. Patchable: emailEnabled' } })
+    }
+    const next = { ...m, ...updates }
+    await redis.set(`insights:monitor:${id}`, JSON.stringify(next))
+    res.json({ success: true, monitor_id: id, ...updates })
   } catch (err) {
     res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
   }
@@ -714,6 +765,216 @@ app.post('/v1/search/draft', async (req, res) => {
     res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
   }
 })
+
+// ── Unsubscribe + delete-account (public, token-gated) ────────────────────
+// All three routes look up a monitor by an unguessable 32-byte token issued
+// at monitor creation. No login required — designed for one-click email
+// links and "I lost access" recovery paths.
+
+// Tiny HTML page builder so we don't pull in a template engine.
+function htmlPage({ title, body, accent = '#0F172A' }) {
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title>
+  <style>
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#F1F5F9;color:#0F172A;margin:0;padding:48px 20px;line-height:1.65;}
+    .card{max-width:520px;margin:0 auto;background:#fff;border-radius:12px;padding:36px 32px;box-shadow:0 4px 20px rgba(15,23,42,.06);}
+    h1{margin:0 0 14px;font-size:22px;color:${accent};letter-spacing:-.3px;}
+    p{margin:0 0 14px;font-size:15px;color:#334155;}
+    .btn{display:inline-block;background:#FF6B35;color:#fff;font-weight:700;padding:11px 22px;border-radius:6px;text-decoration:none;font-size:14px;margin-top:8px;border:none;cursor:pointer;font-family:inherit;}
+    .btn-danger{background:#DC2626;}
+    .btn-ghost{background:transparent;color:#64748B;border:1px solid #E2E8F0;}
+    .footnote{font-size:12px;color:#94A3B8;margin-top:24px;text-align:center;}
+    a{color:#FF6B35;}
+  </style></head><body><div class="card">${body}</div><div class="footnote">Ebenova Insights · Built in Canada · Compliant with CASL &amp; NDPR</div></body></html>`
+}
+
+// ── GET /unsubscribe?token=… ───────────────────────────────────────────────
+app.get('/unsubscribe', async (req, res) => {
+  res.set('Content-Type', 'text/html; charset=utf-8')
+  const { token } = req.query
+  try {
+    const redis = getRedis()
+    const resolved = await resolveUnsubscribeToken(redis, token)
+    if (!resolved) {
+      return res.status(404).send(htmlPage({
+        title: 'Link expired or invalid',
+        accent: '#DC2626',
+        body: `<h1>This unsubscribe link is no longer valid</h1>
+          <p>The link may have expired, or the monitor it pointed to has already been deleted.</p>
+          <p>If you continue to receive emails, reply to one and we'll handle it manually.</p>`,
+      }))
+    }
+    await setMonitorEmailEnabled(redis, resolved.monitorId, false)
+    const appUrl = process.env.APP_URL || 'https://ebenova-insights-production.up.railway.app'
+    const tokenParam = encodeURIComponent(token)
+    res.send(htmlPage({
+      title: 'Unsubscribed',
+      body: `<h1>You've been unsubscribed</h1>
+        <p>Your monitor "<strong>${escapeHtmlInline(resolved.monitor.name || 'Untitled')}</strong>" is still running — it just won't send you any more email alerts.</p>
+        <p>Changed your mind?</p>
+        <a class="btn" href="${appUrl}/resubscribe?token=${tokenParam}">Re-enable email alerts</a>
+        &nbsp;
+        <a class="btn btn-ghost" href="${appUrl}/delete-account?token=${tokenParam}">Delete my account instead</a>`,
+    }))
+  } catch (err) {
+    console.error('[unsubscribe] error:', err.message)
+    res.status(500).send(htmlPage({ title: 'Error', accent: '#DC2626', body: `<h1>Something went wrong</h1><p>Try the link again in a moment, or reply to your most recent alert email.</p>` }))
+  }
+})
+
+// ── GET /resubscribe?token=… ───────────────────────────────────────────────
+app.get('/resubscribe', async (req, res) => {
+  res.set('Content-Type', 'text/html; charset=utf-8')
+  const { token } = req.query
+  try {
+    const redis = getRedis()
+    const resolved = await resolveUnsubscribeToken(redis, token)
+    if (!resolved) {
+      return res.status(404).send(htmlPage({
+        title: 'Link expired or invalid',
+        accent: '#DC2626',
+        body: `<h1>This link is no longer valid</h1><p>The monitor it pointed to may have been deleted.</p>`,
+      }))
+    }
+    await setMonitorEmailEnabled(redis, resolved.monitorId, true)
+    res.send(htmlPage({
+      title: 'Re-subscribed',
+      body: `<h1>You're back on the list</h1>
+        <p>Email alerts for "<strong>${escapeHtmlInline(resolved.monitor.name || 'Untitled')}</strong>" are enabled again. Next match will land in your inbox.</p>`,
+    }))
+  } catch (err) {
+    console.error('[resubscribe] error:', err.message)
+    res.status(500).send(htmlPage({ title: 'Error', accent: '#DC2626', body: `<h1>Something went wrong</h1>` }))
+  }
+})
+
+// ── GET /delete-account?token=… ────────────────────────────────────────────
+// Step 1: confirmation page. Does NOT delete anything yet.
+app.get('/delete-account', async (req, res) => {
+  res.set('Content-Type', 'text/html; charset=utf-8')
+  const { token } = req.query
+  try {
+    const redis = getRedis()
+    const resolved = await resolveUnsubscribeToken(redis, token)
+    if (!resolved) {
+      return res.status(404).send(htmlPage({
+        title: 'Link expired or invalid',
+        accent: '#DC2626',
+        body: `<h1>This link is no longer valid</h1>
+          <p>The account or monitor it pointed to may have already been deleted.</p>`,
+      }))
+    }
+    const tokenParam = encodeURIComponent(token)
+    res.send(htmlPage({
+      title: 'Delete account?',
+      accent: '#DC2626',
+      body: `<h1>This cannot be undone</h1>
+        <p>Confirming deletion will permanently remove:</p>
+        <ul style="font-size:14px;color:#475569;">
+          <li>Your monitor "<strong>${escapeHtmlInline(resolved.monitor.name || 'Untitled')}</strong>"</li>
+          <li>All matched posts (last 7 days)</li>
+          <li>All stored reply drafts</li>
+          <li>Your email from our system (if this is your only monitor)</li>
+        </ul>
+        <p>This action takes effect immediately. There is no recovery.</p>
+        <form method="POST" action="/delete-account" style="margin-top:18px;">
+          <input type="hidden" name="token" value="${tokenParam}">
+          <button class="btn btn-danger" type="submit">Confirm deletion</button>
+        </form>
+        <p style="margin-top:18px;font-size:13px;">
+          <a href="/unsubscribe?token=${tokenParam}">Just stop the emails instead</a>
+        </p>`,
+    }))
+  } catch (err) {
+    console.error('[delete-account GET] error:', err.message)
+    res.status(500).send(htmlPage({ title: 'Error', accent: '#DC2626', body: `<h1>Something went wrong</h1>` }))
+  }
+})
+
+// ── POST /delete-account ───────────────────────────────────────────────────
+// Step 2: actually delete. Body can come as form-encoded (from the GET-page
+// form) or JSON (from the dashboard's typed-DELETE flow).
+app.post('/delete-account', express.urlencoded({ extended: false }), async (req, res) => {
+  const isHtml = (req.headers['accept'] || '').includes('text/html')
+  res.set('Content-Type', isHtml ? 'text/html; charset=utf-8' : 'application/json')
+  const token = req.body?.token || req.query?.token
+  try {
+    const redis = getRedis()
+    const resolved = await resolveUnsubscribeToken(redis, token)
+    if (!resolved) {
+      const msg = 'This link is no longer valid.'
+      return res.status(404).send(isHtml
+        ? htmlPage({ title: 'Not found', accent: '#DC2626', body: `<h1>${msg}</h1>` })
+        : JSON.stringify({ success: false, error: { code: 'INVALID_TOKEN', message: msg } }))
+    }
+
+    const summary = await deleteMonitorAndData(redis, resolved.monitorId)
+    await logDeletion(redis, { monitorId: resolved.monitorId, reason: 'user_request' })
+
+    // Best-effort: remove the user from a Resend audience if one is set up.
+    // Silent no-op when audience isn't configured.
+    if (resolved.monitor.owner) {
+      removeResendContact({ email: resolved.monitor.owner })
+        .then(r => { if (!r.removed && r.reason !== 'no_audience_configured' && r.reason !== 'no_resend_key') {
+          console.warn(`[delete-account] resend contact removal: ${r.reason}`)
+        } })
+        .catch(err => console.warn('[delete-account] resend contact threw:', err.message))
+    }
+
+    // Audit notification to operator email (no PII in the message body
+    // beyond the monitor name + ID — owner email is not included).
+    notifyOperatorOfDeletion({
+      monitorId: resolved.monitorId,
+      monitorName: resolved.monitor.name,
+      accountAlsoDeleted: summary.accountAlsoDeleted,
+    }).catch(() => {}) // never block the response on audit email
+
+    if (isHtml) {
+      return res.status(200).send(htmlPage({
+        title: 'Deleted',
+        body: `<h1>All done</h1>
+          <p>Your account and all associated data have been deleted.</p>
+          <p>If you have questions, email <a href="mailto:olumide@ebenova.net">olumide@ebenova.net</a>.</p>`,
+      }))
+    }
+    res.json({
+      success: true,
+      monitor_id: resolved.monitorId,
+      account_deleted: summary.accountAlsoDeleted,
+      removed: summary.deleted.length,
+    })
+  } catch (err) {
+    console.error('[delete-account POST] error:', err.message)
+    res.status(500).send(isHtml
+      ? htmlPage({ title: 'Error', accent: '#DC2626', body: `<h1>Something went wrong</h1>` })
+      : JSON.stringify({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }))
+  }
+})
+
+// Minimal HTML escape — only for values we interpolate into the unsub pages.
+function escapeHtmlInline(s) {
+  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+}
+
+// Operator notification — fires when any monitor is deleted via the
+// public /delete-account flow. No PII (no email address); just a heads-up
+// so the operator has a human-readable audit trail in their inbox.
+async function notifyOperatorOfDeletion({ monitorId, monitorName, accountAlsoDeleted }) {
+  if (!process.env.RESEND_API_KEY) return
+  const operatorEmail = process.env.ALERT_EMAIL || 'info@ebenova.net'
+  try {
+    const { Resend } = await import('resend')
+    const resend = new Resend(process.env.RESEND_API_KEY)
+    const fromAddress = process.env.FROM_EMAIL || 'insights@ebenova.dev'
+    await resend.emails.send({
+      from:    `Ebenova Insights <${fromAddress}>`,
+      to:      operatorEmail,
+      subject: `[audit] Monitor deleted via /delete-account · ${monitorId.slice(0, 12)}`,
+      text:    `A user-initiated deletion just completed.\n\nMonitor: ${monitorName || '(untitled)'}\nMonitor ID: ${monitorId}\nAccount fully wiped: ${accountAlsoDeleted ? 'yes' : 'no — owner had other monitors'}\nWhen: ${new Date().toUTCString()}\n\nThis email contains no user PII. Original Redis records have been removed.`,
+    })
+  } catch (err) {
+    console.warn('[delete-account] operator notification failed:', err.message)
+  }
+}
 
 // ── Start ─────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {

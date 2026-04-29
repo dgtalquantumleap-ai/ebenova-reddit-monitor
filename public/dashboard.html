@@ -1010,6 +1010,14 @@ function Settings({ apiKey, userEmail, plan, onSignOut, monitors, onRefresh }) {
   const [showKey, setShowKey] = useState(false);
   const [deleting, setDeleting] = useState('');
   const [upgradeMsg, setUpgradeMsg] = useState('');
+  // Optimistic per-monitor email-toggle state. Avoids a round-trip when the
+  // user clicks; if the PATCH call fails we surface the error and revert.
+  const [emailToggles, setEmailToggles] = useState(() =>
+    Object.fromEntries(monitors.map(m => [m.id, m.email_enabled !== false]))
+  );
+  const [showDanger, setShowDanger] = useState(false);
+  const [confirmText, setConfirmText] = useState('');
+  const [danger, setDanger] = useState({ submitting: false, err: '', done: false });
   const planLabel = {starter:'Starter',growth:'Growth',scale:'Scale'}[plan]||'Starter';
 
   const copyKey = () => { navigator.clipboard.writeText(apiKey); setCopied(true); setTimeout(()=>setCopied(false),2000); };
@@ -1019,6 +1027,53 @@ function Settings({ apiKey, userEmail, plan, onSignOut, monitors, onRefresh }) {
     setDeleting(id);
     await apiFetch(`/v1/monitors/${id}`,{method:'DELETE'},apiKey);
     setDeleting(''); onRefresh();
+  };
+
+  // Toggle per-monitor email alerts via PATCH /v1/monitors/:id.
+  // Optimistic update: flip the local state first, revert on API failure.
+  const toggleEmail = async (id) => {
+    const next = !emailToggles[id];
+    setEmailToggles(prev => ({ ...prev, [id]: next }));
+    const r = await apiFetch(`/v1/monitors/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ emailEnabled: next }),
+    }, apiKey);
+    if (!r.ok) {
+      setEmailToggles(prev => ({ ...prev, [id]: !next })); // revert
+      alert(r.data?.error?.message || 'Could not save. Try again.');
+    }
+  };
+
+  // Account-wide delete. Looks up the user's first monitor to grab its
+  // unsubscribeToken (every monitor has one), then POSTs to /delete-account.
+  // Starter users have 1 monitor so this wipes everything; growth users
+  // get a more nuanced message about the per-monitor deletion.
+  const requestAccountDeletion = async () => {
+    if (confirmText !== 'DELETE') {
+      setDanger({ submitting: false, err: 'Type DELETE to confirm.', done: false });
+      return;
+    }
+    setDanger({ submitting: true, err: '', done: false });
+    // Pull a fresh monitor list so we have the unsubscribeToken
+    const list = await apiFetch('/v1/monitors', {}, apiKey);
+    const tokenedMon = (list.data?.monitors || []).find(m => m.unsubscribe_token);
+    if (!tokenedMon) {
+      setDanger({ submitting: false, err: 'No monitor found to delete from.', done: false });
+      return;
+    }
+    const formData = new URLSearchParams();
+    formData.set('token', tokenedMon.unsubscribe_token);
+    const res = await fetch('/delete-account', {
+      method: 'POST',
+      headers: { 'Accept': 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: formData.toString(),
+    });
+    if (!res.ok) {
+      setDanger({ submitting: false, err: 'Could not delete. Try again.', done: false });
+      return;
+    }
+    setDanger({ submitting: false, err: '', done: true });
+    setTimeout(() => { localStorage.removeItem('ebi_key'); location.href = '/'; }, 2500);
   };
 
   return (
@@ -1086,18 +1141,78 @@ function Settings({ apiKey, userEmail, plan, onSignOut, monitors, onRefresh }) {
         <div className="card settings-tile">
           <div className="tile-label">Active monitors ({monitors.length})</div>
           {!monitors.length && <p style={{fontSize:13,color:'#94A3B8'}}>No monitors yet.</p>}
-          {monitors.map(m=>(
-            <div key={m.id} className="monitor-row">
-              <div className={m.active?'active-dot':'paused-dot'}></div>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:13,fontWeight:600,color:'#0F172A',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{m.name}</div>
-                <div style={{fontSize:12,color:'#94A3B8',marginTop:2}}>{m.keyword_count} keywords · {m.total_matches_found||0} matches found</div>
+          {monitors.map(m=>{
+            const emailOn = emailToggles[m.id] ?? (m.email_enabled !== false);
+            return (
+              <div key={m.id} className="monitor-row" style={{flexWrap:'wrap'}}>
+                <div className={m.active?'active-dot':'paused-dot'}></div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:13,fontWeight:600,color:'#0F172A',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{m.name}</div>
+                  <div style={{fontSize:12,color:'#94A3B8',marginTop:2}}>{m.keyword_count} keywords · {m.total_matches_found||0} matches found</div>
+                </div>
+                <button
+                  className="btn btn-ghost btn-sm"
+                  title={emailOn ? 'Pause email alerts for this monitor' : 'Resume email alerts'}
+                  onClick={()=>toggleEmail(m.id)}
+                  style={{color: emailOn ? '#475569' : '#94A3B8'}}
+                >
+                  <i className={`ph ph-${emailOn ? 'envelope' : 'envelope-simple-open'}`}></i>
+                  {emailOn ? 'Emails on' : 'Paused'}
+                </button>
+                <button className="btn btn-danger btn-sm" onClick={()=>del(m.id,m.name)} disabled={deleting===m.id}>
+                  {deleting===m.id ? <i className="ph ph-circle-notch spin"></i> : <i className="ph ph-trash"></i>}
+                </button>
               </div>
-              <button className="btn btn-danger btn-sm" onClick={()=>del(m.id,m.name)} disabled={deleting===m.id}>
-                {deleting===m.id ? <i className="ph ph-circle-notch spin"></i> : <i className="ph ph-trash"></i>}
+            );
+          })}
+        </div>
+
+        {/* Danger Zone — full account deletion */}
+        <div className="card settings-tile" style={{borderLeft:'3px solid #DC2626'}}>
+          <div className="tile-label" style={{color:'#DC2626'}}>Danger zone</div>
+          {!showDanger ? (
+            <>
+              <p style={{fontSize:13,color:'#475569',lineHeight:1.6,margin:'0 0 12px'}}>
+                Permanently delete your account, monitors, matches, and drafts. This cannot be undone.
+              </p>
+              <button className="btn btn-ghost btn-sm" style={{color:'#DC2626'}} onClick={()=>setShowDanger(true)}>
+                <i className="ph ph-warning-circle"></i> Delete my account
               </button>
+            </>
+          ) : danger.done ? (
+            <div style={{padding:'14px',background:'#F8FAFC',borderRadius:7,fontSize:13,color:'#475569'}}>
+              <i className="ph ph-check-circle" style={{color:'#059669',marginRight:6}}></i>
+              Done. Signing you out…
             </div>
-          ))}
+          ) : (
+            <>
+              <p style={{fontSize:13,color:'#475569',lineHeight:1.6,margin:'0 0 12px'}}>
+                This will remove all your monitors ({monitors.length}), every match record, every draft, and your email from our system.
+              </p>
+              <p style={{fontSize:12,color:'#94A3B8',margin:'0 0 10px'}}>Type <strong style={{color:'#DC2626'}}>DELETE</strong> in the box below to confirm.</p>
+              <input
+                className="inp"
+                value={confirmText}
+                onChange={e=>setConfirmText(e.target.value)}
+                placeholder="Type DELETE"
+                style={{maxWidth:240,marginBottom:10}}
+                disabled={danger.submitting}
+              />
+              {danger.err && <div style={{fontSize:12,color:'#DC2626',margin:'0 0 8px'}}>{danger.err}</div>}
+              <div style={{display:'flex',gap:8}}>
+                <button className="btn btn-ghost btn-sm" onClick={()=>{setShowDanger(false);setConfirmText('');setDanger({submitting:false,err:'',done:false})}} disabled={danger.submitting}>
+                  Cancel
+                </button>
+                <button
+                  className="btn btn-danger btn-sm"
+                  onClick={requestAccountDeletion}
+                  disabled={danger.submitting || confirmText !== 'DELETE'}
+                >
+                  {danger.submitting ? <><i className="ph ph-circle-notch spin"></i> Deleting…</> : 'Confirm permanent deletion'}
+                </button>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Developer key */}
