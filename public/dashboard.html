@@ -245,6 +245,23 @@ async function apiFetch(path, opts={}, apiKey) {
   return { ok: res.ok, status: res.status, data };
 }
 
+// ── Landing-page platform prefs ─────────────────────────────────────────────
+// Known platforms for the new-monitor chip selector (matches lib/platforms.js
+// VALID_PLATFORMS; twitter included as it is technically valid even though the
+// marketing page does not surface it).
+var KNOWN_PLATFORMS = ['reddit','hackernews','medium','substack','quora','upwork','fiverr','github','producthunt','twitter'];
+
+function readLandingPlatformPrefs(known) {
+  try {
+    var raw = localStorage.getItem('ebnv_landing_platform_prefs');
+    if (!raw) return null;
+    var parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return null;
+    var filtered = parsed.filter(function (k) { return known.indexOf(k) !== -1; });
+    return filtered.length > 0 ? filtered : null;
+  } catch (e) { return null; }
+}
+
 // ΓöÇΓöÇ Auth Modal ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 function AuthModal({ onSave }) {
   const [email, setEmail] = useState('');
@@ -668,8 +685,9 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
   const [customKw, setCustomKw] = useState('')
   const [monitorName, setMonitorName] = useState('')
   const [replyTone, setReplyTone] = useState('conversational')
-  // Default selection per spec: Reddit only. At least 1 must remain selected.
-  const [platforms, setPlatforms] = useState(['reddit'])
+  // Honor a selection the visitor made on the landing page. Falls back to the
+  // existing default (Reddit only) if nothing valid is stored.
+  const [platforms, setPlatforms] = useState(() => readLandingPlatformPrefs(KNOWN_PLATFORMS) || ['reddit'])
   const [shakeId, setShakeId] = useState('')   // brief visual nudge when user tries to deselect last chip
   const [savedMonitorId, setSavedMonitorId] = useState('')
   const [sampleMatches, setSampleMatches] = useState([])

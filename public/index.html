@@ -25,13 +25,16 @@
     --sans: 'Inter', system-ui, sans-serif;
     --mono: 'JetBrains Mono', 'Menlo', monospace;
   }
-  html, body { background: var(--bg); color: var(--ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
-  body {
-    background-image:
-      radial-gradient(circle at 12% 8%, rgba(255,107,53,0.04), transparent 50%),
-      radial-gradient(circle at 88% 92%, rgba(255,107,53,0.03), transparent 60%);
-    min-height: 100vh;
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
+  html, body { background: var(--bg); color: var(--ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+  body { min-height: 100vh; }
   a { color: inherit; text-decoration: none; }
   .mono { font-family: var(--mono); font-feature-settings: 'ss01' on; }
   .serif { font-family: var(--serif); }
@@ -207,6 +210,49 @@
   .feed-cta-blink::after { content: '_'; animation: blink 1s infinite; }
   @keyframes blink { 50% { opacity: 0; } }
 
+  /* Platform selector marketing block */
+  #how .how-intro {
+    color: var(--ink-2); font-size: 16px; line-height: 1.7;
+    max-width: 640px; margin: 12px 0 36px;
+  }
+  .selector-grid {
+    display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 18px;
+  }
+  .selector-chip {
+    font-family: var(--mono); font-size: 12px; letter-spacing: 1px;
+    padding: 9px 14px; border-radius: 999px;
+    background: var(--bg-2); color: var(--ink-2);
+    border: 1px solid var(--line); cursor: pointer;
+    transition: transform 0.1s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .selector-chip:hover { transform: translateY(-1px); border-color: var(--ink-3); }
+  .selector-chip:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+  .selector-chip:active { transform: scale(0.97); }
+  .selector-chip.on {
+    color: var(--ink); border-color: var(--gold);
+    box-shadow: inset 0 0 0 1px rgba(255,107,53,0.2);
+  }
+  .selector-meta {
+    font-family: var(--mono); font-size: 11px; color: var(--ink-3);
+    letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 24px;
+  }
+  .selector-count { color: var(--gold); font-weight: 700; transition: opacity 0.12s ease; }
+  .selector-count.flicker { opacity: 0.4; }
+  .selector-feed {
+    background: var(--bg-2); border: 1px solid var(--line);
+    border-radius: 8px; padding: 8px 0; min-height: 240px; max-height: 360px;
+    overflow: hidden; position: relative; font-family: var(--mono); font-size: 12px;
+  }
+  .selector-feed::after {
+    content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 60px;
+    background: linear-gradient(to bottom, transparent, var(--bg-2));
+    pointer-events: none;
+  }
+  @media (max-width: 640px) {
+    .selector-grid { gap: 8px; }
+    .selector-chip { font-size: 11px; padding: 8px 12px; }
+  }
+
   /* Section frame */
   section { max-width: 1280px; margin: 0 auto; padding: 80px 24px; }
   .label {
@@ -279,6 +325,26 @@
   .marker-2 { top: 70px; right: -100px; }
   .marker-3 { bottom: 70px; right: -120px; }
   @media (max-width: 900px) { .anatomy-marker { display: none; } }
+
+  .anatomy-marker::before {
+    content: '';
+    position: absolute;
+    background: var(--gold);
+    opacity: 0.6;
+  }
+  .anatomy-marker.marker-1::before { top: 50%; right: -28px; width: 24px; height: 1px; }
+  .anatomy-marker.marker-2::before { top: 50%; right: -28px; width: 24px; height: 1px; }
+  .anatomy-marker.marker-3::before { top: 50%; right: -28px; width: 24px; height: 1px; }
+  .anatomy-marker.marker-4::before { top: 50%; right: -28px; width: 24px; height: 1px; }
+  .anatomy-marker.marker-4 {
+    position: absolute; right: -180px; top: 24px;
+    font-family: var(--mono); font-size: 10px; color: var(--gold);
+    letter-spacing: 1px; white-space: nowrap;
+  }
+  @media (max-width: 1024px) {
+    .anatomy-marker::before { display: none; }
+    .anatomy-marker.marker-4 { position: static; display: inline-block; margin: 6px 0; }
+  }
 
   .anatomy-list { display: flex; flex-direction: column; gap: 26px; }
   .anatomy-item { display: flex; gap: 18px; align-items: flex-start; }
@@ -362,6 +428,70 @@
   .price-card.featured .price-cta { background: var(--gold); color: #000; border-color: var(--gold); }
   .price-card.featured .price-cta:hover { background: var(--gold-2); }
   .price-cta:hover { border-color: var(--gold); }
+
+  /* Dispatch */
+  #dispatch {
+    padding: 96px 24px;
+    max-width: 1280px; margin: 0 auto;
+    border-top: 1px solid var(--line);
+  }
+  .dispatch-grid {
+    display: grid; grid-template-columns: 1.1fr 1fr; gap: 64px; align-items: center;
+    margin-top: 24px;
+  }
+  .dispatch-sub {
+    color: var(--ink-2); font-size: 16px; line-height: 1.7; max-width: 520px; margin-top: 18px;
+  }
+  .dispatch-form { display: flex; flex-direction: column; gap: 12px; }
+  .dispatch-label {
+    font-family: var(--mono); font-size: 11px; color: var(--ink-3);
+    letter-spacing: 2.5px; text-transform: uppercase;
+  }
+  .dispatch-form input[type="email"] {
+    background: var(--bg-2); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 6px;
+    padding: 14px 16px; font-family: var(--mono); font-size: 14px;
+    transition: border-color 0.15s ease;
+  }
+  .dispatch-form input[type="email"]:focus {
+    outline: none; border-color: var(--gold);
+    box-shadow: inset 0 0 0 1px rgba(255,107,53,0.2);
+  }
+  .dispatch-form input[type="email"]:disabled { opacity: 0.5; }
+  .dispatch-cta {
+    background: var(--gold); color: #000; font-weight: 700;
+    padding: 14px 22px; border-radius: 6px; border: none; cursor: pointer;
+    font-family: var(--mono); font-size: 13px; letter-spacing: 0.5px;
+    display: inline-flex; align-items: center; gap: 10px; align-self: flex-start;
+    transition: background 0.15s ease, transform 0.1s ease;
+  }
+  .dispatch-cta:hover { background: var(--gold-2); transform: translateY(-1px); }
+  .dispatch-cta:disabled { opacity: 0.6; cursor: progress; transform: none; }
+  .dispatch-meta {
+    font-family: var(--mono); font-size: 11px; color: var(--ink-3); letter-spacing: 0.5px;
+  }
+  .dispatch-error {
+    font-family: var(--mono); font-size: 11px; color: var(--red); letter-spacing: 0.5px;
+    margin-top: 4px;
+  }
+  .dispatch-success {
+    font-family: var(--serif); font-size: 22px; color: var(--ink);
+    line-height: 1.4;
+  }
+  .dispatch-success small {
+    display: block; font-family: var(--mono); font-size: 11px;
+    color: var(--ink-3); letter-spacing: 1px; margin-top: 8px;
+  }
+  @keyframes dispatch-shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-4px); }
+    75% { transform: translateX(4px); }
+  }
+  .dispatch-form.shake { animation: dispatch-shake 0.25s ease; }
+  @media (max-width: 768px) {
+    #dispatch { padding: 72px 24px; }
+    .dispatch-grid { grid-template-columns: 1fr; gap: 32px; }
+  }
 
   /* CTA banner */
   .cta-banner {
@@ -491,7 +621,7 @@
       <div class="terminal-title">EBNV-1 // LIVE FEED</div>
       <div class="terminal-status">SCANNING</div>
     </div>
-    <div class="feed">
+    <div class="feed" id="hero-feed">
       <div class="feed-row" style="animation-delay: 0s;">
         <span class="feed-time">04:42:18</span>
         <span class="feed-source src-reddit">REDDIT</span>
@@ -530,18 +660,6 @@
         <span class="feed-title-low">Issue: best library for AI prompt sanitization?</span>
         <span class="feed-score">6.5</span>
       </div>
-      <div class="feed-row" style="animation-delay: 0.6s;">
-        <span class="feed-time">04:40:09</span>
-        <span class="feed-source src-ph">PH</span>
-        <span class="feed-title-low">Frustrated by manual outreach — what's the modern stack?</span>
-        <span class="feed-score">8.1</span>
-      </div>
-      <div class="feed-row" style="animation-delay: 0.7s;">
-        <span class="feed-time">04:39:41</span>
-        <span class="feed-source src-substack">SUBSTACK</span>
-        <span class="feed-title-low">Comment on "AI tools that actually save me time" → asks recs</span>
-        <span class="feed-score">7.0</span>
-      </div>
     </div>
     <div class="feed-cta">
       <span class="feed-cta-blink">FEED // DEMO_MODE</span>
@@ -566,27 +684,29 @@
   <div class="platforms-meta">9 STREAMS // 1 INTERFACE</div>
 </div>
 
-<!-- HOW IT WORKS -->
+<!-- PROTOCOL — interactive platform selector -->
 <section id="how">
   <span class="label">PROTOCOL</span>
-  <h2 class="h-display">Three signals. <em>Three minutes.</em><br>One unfair advantage.</h2>
-  <div style="margin-top: 64px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden;">
-    <div style="padding: 36px 32px; background: var(--bg-2);">
-      <div class="mono" style="font-size: 11px; color: var(--gold); letter-spacing: 3px; margin-bottom: 16px;">// 01</div>
-      <h3 style="font-family: var(--serif); font-size: 22px; font-weight: 600; margin-bottom: 10px;">Describe what you sell</h3>
-      <p style="color: var(--ink-2); font-size: 14px; line-height: 1.7;">A short paragraph. Who buys, what problem you solve, the kind of customer you want. Your monitor uses this to filter signal from noise — and to draft replies that sound like you.</p>
-    </div>
-    <div style="padding: 36px 32px; background: var(--bg-2);">
-      <div class="mono" style="font-size: 11px; color: var(--gold); letter-spacing: 3px; margin-bottom: 16px;">// 02</div>
-      <h3 style="font-family: var(--serif); font-size: 22px; font-weight: 600; margin-bottom: 10px;">We watch the open web</h3>
-      <p style="color: var(--ink-2); font-size: 14px; line-height: 1.7;">Every 15 minutes, nine platforms. Buying-intent scoring — questions, comparison searches, frustration with competitors, hiring inquiries. We skip the noise.</p>
-    </div>
-    <div style="padding: 36px 32px; background: var(--bg-2);">
-      <div class="mono" style="font-size: 11px; color: var(--gold); letter-spacing: 3px; margin-bottom: 16px;">// 03</div>
-      <h3 style="font-family: var(--serif); font-size: 22px; font-weight: 600; margin-bottom: 10px;">Reply ready in seconds</h3>
-      <p style="color: var(--ink-2); font-size: 14px; line-height: 1.7;">Each match arrives with a draft that sounds like a community member, not a salesperson. Tweak, copy, post. Your name in the right thread, fast.</p>
-    </div>
+  <h2 class="h-display">Pick what you want <em>watched.</em></h2>
+  <p class="how-intro">Toggle a source off and the feed below stops carrying it. The selection follows you to the dashboard when you sign up.</p>
+
+  <div class="selector-grid" role="group" aria-label="Platform selection">
+    <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="reddit"     aria-label="Toggle Reddit">REDDIT</button>
+    <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="hackernews" aria-label="Toggle Hacker News">HACKER NEWS</button>
+    <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="upwork"     aria-label="Toggle Upwork">UPWORK</button>
+    <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="fiverr"     aria-label="Toggle Fiverr">FIVERR</button>
+    <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="quora"      aria-label="Toggle Quora">QUORA</button>
+    <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="github"     aria-label="Toggle GitHub">GITHUB</button>
+    <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="medium"     aria-label="Toggle Medium">MEDIUM</button>
+    <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="substack"   aria-label="Toggle Substack">SUBSTACK</button>
+    <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="producthunt" aria-label="Toggle Product Hunt">PRODUCT HUNT</button>
   </div>
+
+  <div class="selector-meta">
+    Watching <span class="selector-count" id="selector-count">9</span> of 9 · all plans
+  </div>
+
+  <div class="selector-feed" id="selector-feed" role="log" aria-live="off"></div>
 </section>
 
 <!-- ANATOMY -->
@@ -617,6 +737,7 @@
       <div class="anatomy-marker marker-1">SOURCE + SCORE →</div>
       <div class="anatomy-marker marker-2">CONTEXT →</div>
       <div class="anatomy-marker marker-3">REPLY DRAFT →</div>
+      <div class="anatomy-marker marker-4">INTENT 9.2/10 →</div>
     </div>
 
     <div class="anatomy-list">
@@ -746,6 +867,23 @@
   </div>
 </section>
 
+<!-- DISPATCH — weekly briefing capture -->
+<section id="dispatch">
+  <span class="label">DISPATCH</span>
+  <div class="dispatch-grid">
+    <div>
+      <h2 class="h-display">Not ready to run<br>your own monitor?<br><em>Read ours.</em></h2>
+      <p class="dispatch-sub">A weekly briefing of buying-intent posts we caught — anonymized, with the reply that worked.</p>
+    </div>
+    <form class="dispatch-form" id="dispatch-form" novalidate>
+      <label for="dispatch-email" class="dispatch-label">EMAIL</label>
+      <input type="email" id="dispatch-email" name="email" required placeholder="you@company.com" autocomplete="email" aria-describedby="dispatch-meta">
+      <button type="submit" class="dispatch-cta" id="dispatch-submit">SUBSCRIBE <span class="btn-arrow">→</span></button>
+      <div class="dispatch-meta" id="dispatch-meta">Free. Tuesdays. No "boost your reach" fluff.</div>
+    </form>
+  </div>
+</section>
+
 <!-- CTA BANNER -->
 <div class="cta-banner">
   <h2 class="cta-h">Open the terminal.<br>Watch the feed go <em>live.</em></h2>
@@ -765,6 +903,315 @@
     <a href="mailto:info@ebenova.net">CONTACT</a>
   </div>
 </footer>
+
+<!-- Live-tail mock feed for the hero terminal + (later) platform selector.
+     No fetches — pool stays inline. Pauses on tab-hidden, reduced-motion,
+     and small viewports. -->
+<script>
+(function () {
+  // Shared pool. window.__ebnvFeedPool exposed so the platform-selector
+  // script (loaded later in the page) can read the same source of truth.
+  var POOL = [
+    { src: 'reddit',     cls: 'src-reddit',   title: '"Anyone using AI to draft sales emails? Looking for recommendations…"', score: 9.2, summary: 'r/SaaS · 14 comments · author has shipped before' },
+    { src: 'hackernews', cls: 'src-hn',       title: 'Show HN: I want to monitor Reddit for buying signals',                  score: 8.7, summary: '94 points · 22 comments' },
+    { src: 'upwork',     cls: 'src-upwork',   title: 'Need a Shopify dev — looking for ongoing relationship',                 score: 7.4, summary: 'job posted 12m ago · fixed-price' },
+    { src: 'quora',      cls: 'src-quora',    title: "What's the best alternative to Brand24 for monitoring mentions?",       score: 8.9, summary: '47 followers · 3 answers' },
+    { src: 'fiverr',     cls: 'src-fiverr',   title: 'Looking for a freelance copywriter who has worked with B2B SaaS',       score: 7.8, summary: 'buyer request · open' },
+    { src: 'github',     cls: 'src-github',   title: 'Issue: best library for AI prompt sanitization?',                       score: 6.5, summary: 'opened 8m ago · 2 reactions' },
+    { src: 'producthunt',cls: 'src-ph',       title: 'Frustrated by manual outreach — what\'s the modern stack?',             score: 8.1, summary: 'discussion · 6 comments' },
+    { src: 'substack',   cls: 'src-substack', title: 'Comment on "AI tools that actually save me time" → asks recs',         score: 7.0, summary: 'inline comment · 11 likes' },
+    { src: 'medium',     cls: 'src-medium',   title: 'How I built a dripped-out outbound stack on $50/mo',                    score: 6.8, summary: 'article · 240 claps' },
+    { src: 'reddit',     cls: 'src-reddit',   title: 'Need help finding leads in r/Entrepreneur without getting banned',      score: 8.4, summary: 'r/Entrepreneur · 9 comments' },
+    { src: 'hackernews', cls: 'src-hn',       title: 'Ask HN: how do you replace cold email in 2026?',                         score: 7.9, summary: '38 points · 19 comments' },
+    { src: 'quora',      cls: 'src-quora',    title: 'Has anyone moved off Brand24? Looking for cheaper options',             score: 8.2, summary: '12 followers · 1 answer' },
+    { src: 'upwork',     cls: 'src-upwork',   title: 'Need ongoing AI engineer — comfortable with LangChain + Python',        score: 8.6, summary: 'hourly · long-term' },
+    { src: 'fiverr',     cls: 'src-fiverr',   title: 'Want a designer who has shipped a SaaS marketing site before',          score: 7.1, summary: 'open brief · negotiable' },
+    { src: 'github',     cls: 'src-github',   title: 'PR comment: "Could we use OpenRouter instead of direct Groq?"',          score: 6.9, summary: 'review thread · merged' },
+    { src: 'producthunt',cls: 'src-ph',       title: 'Founders: what\'s actually working for new-customer acquisition?',     score: 8.0, summary: 'maker discussion · 14 comments' },
+    { src: 'substack',   cls: 'src-substack', title: 'Reply on "The death of paid ads" → asks for tool recs',                 score: 7.5, summary: 'comment · 8 likes' },
+    { src: 'medium',     cls: 'src-medium',   title: 'My honest review of every social-listening tool I tried in Q1',         score: 7.3, summary: 'article · 180 claps' },
+  ];
+  window.__ebnvFeedPool = POOL;
+
+  var heroFeed = document.getElementById('hero-feed');
+  if (!heroFeed) return;
+
+  var reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var smallViewport = window.matchMedia && window.matchMedia('(max-width: 480px)').matches;
+  if (reducedMotion || smallViewport) return; // leave the static rows in place
+
+  function pad(n) { return n < 10 ? '0' + n : '' + n; }
+  function nowStamp() {
+    var d = new Date();
+    return pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+  }
+  function rowMarkup(item) {
+    var titleClass = item.score >= 8 ? 'feed-title' : 'feed-title-low';
+    var summary = item.summary
+      ? '<span class="feed-summary">' + item.summary + '</span>'
+      : '';
+    return ''
+      + '<div class="feed-row">'
+      +   '<span class="feed-time">' + nowStamp() + '</span>'
+      +   '<span class="feed-source ' + item.cls + '">' + item.src.toUpperCase().replace('PRODUCTHUNT', 'PH').replace('HACKERNEWS', 'HN') + '</span>'
+      +   '<span class="' + titleClass + '">' + item.title + '</span>'
+      +   '<span class="feed-score">' + item.score.toFixed(1) + '</span>'
+      +   summary
+      + '</div>';
+  }
+  function pickItem() {
+    return POOL[Math.floor(Math.random() * POOL.length)];
+  }
+
+  var timer = null;
+  function tick() {
+    if (document.hidden) return;
+    var item = pickItem();
+    var temp = document.createElement('div');
+    temp.innerHTML = rowMarkup(item);
+    var newRow = temp.firstChild;
+    heroFeed.insertBefore(newRow, heroFeed.firstChild);
+    while (heroFeed.children.length > 8) {
+      heroFeed.removeChild(heroFeed.lastChild);
+    }
+  }
+  function schedule() {
+    var delay = 4000 + Math.floor(Math.random() * 2000); // 4–6 s jitter
+    timer = setTimeout(function () { tick(); schedule(); }, delay);
+  }
+  schedule();
+
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) {
+      if (timer) { clearTimeout(timer); timer = null; }
+    } else if (!timer) {
+      schedule();
+    }
+  });
+})();
+</script>
+
+<script>
+(function () {
+  var STORAGE_KEY = 'ebnv_landing_platform_prefs';
+  var KNOWN = ['reddit','hackernews','medium','substack','quora','upwork','fiverr','github','producthunt'];
+
+  var grid = document.querySelector('.selector-grid');
+  var countEl = document.getElementById('selector-count');
+  if (!grid || !countEl) return;
+
+  var chips = Array.prototype.slice.call(grid.querySelectorAll('.selector-chip'));
+
+  // Active set — load from localStorage if valid, else default to all KNOWN.
+  var active = (function () {
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return KNOWN.slice();
+      var parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return KNOWN.slice();
+      var filtered = parsed.filter(function (k) { return KNOWN.indexOf(k) !== -1; });
+      return filtered.length > 0 ? filtered : KNOWN.slice();
+    } catch (e) { return KNOWN.slice(); }
+  })();
+
+  function persist() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(active)); } catch (e) {}
+  }
+  function flickerCount() {
+    countEl.classList.add('flicker');
+    setTimeout(function () { countEl.classList.remove('flicker'); }, 120);
+  }
+  function render() {
+    chips.forEach(function (chip) {
+      var key = chip.getAttribute('data-platform');
+      var isOn = active.indexOf(key) !== -1;
+      chip.classList.toggle('on', isOn);
+      chip.setAttribute('aria-checked', isOn ? 'true' : 'false');
+    });
+    countEl.textContent = String(active.length);
+    flickerCount();
+  }
+
+  chips.forEach(function (chip) {
+    chip.addEventListener('click', function () {
+      var key = chip.getAttribute('data-platform');
+      var idx = active.indexOf(key);
+      if (idx === -1) active.push(key); else active.splice(idx, 1);
+      persist();
+      render();
+      // Fire a custom event so the selector-feed (Task 7) can react.
+      window.dispatchEvent(new CustomEvent('ebnv:selection-change', { detail: { active: active.slice() } }));
+    });
+  });
+
+  // Initial render reflects loaded state.
+  render();
+  // Expose for Task 7's feed renderer to read on init.
+  window.__ebnvSelection = active;
+  window.__ebnvSelectorChips = chips;
+})();
+</script>
+
+<script>
+(function () {
+  var feed = document.getElementById('selector-feed');
+  if (!feed) return;
+
+  var pool = window.__ebnvFeedPool || [];
+  if (pool.length === 0) return; // hero script didn't load
+
+  function pad(n) { return n < 10 ? '0' + n : '' + n; }
+  function nowStamp() {
+    var d = new Date();
+    return pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+  }
+  function rowMarkup(item) {
+    var titleClass = item.score >= 8 ? 'feed-title' : 'feed-title-low';
+    var summary = item.summary
+      ? '<span class="feed-summary">' + item.summary + '</span>'
+      : '';
+    return ''
+      + '<div class="feed-row">'
+      +   '<span class="feed-time">' + nowStamp() + '</span>'
+      +   '<span class="feed-source ' + item.cls + '">' + item.src.toUpperCase().replace('PRODUCTHUNT', 'PH').replace('HACKERNEWS', 'HN') + '</span>'
+      +   '<span class="' + titleClass + '">' + item.title + '</span>'
+      +   '<span class="feed-score">' + item.score.toFixed(1) + '</span>'
+      +   summary
+      + '</div>';
+  }
+
+  function activeSet() {
+    return new Set(window.__ebnvSelection || []);
+  }
+  function filteredPool() {
+    var s = activeSet();
+    return pool.filter(function (it) { return s.has(it.src); });
+  }
+  function renderInitial() {
+    var pool2 = filteredPool();
+    var pick = pool2.slice(0, 6);
+    feed.innerHTML = pick.map(rowMarkup).join('');
+    if (pick.length === 0) {
+      feed.innerHTML = '<div style="padding:32px 14px;color:var(--ink-3);font-family:var(--mono);font-size:11px;letter-spacing:1px;text-align:center;">// NO PLATFORMS SELECTED</div>';
+    }
+  }
+
+  renderInitial();
+
+  var reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var smallViewport = window.matchMedia && window.matchMedia('(max-width: 480px)').matches;
+
+  var timer = null;
+  function tick() {
+    if (document.hidden) return;
+    var pool2 = filteredPool();
+    if (pool2.length === 0) return; // selector-feed already shows the empty state
+    var item = pool2[Math.floor(Math.random() * pool2.length)];
+    var temp = document.createElement('div');
+    temp.innerHTML = rowMarkup(item);
+    var newRow = temp.firstChild;
+    feed.insertBefore(newRow, feed.firstChild);
+    while (feed.children.length > 6) feed.removeChild(feed.lastChild);
+  }
+  function schedule() {
+    var delay = 5000 + Math.floor(Math.random() * 3000); // 5–8 s
+    timer = setTimeout(function () { tick(); schedule(); }, delay);
+  }
+  if (!reducedMotion && !smallViewport) schedule();
+
+  // Re-render fully when the selection changes.
+  window.addEventListener('ebnv:selection-change', function () {
+    renderInitial();
+  });
+
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) {
+      if (timer) { clearTimeout(timer); timer = null; }
+    } else if (!timer && !reducedMotion && !smallViewport) {
+      schedule();
+    }
+  });
+})();
+</script>
+
+<script>
+(function () {
+  var form = document.getElementById('dispatch-form');
+  if (!form) return;
+  var input = document.getElementById('dispatch-email');
+  var submit = document.getElementById('dispatch-submit');
+  var meta = document.getElementById('dispatch-meta');
+
+  function showError(message) {
+    var existing = form.querySelector('.dispatch-error');
+    if (existing) existing.remove();
+    var err = document.createElement('div');
+    err.className = 'dispatch-error';
+    err.textContent = '⚠ ' + message;
+    err.setAttribute('role', 'alert');
+    form.appendChild(err);
+    form.classList.remove('shake');
+    void form.offsetWidth; // restart animation
+    form.classList.add('shake');
+  }
+  function clearError() {
+    var existing = form.querySelector('.dispatch-error');
+    if (existing) existing.remove();
+  }
+  function setBusy(busy) {
+    if (busy) {
+      input.disabled = true;
+      submit.disabled = true;
+      submit.innerHTML = 'SUBSCRIBING<span style="display:inline-block;animation:dispatch-shake 0.5s infinite;">…</span>';
+    } else {
+      input.disabled = false;
+      submit.disabled = false;
+      submit.innerHTML = 'SUBSCRIBE <span class="btn-arrow">→</span>';
+    }
+  }
+  function showSuccess() {
+    form.innerHTML = ''
+      + '<div class="dispatch-success" role="status">'
+      +   '<span style="color:var(--green);font-family:var(--mono);font-size:14px;letter-spacing:1px;">✓ SUBSCRIBED.</span><br>'
+      +   'First dispatch lands Tuesday.'
+      +   '<small>Check your inbox if you don\'t see it by Wednesday.</small>'
+      + '</div>';
+  }
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    clearError();
+    var email = (input.value || '').trim();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      showError('Enter a valid email address.');
+      return;
+    }
+    setBusy(true);
+    fetch('/v1/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email, plan: 'dispatch', source: 'landing_dispatch' }),
+    })
+      .then(function (r) {
+        if (r.status === 429) {
+          throw new Error('Too many requests. Try again in a minute.');
+        }
+        if (!r.ok) {
+          throw new Error('Subscription failed (' + r.status + '). Try again.');
+        }
+        return r.json();
+      })
+      .then(function (data) {
+        if (data && data.success) showSuccess();
+        else throw new Error('Unexpected response.');
+      })
+      .catch(function (err) {
+        setBusy(false);
+        showError(err.message || 'Network error. Try again.');
+      });
+  });
+})();
+</script>
 
 <!-- Invite-code propagation: if landed via ?invite=CODE, rewrite /dashboard
      links to carry the code through to the AuthModal signup flow. -->
