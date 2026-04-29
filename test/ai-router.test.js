@@ -23,6 +23,7 @@ test('per-spec routing assignments', () => {
   // Spec-locked: changing these is a behavior change, not a refactor.
   assert.equal(TASK_ROUTING.classify_match,               'GROQ_FAST')
   assert.equal(TASK_ROUTING.generate_reply_draft,         'GROQ_QUALITY')
+  assert.equal(TASK_ROUTING.generate_premium_reply,       'CLAUDE')
   assert.equal(TASK_ROUTING.weekly_pattern_summary,       'DEEPSEEK')
   assert.equal(TASK_ROUTING.generate_icp,                 'DEEPSEEK')
   assert.equal(TASK_ROUTING.competitor_threat_summary,    'DEEPSEEK')
