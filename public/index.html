@@ -901,6 +901,67 @@
 })();
 </script>
 
+<script>
+(function () {
+  var STORAGE_KEY = 'ebnv_landing_platform_prefs';
+  var KNOWN = ['reddit','hackernews','medium','substack','quora','upwork','fiverr','github','producthunt'];
+
+  var grid = document.querySelector('.selector-grid');
+  var countEl = document.getElementById('selector-count');
+  if (!grid || !countEl) return;
+
+  var chips = Array.prototype.slice.call(grid.querySelectorAll('.selector-chip'));
+
+  // Active set — load from localStorage if valid, else default to all KNOWN.
+  var active = (function () {
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return KNOWN.slice();
+      var parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return KNOWN.slice();
+      var filtered = parsed.filter(function (k) { return KNOWN.indexOf(k) !== -1; });
+      return filtered.length > 0 ? filtered : KNOWN.slice();
+    } catch (e) { return KNOWN.slice(); }
+  })();
+
+  function persist() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(active)); } catch (e) {}
+  }
+  function flickerCount() {
+    countEl.classList.add('flicker');
+    setTimeout(function () { countEl.classList.remove('flicker'); }, 120);
+  }
+  function render() {
+    chips.forEach(function (chip) {
+      var key = chip.getAttribute('data-platform');
+      var isOn = active.indexOf(key) !== -1;
+      chip.classList.toggle('on', isOn);
+      chip.setAttribute('aria-checked', isOn ? 'true' : 'false');
+    });
+    countEl.textContent = String(active.length);
+    flickerCount();
+  }
+
+  chips.forEach(function (chip) {
+    chip.addEventListener('click', function () {
+      var key = chip.getAttribute('data-platform');
+      var idx = active.indexOf(key);
+      if (idx === -1) active.push(key); else active.splice(idx, 1);
+      persist();
+      render();
+      // Fire a custom event so the selector-feed (Task 7) can react.
+      window.dispatchEvent(new CustomEvent('ebnv:selection-change', { detail: { active: active.slice() } }));
+    });
+  });
+
+  // Initial render reflects loaded state.
+  render();
+  // Expose for Task 7's feed renderer to read on init.
+  window.__ebnvSelection = active;
+  window.__ebnvSelectorChips = chips;
+})();
+</script>
+
 <!-- Invite-code propagation: if landed via ?invite=CODE, rewrite /dashboard
      links to carry the code through to the AuthModal signup flow. -->
 <script>
