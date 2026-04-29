@@ -192,6 +192,7 @@
   .src-medium { background: #00ab6c; color: #fff; }
   .src-github { background: #d8d4cc; }
   .src-ph { background: #ff5852; color: #fff; }
+  .src-twitter { background: #1DA1F2; color: #fff; }
   .feed-title { color: var(--ink); }
   .feed-score { color: var(--gold); font-weight: 700; }
   .feed-title-low { color: var(--ink-2); }
@@ -700,10 +701,11 @@
     <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="medium"     aria-label="Toggle Medium">MEDIUM</button>
     <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="substack"   aria-label="Toggle Substack">SUBSTACK</button>
     <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="producthunt" aria-label="Toggle Product Hunt">PRODUCT HUNT</button>
+    <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="twitter"     aria-label="Toggle Twitter">TWITTER</button>
   </div>
 
   <div class="selector-meta">
-    Watching <span class="selector-count" id="selector-count">9</span> of 9 · all plans
+    Watching <span class="selector-count" id="selector-count">10</span> of 10 · all plans
   </div>
 
   <div class="selector-feed" id="selector-feed" role="log" aria-live="off"></div>
@@ -930,6 +932,9 @@
     { src: 'producthunt',cls: 'src-ph',       title: 'Founders: what\'s actually working for new-customer acquisition?',     score: 8.0, summary: 'maker discussion · 14 comments' },
     { src: 'substack',   cls: 'src-substack', title: 'Reply on "The death of paid ads" → asks for tool recs',                 score: 7.5, summary: 'comment · 8 likes' },
     { src: 'medium',     cls: 'src-medium',   title: 'My honest review of every social-listening tool I tried in Q1',         score: 7.3, summary: 'article · 180 claps' },
+    { src: 'twitter',    cls: 'src-twitter',  title: '"Just paid $99/mo for Brand24 and it\'s still missing half the threads. There has to be something better."', score: 8.4, summary: '@alex_indie · 14 likes · 6 replies' },
+    { src: 'twitter',    cls: 'src-twitter',  title: 'who do y\'all use for monitoring buying signals on the open web? prefer something cheap and not 100% reddit-only', score: 8.7, summary: '@startup_lia · 22 likes · 11 replies' },
+    { src: 'twitter',    cls: 'src-twitter',  title: 'Anyone tried the new wave of social-listening tools? My current one drowns me in noise.',                       score: 7.3, summary: '@founder_rae · 8 likes · 4 replies' },
   ];
   window.__ebnvFeedPool = POOL;
 
@@ -994,7 +999,7 @@
 <script>
 (function () {
   var STORAGE_KEY = 'ebnv_landing_platform_prefs';
-  var KNOWN = ['reddit','hackernews','medium','substack','quora','upwork','fiverr','github','producthunt'];
+  var KNOWN = ['reddit','hackernews','medium','substack','quora','upwork','fiverr','github','producthunt','twitter'];
 
   var grid = document.querySelector('.selector-grid');
   var countEl = document.getElementById('selector-count');
