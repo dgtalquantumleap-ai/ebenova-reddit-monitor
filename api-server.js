@@ -519,6 +519,61 @@ app.get('/v1/matches/intent-summary', async (req, res) => {
   }
 })
 
+// ── PATCH /v1/matches/posted ───────────────────────────────────────────────
+// Toggle the "posted" state of a match. Sets `postedAt` to now (or clears it
+// on undo) and bumps the per-monitor `posted_count` so the dashboard can
+// surface a real engagement metric. Body: { monitor_id, match_id }.
+//
+// Idempotent up to "current state": calling twice in a row toggles back. The
+// counter only moves on actual state transition (off→on increments, on→off
+// decrements) so click-arounds don't inflate the metric.
+app.patch('/v1/matches/posted', async (req, res) => {
+  const auth = await authenticate(req)
+  if (!auth.ok) return res.status(auth.status).json({ success: false, error: auth.error })
+  const { monitor_id, match_id } = req.body || {}
+  if (!monitor_id || !match_id)
+    return res.status(400).json({ success: false, error: { code: 'INVALID_INPUT', message: 'monitor_id and match_id required' } })
+  try {
+    const redis = getRedis()
+    // Verify caller owns this monitor (matches /v1/matches/feedback's pattern,
+    // returns 404 to avoid leaking existence).
+    const monitorKey = `insights:monitor:${monitor_id}`
+    const monitorRaw = await redis.get(monitorKey)
+    if (!monitorRaw) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Monitor not found' } })
+    const monitor = typeof monitorRaw === 'string' ? JSON.parse(monitorRaw) : monitorRaw
+    if (monitor.owner !== auth.owner) {
+      return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Monitor not found' } })
+    }
+
+    const matchKey = `insights:match:${monitor_id}:${match_id}`
+    const matchRaw = await redis.get(matchKey)
+    if (!matchRaw) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Match not found' } })
+    const match = typeof matchRaw === 'string' ? JSON.parse(matchRaw) : matchRaw
+
+    const wasPosted = !!match.postedAt
+    const now = new Date().toISOString()
+    const nextMatch = wasPosted
+      ? { ...match, postedAt: null }
+      : { ...match, postedAt: now }
+    await redis.set(matchKey, JSON.stringify(nextMatch))
+
+    // Counter only moves on actual transition.
+    const currentCount = Number(monitor.posted_count) || 0
+    const nextCount = wasPosted ? Math.max(0, currentCount - 1) : currentCount + 1
+    await redis.set(monitorKey, JSON.stringify({ ...monitor, posted_count: nextCount }))
+
+    res.json({
+      success: true,
+      match_id,
+      posted: !wasPosted,
+      postedAt: nextMatch.postedAt,
+      monitor_posted_count: nextCount,
+    })
+  } catch (err) {
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
+  }
+})
+
 // ── POST /v1/matches/feedback ──────────────────────────────────────────────
 app.post('/v1/matches/feedback', async (req, res) => {
   const auth = await authenticate(req)

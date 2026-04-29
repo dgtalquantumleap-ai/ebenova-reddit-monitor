@@ -78,6 +78,8 @@ select.inp{cursor:pointer}
 .btn-white{background:#fff;color:#374151;border:1px solid #D1D5DB;box-shadow:0 1px 2px rgba(0,0,0,.04)}
 .btn-white:hover{background:#F9FAFB;border-color:#9CA3AF}
 .btn-ghost{background:transparent;color:#6B7280;border:1px solid #E5E7EB}
+.btn-posted{background:#DCFCE7;color:#166534;border:1px solid #BBF7D0}
+.btn-posted:hover{background:#BBF7D0}
 .btn-ghost:hover{background:#F9FAFB;color:#374151;border-color:#D1D5DB}
 .btn-danger{background:transparent;color:#DC2626;border:1px solid #FECACA}
 .btn-danger:hover{background:#FEF2F2}
@@ -454,6 +456,13 @@ function MatchCard({ match, monitorId, apiKey, onAction }) {
   const [copied, setCopied] = useState(false);
   useEffect(() => { setDraftText(match.draft || ''); setCopied(false); }, [match.draft]);
 
+  // Posted state — local optimistic shadow of match.postedAt. Updates on
+  // PATCH success; resets if the upstream prop changes (e.g., a parent
+  // refresh comes through).
+  const [postedAt, setPostedAt] = useState(match.postedAt || null);
+  const [posting, setPosting] = useState(false);
+  useEffect(() => { setPostedAt(match.postedAt || null); }, [match.postedAt]);
+
   const regenerate = async () => {
     setDrafting(true);
     const r = await apiFetch('/v1/matches/draft',{method:'POST',body:JSON.stringify({monitor_id:monitorId,match_id:match.id})},apiKey);
@@ -464,6 +473,13 @@ function MatchCard({ match, monitorId, apiKey, onAction }) {
   const feedback = async (fb) => {
     await apiFetch('/v1/matches/feedback',{method:'POST',body:JSON.stringify({monitor_id:monitorId,match_id:match.id,feedback:fb})},apiKey);
     setGone(true);
+  };
+
+  const togglePosted = async () => {
+    setPosting(true);
+    const r = await apiFetch('/v1/matches/posted', { method:'PATCH', body:JSON.stringify({ monitor_id: monitorId, match_id: match.id }) }, apiKey);
+    setPosting(false);
+    if (r.ok) setPostedAt(r.data.postedAt || null);
   };
 
   const copyDraft = () => {
@@ -516,8 +532,14 @@ function MatchCard({ match, monitorId, apiKey, onAction }) {
             <i className={`ph-bold ph-${copied?'check':'copy'}`}></i> {copied ? 'Copied' : 'Copy'}
           </button>
         )}
-        <button className="btn btn-ghost btn-sm" onClick={()=>feedback('up')}>
-          <i className="ph ph-check"></i> Replied
+        <button
+          className={`btn btn-sm ${postedAt ? 'btn-posted' : 'btn-ghost'}`}
+          onClick={togglePosted}
+          disabled={posting}
+          title={postedAt ? 'Click to undo' : 'Mark this match as a reply you posted'}
+        >
+          <i className={`ph${postedAt ? '-fill ph-check-circle' : ' ph-check'}`}></i>
+          {postedAt ? `Posted ${timeAgo(postedAt)}` : (posting ? 'Saving…' : 'Mark posted')}
         </button>
         <button className="btn btn-ghost btn-sm" onClick={regenerate} disabled={drafting}>
           <i className={`ph ph-arrow-clockwise${drafting?' spin':''}`}></i> {drafting?'Drafting…':'New draft'}
