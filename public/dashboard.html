@@ -757,6 +757,13 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
   const [customKw, setCustomKw] = useState('')
   const [monitorName, setMonitorName] = useState('')
   const [replyTone, setReplyTone] = useState('conversational')
+  // PR #22 — UTM tracking (all optional). Defaults match server-side defaults
+  // so the live preview shows what will actually be appended in drafts.
+  const [showUtm, setShowUtm] = useState(false)
+  const [productUrl, setProductUrl] = useState('')
+  const [utmSource, setUtmSource] = useState('ebenova-insights')
+  const [utmMedium, setUtmMedium] = useState('community')
+  const [utmCampaign, setUtmCampaign] = useState('')
   // Honor a selection the visitor made on the landing page. Falls back to the
   // existing default (Reddit only) if nothing valid is stored.
   const [platforms, setPlatforms] = useState(() => readLandingPlatformPrefs(KNOWN_PLATFORMS) || ['reddit'])
@@ -842,6 +849,12 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
       productContext: suggestion?.productContext || description,
       replyTone,
       platforms,
+      // UTM injection (PR #22). Server validates productUrl and falls back to
+      // its own defaults for blank utm_* values, so blanks are safe to send.
+      productUrl:  productUrl.trim() || null,
+      utmSource:   utmSource.trim()   || null,
+      utmMedium:   utmMedium.trim()   || null,
+      utmCampaign: utmCampaign.trim() || null,
     };
     const m = await apiFetch('/v1/monitors', { method:'POST', body: JSON.stringify(body) }, apiKey);
     if (!m.ok) { setErr(m.data?.error?.message || 'Could not create monitor.'); setLoading(false); setStep(3); return; }
@@ -1094,6 +1107,58 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
                   )
                 })}
               </div>
+            </div>
+            {/* PR #22 — UTM injection (Advanced) */}
+            <div className="field" style={{marginBottom:14}}>
+              <button type="button" onClick={()=>setShowUtm(s=>!s)}
+                style={{background:'transparent',border:'none',padding:0,cursor:'pointer',fontSize:12,color:'#64748B',fontFamily:'inherit',display:'inline-flex',alignItems:'center',gap:6}}>
+                <i className={`ph ph-caret-${showUtm?'down':'right'}`}></i>
+                Advanced · UTM tracking <span style={{color:'#94A3B8'}}>(optional)</span>
+              </button>
+              {showUtm && (
+                <div style={{marginTop:10,padding:14,background:'#F8FAFC',border:'1px solid #E2E8F0',borderRadius:6}}>
+                  <div style={{fontSize:12,color:'#64748B',marginBottom:10,lineHeight:1.5}}>
+                    If you set a product URL, drafts that mention it will get UTM params appended automatically. Other links (Reddit, etc.) are left alone.
+                  </div>
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+                    <div style={{gridColumn:'1 / -1'}}>
+                      <label className="label" style={{fontSize:11}}>Product URL</label>
+                      <input className="inp" placeholder="https://yourproduct.com" value={productUrl} onChange={e=>setProductUrl(e.target.value)} />
+                    </div>
+                    <div>
+                      <label className="label" style={{fontSize:11}}>utm_source</label>
+                      <input className="inp" placeholder="ebenova-insights" value={utmSource} onChange={e=>setUtmSource(e.target.value)} />
+                    </div>
+                    <div>
+                      <label className="label" style={{fontSize:11}}>utm_medium</label>
+                      <input className="inp" placeholder="community" value={utmMedium} onChange={e=>setUtmMedium(e.target.value)} />
+                    </div>
+                    <div style={{gridColumn:'1 / -1'}}>
+                      <label className="label" style={{fontSize:11}}>utm_campaign <span style={{color:'#94A3B8',fontWeight:400}}>· defaults to monitor name slug</span></label>
+                      <input className="inp" placeholder={(monitorName.trim()||'my-monitor').toLowerCase().replace(/[^a-z0-9]+/g,'-').slice(0,40)} value={utmCampaign} onChange={e=>setUtmCampaign(e.target.value)} />
+                    </div>
+                  </div>
+                  {productUrl.trim() && (() => {
+                    try {
+                      const u = new URL(productUrl.trim())
+                      const src = utmSource.trim() || 'ebenova-insights'
+                      const med = utmMedium.trim() || 'community'
+                      const cmp = utmCampaign.trim() || (monitorName.trim()||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,40)
+                      if (src) u.searchParams.set('utm_source', src)
+                      if (med) u.searchParams.set('utm_medium', med)
+                      if (cmp) u.searchParams.set('utm_campaign', cmp)
+                      return (
+                        <div style={{marginTop:12,padding:'10px 12px',background:'#fff',border:'1px dashed #FED7AA',borderRadius:6,fontFamily:"'JetBrains Mono',monospace",fontSize:11.5,color:'#451A03',wordBreak:'break-all'}}>
+                          <span style={{color:'#9A3412',fontWeight:700,letterSpacing:'.5px',textTransform:'uppercase',fontSize:9,marginRight:6}}>Preview</span>
+                          {u.toString()}
+                        </div>
+                      )
+                    } catch (_) {
+                      return <div style={{marginTop:12,fontSize:11.5,color:'#DC2626'}}>⚠ Product URL is not a valid http(s) URL</div>
+                    }
+                  })()}
+                </div>
+              )}
             </div>
             <div style={{padding:'12px 0',borderBottom:'1px solid #F1F5F9',display:'flex',justifyContent:'space-between'}}>
               <span style={{fontSize:12,color:'#94A3B8',fontFamily:"'JetBrains Mono',monospace",letterSpacing:1}}>KEYWORDS</span>
