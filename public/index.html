@@ -1125,6 +1125,85 @@
 })();
 </script>
 
+<script>
+(function () {
+  var form = document.getElementById('dispatch-form');
+  if (!form) return;
+  var input = document.getElementById('dispatch-email');
+  var submit = document.getElementById('dispatch-submit');
+  var meta = document.getElementById('dispatch-meta');
+
+  function showError(message) {
+    var existing = form.querySelector('.dispatch-error');
+    if (existing) existing.remove();
+    var err = document.createElement('div');
+    err.className = 'dispatch-error';
+    err.textContent = '⚠ ' + message;
+    err.setAttribute('role', 'alert');
+    form.appendChild(err);
+    form.classList.remove('shake');
+    void form.offsetWidth; // restart animation
+    form.classList.add('shake');
+  }
+  function clearError() {
+    var existing = form.querySelector('.dispatch-error');
+    if (existing) existing.remove();
+  }
+  function setBusy(busy) {
+    if (busy) {
+      input.disabled = true;
+      submit.disabled = true;
+      submit.innerHTML = 'SUBSCRIBING<span style="display:inline-block;animation:dispatch-shake 0.5s infinite;">…</span>';
+    } else {
+      input.disabled = false;
+      submit.disabled = false;
+      submit.innerHTML = 'SUBSCRIBE <span class="btn-arrow">→</span>';
+    }
+  }
+  function showSuccess() {
+    form.innerHTML = ''
+      + '<div class="dispatch-success" role="status">'
+      +   '<span style="color:var(--green);font-family:var(--mono);font-size:14px;letter-spacing:1px;">✓ SUBSCRIBED.</span><br>'
+      +   'First dispatch lands Tuesday.'
+      +   '<small>Check your inbox if you don\'t see it by Wednesday.</small>'
+      + '</div>';
+  }
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    clearError();
+    var email = (input.value || '').trim();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      showError('Enter a valid email address.');
+      return;
+    }
+    setBusy(true);
+    fetch('/v1/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email, plan: 'dispatch', source: 'landing_dispatch' }),
+    })
+      .then(function (r) {
+        if (r.status === 429) {
+          throw new Error('Too many requests. Try again in a minute.');
+        }
+        if (!r.ok) {
+          throw new Error('Subscription failed (' + r.status + '). Try again.');
+        }
+        return r.json();
+      })
+      .then(function (data) {
+        if (data && data.success) showSuccess();
+        else throw new Error('Unexpected response.');
+      })
+      .catch(function (err) {
+        setBusy(false);
+        showError(err.message || 'Network error. Try again.');
+      });
+  });
+})();
+</script>
+
 <!-- Invite-code propagation: if landed via ?invite=CODE, rewrite /dashboard
      links to carry the code through to the AuthModal signup flow. -->
 <script>
