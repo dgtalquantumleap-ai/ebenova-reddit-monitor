@@ -37,6 +37,7 @@ import { draftCall }   from './lib/draft-call.js'
 import { parseRedditRSS, buildRedditSearchUrl, parseRetryAfter } from './lib/reddit-rss.js'
 import { generateUnsubscribeToken, buildEmailFooter } from './lib/account-deletion.js'
 import { classifyMatch, intentPriority, isHighPriority } from './lib/classify.js'
+import { recordAuthor } from './lib/author-profiles.js'
 
 // F14: lazy daily cost caps. Soft-fail so the worker degrades gracefully
 // (skip-draft / skip-email / skip-embedding) rather than crashing.
@@ -716,6 +717,20 @@ async function runMonitor(monitor) {
       totalMatchesFound: (monitor.totalMatchesFound || 0) + allMatches.length,
     }
     await redis.set(`insights:monitor:${monitor.id}`, JSON.stringify(updatedMonitor))
+
+    // Record author profiles (PR #24). Best-effort: each call swallows its
+    // own errors. Skips placeholder authors (unknown / platform-name fallbacks).
+    let authorsRecorded = 0, authorsNew = 0
+    for (const m of allMatches) {
+      const r = await recordAuthor({ redis, monitorId: monitor.id, match: m })
+      if (r?.recorded) {
+        authorsRecorded++
+        if (r.isNew) authorsNew++
+      }
+    }
+    if (authorsRecorded > 0) {
+      console.log(`${label} Author profiles: ${authorsNew} new, ${authorsRecorded - authorsNew} returning`)
+    }
   } catch (err) {
     console.error(`${label} Redis store error:`, err.message)
   }
