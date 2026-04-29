@@ -283,6 +283,26 @@
   .marker-3 { bottom: 70px; right: -120px; }
   @media (max-width: 900px) { .anatomy-marker { display: none; } }
 
+  .anatomy-marker::before {
+    content: '';
+    position: absolute;
+    background: var(--gold);
+    opacity: 0.6;
+  }
+  .anatomy-marker.marker-1::before { top: 50%; right: -28px; width: 24px; height: 1px; }
+  .anatomy-marker.marker-2::before { top: 50%; right: -28px; width: 24px; height: 1px; }
+  .anatomy-marker.marker-3::before { top: 50%; right: -28px; width: 24px; height: 1px; }
+  .anatomy-marker.marker-4::before { top: 50%; right: -28px; width: 24px; height: 1px; }
+  .anatomy-marker.marker-4 {
+    position: absolute; right: -180px; top: 24px;
+    font-family: var(--mono); font-size: 10px; color: var(--gold);
+    letter-spacing: 1px; white-space: nowrap;
+  }
+  @media (max-width: 1024px) {
+    .anatomy-marker::before { display: none; }
+    .anatomy-marker.marker-4 { position: static; display: inline-block; margin: 6px 0; }
+  }
+
   .anatomy-list { display: flex; flex-direction: column; gap: 26px; }
   .anatomy-item { display: flex; gap: 18px; align-items: flex-start; }
   .anatomy-num {
@@ -620,6 +640,7 @@
       <div class="anatomy-marker marker-1">SOURCE + SCORE →</div>
       <div class="anatomy-marker marker-2">CONTEXT →</div>
       <div class="anatomy-marker marker-3">REPLY DRAFT →</div>
+      <div class="anatomy-marker marker-4">INTENT 9.2/10 →</div>
     </div>
 
     <div class="anatomy-list">
