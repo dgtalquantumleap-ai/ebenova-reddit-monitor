@@ -25,6 +25,11 @@ export function createMockRedis() {
       store.set(key, cur)
       return cur
     },
+    async incrby(key, amount) {
+      const cur = Number(store.get(key) || 0) + Number(amount || 0)
+      store.set(key, cur)
+      return cur
+    },
     async expire(_key, _seconds) { return 1 },
     async ping() { return 'PONG' },
     async sadd(key, ...members) {

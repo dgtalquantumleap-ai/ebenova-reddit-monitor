@@ -40,6 +40,7 @@ import { classifyMatch, intentPriority, isHighPriority } from './lib/classify.js
 import { recordAuthor } from './lib/author-profiles.js'
 import { fireWebhook, buildPayload as buildWebhookPayload } from './lib/outbound-webhook.js'
 import { runAllDigests } from './lib/weekly-digest.js'
+import { isoWeekLabel } from './lib/keyword-types.js'
 
 // F14: lazy daily cost caps. Soft-fail so the worker degrades gracefully
 // (skip-draft / skip-email / skip-embedding) rather than crashing.
@@ -379,6 +380,8 @@ async function generateReplyDraft(post, productContext, tone, utmConfig) {
     utmSource:      utmConfig?.utmSource,
     utmMedium:      utmConfig?.utmMedium,
     utmCampaign:    utmConfig?.utmCampaign,
+    // PR #28: competitor-mode prompt addendum for matches from competitor keywords.
+    competitorMode: utmConfig?.competitorMode === true,
   })
 }
 
@@ -580,13 +583,15 @@ async function runMonitor(monitor) {
   if (platforms.includes('reddit')) {
     for (const kw of monitor.keywords) {
       const ctx = kw.productContext || monitor.productContext || ''
+      const kwType = kw.type || 'keyword'
       const redditMatches = await searchReddit(monitor.id, kw)
       for (const m of redditMatches) {
         m.productContext = ctx
+        m.keywordType = kwType   // PR #28
         allMatches.push(m)
       }
       if (redditMatches.length > 0) {
-        console.log(`${label} Reddit "${kw.keyword}": ${redditMatches.length} new`)
+        console.log(`${label} Reddit "${kw.keyword}"${kwType === 'competitor' ? ' [competitor]' : ''}: ${redditMatches.length} new`)
       }
       await delay(2000)
 
@@ -601,6 +606,7 @@ async function runMonitor(monitor) {
             const semanticMatches = await semanticSearchSubreddit(monitor.id, sr, kw, queryEmbedding)
             for (const m of semanticMatches) {
               m.productContext = ctx
+              m.keywordType = kwType   // PR #28
               allMatches.push(m)
             }
             if (semanticMatches.length > 0) {
@@ -634,9 +640,10 @@ async function runMonitor(monitor) {
     if (!platforms.includes(key)) continue
     for (const kw of monitor.keywords) {
       const ctx = kw.productContext || monitor.productContext || ''
+      const kwType = kw.type || 'keyword'   // PR #28
       const matches = await scraper(kw, { seenIds, delay, MAX_AGE_MS: maxAgeMs })
-      matches.forEach(m => { m.productContext = ctx; allMatches.push(m) })
-      if (matches.length) console.log(`${label} ${PLATFORM_LABELS[key] || key} "${kw.keyword}": ${matches.length} new`)
+      matches.forEach(m => { m.productContext = ctx; m.keywordType = kwType; allMatches.push(m) })
+      if (matches.length) console.log(`${label} ${PLATFORM_LABELS[key] || key} "${kw.keyword}"${kwType === 'competitor' ? ' [competitor]' : ''}: ${matches.length} new`)
       await delay(delayMs)
     }
   }
@@ -686,6 +693,8 @@ async function runMonitor(monitor) {
         utmSource:   monitor.utmSource,
         utmMedium:   monitor.utmMedium,
         utmCampaign: monitor.utmCampaign,
+        // PR #28: keyword-type aware draft prompt for competitor matches.
+        competitorMode: m.keywordType === 'competitor',
       })
       m.draft = r.draft
       m.draftedBy = r.model
@@ -742,6 +751,34 @@ async function runMonitor(monitor) {
     }
     if (authorsRecorded > 0) {
       console.log(`${label} Author profiles: ${authorsNew} new, ${authorsRecorded - authorsNew} returning`)
+    }
+
+    // PR #28: share-of-voice counters per ISO week. own = matches from
+    // 'keyword' types, competitor = matches from 'competitor' types. Two
+    // INCRBY calls per cycle, 90-day TTL on each. Reads happen via
+    // /v1/matches/intent-summary which fetches the current + previous
+    // week's keys to compute trend.
+    let ownDelta = 0, compDelta = 0
+    for (const m of allMatches) {
+      if (m.keywordType === 'competitor') compDelta++
+      else ownDelta++
+    }
+    if (ownDelta > 0 || compDelta > 0) {
+      const week = isoWeekLabel(new Date())
+      const SOV_TTL = 90 * 24 * 60 * 60   // 90 days
+      try {
+        if (ownDelta > 0) {
+          await redis.incrby(`sov:${monitor.id}:${week}:own`, ownDelta)
+          await redis.expire(`sov:${monitor.id}:${week}:own`, SOV_TTL)
+        }
+        if (compDelta > 0) {
+          await redis.incrby(`sov:${monitor.id}:${week}:competitor`, compDelta)
+          await redis.expire(`sov:${monitor.id}:${week}:competitor`, SOV_TTL)
+        }
+        console.log(`${label} SoV ${week}: own +${ownDelta}, competitor +${compDelta}`)
+      } catch (err) {
+        console.warn(`${label} SoV write failed: ${err.message}`)
+      }
     }
   } catch (err) {
     console.error(`${label} Redis store error:`, err.message)

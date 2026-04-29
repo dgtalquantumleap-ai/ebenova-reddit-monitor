@@ -63,6 +63,7 @@ import { classifyMatch, intentPriority } from './lib/classify.js'
 import { sendOutboundWebhook, buildPayload as buildWebhookPayload } from './lib/outbound-webhook.js'
 import { toCsv, matchToExportRow, MATCH_EXPORT_COLUMNS } from './lib/csv-export.js'
 import { gatherReportData, buildExecutiveSummary, renderReportHtml, resolveReportToken } from './lib/client-report.js'
+import { normalizeKeywordList, isoWeekLabel, previousIsoWeekLabel } from './lib/keyword-types.js'
 
 const PORT = parseInt(process.env.API_PORT || process.env.PORT || '3001')
 const ADMIN_KEY = process.env.MONITOR_ADMIN_KEY
@@ -326,10 +327,10 @@ app.post('/v1/monitors', async (req, res) => {
     return res.status(400).json({ success: false, error: { code: 'KEYWORD_LIMIT_EXCEEDED', message: `Max ${limits.keywords} keywords on ${plan} plan` } })
   try {
     const redis = getRedis()
-    const cleanKws = keywords.map(k => typeof k === 'string'
-      ? { keyword: k.trim(), subreddits: [], productContext: '' }
-      : { keyword: String(k.keyword || '').trim(), subreddits: Array.isArray(k.subreddits) ? k.subreddits.slice(0, 10) : [], productContext: String(k.productContext || '').slice(0, 500) }
-    ).filter(k => k.keyword.length > 1)
+    // Keyword normalization handles legacy string-format and the new
+    // type-aware shape. PR #28 adds optional `type: 'keyword' | 'competitor'`
+    // — defaults to 'keyword' when omitted so existing clients keep working.
+    const cleanKws = normalizeKeywordList(keywords)
     const id = `mon_${randomBytes(12).toString('hex')}`
 
     // F13: atomic add-then-check-then-rollback to close the plan-limit race.
@@ -797,11 +798,57 @@ app.get('/v1/matches/intent-summary', async (req, res) => {
       }
     }
     const high_value_count = by_intent.asking_for_tool + by_intent.buying
+
+    // PR #28: share-of-voice block. Reads the SoV counters this cycle's
+    // monitor-v2 wrote during runMonitor. Both keys may be missing for
+    // a brand-new monitor; treat missing as zero. The trend comparison
+    // uses an own-share fraction (own / (own + competitor)) — if there
+    // were no matches at all in either week, trend is 'stable'.
+    const wkNow  = isoWeekLabel(new Date())
+    const wkPrev = previousIsoWeekLabel(new Date())
+    let sovBlock = null
+    try {
+      const [ownNow, compNow, ownPrev, compPrev] = await Promise.all([
+        redis.get(`sov:${monitor_id}:${wkNow}:own`),
+        redis.get(`sov:${monitor_id}:${wkNow}:competitor`),
+        redis.get(`sov:${monitor_id}:${wkPrev}:own`),
+        redis.get(`sov:${monitor_id}:${wkPrev}:competitor`),
+      ])
+      const own1  = Number(ownNow  || 0)
+      const comp1 = Number(compNow || 0)
+      const own2  = Number(ownPrev  || 0)
+      const comp2 = Number(compPrev || 0)
+      const ratio = (a, b) => {
+        if (a === 0 && b === 0) return '0:0'
+        const g = (function gcd(x, y) { return y === 0 ? x : gcd(y, x % y) })(a, b)
+        return `${a / g}:${b / g}`
+      }
+      const share = (a, b) => (a + b === 0 ? null : a / (a + b))
+      const sNow = share(own1, comp1)
+      const sPrev = share(own2, comp2)
+      let trend = 'stable'
+      if (sNow != null && sPrev != null) {
+        const delta = sNow - sPrev
+        if (delta > 0.05)      trend = 'improving'
+        else if (delta < -0.05) trend = 'declining'
+      } else if (sNow != null && sPrev == null) {
+        trend = 'improving'   // first week with data
+      }
+      sovBlock = {
+        thisWeek: { own: own1, competitor: comp1, ratio: ratio(own1, comp1) },
+        lastWeek: { own: own2, competitor: comp2, ratio: ratio(own2, comp2) },
+        trend,
+      }
+    } catch (err) {
+      console.warn(`[intent-summary] SoV read failed for ${monitor_id}: ${err.message}`)
+    }
+
     res.json({
       success: true,
       monitor_id,
       period: '7d',
       summary: { total, by_intent, by_sentiment, high_value_count },
+      shareOfVoice: sovBlock,
     })
   } catch (err) {
     res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
