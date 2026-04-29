@@ -409,6 +409,70 @@
   .price-card.featured .price-cta:hover { background: var(--gold-2); }
   .price-cta:hover { border-color: var(--gold); }
 
+  /* Dispatch */
+  #dispatch {
+    padding: 96px 24px;
+    max-width: 1280px; margin: 0 auto;
+    border-top: 1px solid var(--line);
+  }
+  .dispatch-grid {
+    display: grid; grid-template-columns: 1.1fr 1fr; gap: 64px; align-items: center;
+    margin-top: 24px;
+  }
+  .dispatch-sub {
+    color: var(--ink-2); font-size: 16px; line-height: 1.7; max-width: 520px; margin-top: 18px;
+  }
+  .dispatch-form { display: flex; flex-direction: column; gap: 12px; }
+  .dispatch-label {
+    font-family: var(--mono); font-size: 11px; color: var(--ink-3);
+    letter-spacing: 2.5px; text-transform: uppercase;
+  }
+  .dispatch-form input[type="email"] {
+    background: var(--bg-2); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 6px;
+    padding: 14px 16px; font-family: var(--mono); font-size: 14px;
+    transition: border-color 0.15s ease;
+  }
+  .dispatch-form input[type="email"]:focus {
+    outline: none; border-color: var(--gold);
+    box-shadow: inset 0 0 0 1px rgba(255,107,53,0.2);
+  }
+  .dispatch-form input[type="email"]:disabled { opacity: 0.5; }
+  .dispatch-cta {
+    background: var(--gold); color: #000; font-weight: 700;
+    padding: 14px 22px; border-radius: 6px; border: none; cursor: pointer;
+    font-family: var(--mono); font-size: 13px; letter-spacing: 0.5px;
+    display: inline-flex; align-items: center; gap: 10px; align-self: flex-start;
+    transition: background 0.15s ease, transform 0.1s ease;
+  }
+  .dispatch-cta:hover { background: var(--gold-2); transform: translateY(-1px); }
+  .dispatch-cta:disabled { opacity: 0.6; cursor: progress; transform: none; }
+  .dispatch-meta {
+    font-family: var(--mono); font-size: 11px; color: var(--ink-3); letter-spacing: 0.5px;
+  }
+  .dispatch-error {
+    font-family: var(--mono); font-size: 11px; color: var(--red); letter-spacing: 0.5px;
+    margin-top: 4px;
+  }
+  .dispatch-success {
+    font-family: var(--serif); font-size: 22px; color: var(--ink);
+    line-height: 1.4;
+  }
+  .dispatch-success small {
+    display: block; font-family: var(--mono); font-size: 11px;
+    color: var(--ink-3); letter-spacing: 1px; margin-top: 8px;
+  }
+  @keyframes dispatch-shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-4px); }
+    75% { transform: translateX(4px); }
+  }
+  .dispatch-form.shake { animation: dispatch-shake 0.25s ease; }
+  @media (max-width: 768px) {
+    #dispatch { padding: 72px 24px; }
+    .dispatch-grid { grid-template-columns: 1fr; gap: 32px; }
+  }
+
   /* CTA banner */
   .cta-banner {
     border: 1px solid var(--gold); border-radius: 12px;
@@ -791,6 +855,23 @@
       </ul>
       <a href="/dashboard?upgrade=scale" class="price-cta" aria-label="Upgrade to the Scale plan, $199 per month">GO SCALE</a>
     </div>
+  </div>
+</section>
+
+<!-- DISPATCH — weekly briefing capture -->
+<section id="dispatch">
+  <span class="label">DISPATCH</span>
+  <div class="dispatch-grid">
+    <div>
+      <h2 class="h-display">Not ready to run<br>your own monitor?<br><em>Read ours.</em></h2>
+      <p class="dispatch-sub">A weekly briefing of buying-intent posts we caught — anonymized, with the reply that worked.</p>
+    </div>
+    <form class="dispatch-form" id="dispatch-form" novalidate>
+      <label for="dispatch-email" class="dispatch-label">EMAIL</label>
+      <input type="email" id="dispatch-email" name="email" required placeholder="you@company.com" autocomplete="email" aria-describedby="dispatch-meta">
+      <button type="submit" class="dispatch-cta" id="dispatch-submit">SUBSCRIBE <span class="btn-arrow">→</span></button>
+      <div class="dispatch-meta" id="dispatch-meta">Free. Tuesdays. No "boost your reach" fluff.</div>
+    </form>
   </div>
 </section>
 
