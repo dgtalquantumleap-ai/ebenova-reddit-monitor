@@ -764,6 +764,13 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
   const [utmSource, setUtmSource] = useState('ebenova-insights')
   const [utmMedium, setUtmMedium] = useState('community')
   const [utmCampaign, setUtmCampaign] = useState('')
+  // PR #23 — outbound webhook (optional). The test button posts to a separate
+  // endpoint after monitor creation, so we hide the test affordance until the
+  // monitor exists.
+  const [showWebhook, setShowWebhook] = useState(false)
+  const [webhookUrl, setWebhookUrl] = useState('')
+  const [testingWebhook, setTestingWebhook] = useState(false)
+  const [webhookTestResult, setWebhookTestResult] = useState(null)
   // Honor a selection the visitor made on the landing page. Falls back to the
   // existing default (Reddit only) if nothing valid is stored.
   const [platforms, setPlatforms] = useState(() => readLandingPlatformPrefs(KNOWN_PLATFORMS) || ['reddit'])
@@ -855,6 +862,8 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
       utmSource:   utmSource.trim()   || null,
       utmMedium:   utmMedium.trim()   || null,
       utmCampaign: utmCampaign.trim() || null,
+      // PR #23 — outbound webhook. Server validates https on its end; null if blank.
+      webhookUrl:  webhookUrl.trim()  || null,
     };
     const m = await apiFetch('/v1/monitors', { method:'POST', body: JSON.stringify(body) }, apiKey);
     if (!m.ok) { setErr(m.data?.error?.message || 'Could not create monitor.'); setLoading(false); setStep(3); return; }
@@ -1157,6 +1166,52 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
                       return <div style={{marginTop:12,fontSize:11.5,color:'#DC2626'}}>⚠ Product URL is not a valid http(s) URL</div>
                     }
                   })()}
+                </div>
+              )}
+            </div>
+            {/* PR #23 — outbound webhook (Advanced) */}
+            <div className="field" style={{marginBottom:14}}>
+              <button type="button" onClick={()=>setShowWebhook(s=>!s)}
+                style={{background:'transparent',border:'none',padding:0,cursor:'pointer',fontSize:12,color:'#64748B',fontFamily:'inherit',display:'inline-flex',alignItems:'center',gap:6}}>
+                <i className={`ph ph-caret-${showWebhook?'down':'right'}`}></i>
+                Advanced · Outbound webhook <span style={{color:'#94A3B8'}}>(optional)</span>
+              </button>
+              {showWebhook && (
+                <div style={{marginTop:10,padding:14,background:'#F8FAFC',border:'1px solid #E2E8F0',borderRadius:6}}>
+                  <div style={{fontSize:12,color:'#64748B',marginBottom:10,lineHeight:1.5}}>
+                    Every approved match will be POSTed to this URL with full match + classification fields. Wire it to Zapier, Make, n8n, your CRM, or a custom endpoint. Must be <code>https://</code>.
+                  </div>
+                  <input className="inp" placeholder="https://hooks.zapier.com/hooks/catch/…" value={webhookUrl} onChange={e=>{ setWebhookUrl(e.target.value); setWebhookTestResult(null) }} />
+                  {savedMonitorId && (
+                    <div style={{marginTop:10,display:'flex',gap:10,alignItems:'center',flexWrap:'wrap'}}>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        disabled={testingWebhook || !webhookUrl.trim()}
+                        onClick={async () => {
+                          setTestingWebhook(true); setWebhookTestResult(null);
+                          // Persist the URL first if it changed since save, then call test endpoint.
+                          await apiFetch(`/v1/monitors/${savedMonitorId}`, { method:'PATCH', body: JSON.stringify({ webhookUrl: webhookUrl.trim() || null }) }, apiKey);
+                          const r = await apiFetch(`/v1/monitors/${savedMonitorId}/test-webhook`, { method:'POST', body: JSON.stringify({}) }, apiKey);
+                          setTestingWebhook(false);
+                          setWebhookTestResult(r);
+                        }}>
+                        <i className={`ph ph-${testingWebhook?'circle-notch spin':'paper-plane-tilt'}`}></i>
+                        {testingWebhook ? 'Sending…' : 'Test webhook'}
+                      </button>
+                      {webhookTestResult && webhookTestResult.ok && webhookTestResult.data?.success && (
+                        <span style={{fontSize:12,color:'#16A34A'}}><i className="ph-bold ph-check"></i> Delivered (status {webhookTestResult.data.status})</span>
+                      )}
+                      {webhookTestResult && (!webhookTestResult.ok || !webhookTestResult.data?.success) && (
+                        <span style={{fontSize:12,color:'#DC2626'}}><i className="ph ph-warning-circle"></i> {webhookTestResult.data?.error?.message || 'Delivery failed'}</span>
+                      )}
+                    </div>
+                  )}
+                  {!savedMonitorId && webhookUrl.trim() && (
+                    <div style={{marginTop:8,fontSize:11.5,color:'#94A3B8'}}>
+                      The "Test webhook" button shows up after the monitor is created.
+                    </div>
+                  )}
                 </div>
               )}
             </div>

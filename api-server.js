@@ -60,6 +60,7 @@ import { applyInviteToUser } from './lib/invite.js'
 import { draftCall } from './lib/draft-call.js'
 import { validatePlatforms, migrateLegacyPlatforms, VALID_PLATFORMS } from './lib/platforms.js'
 import { classifyMatch, intentPriority } from './lib/classify.js'
+import { sendOutboundWebhook, buildPayload as buildWebhookPayload } from './lib/outbound-webhook.js'
 
 const PORT = parseInt(process.env.API_PORT || process.env.PORT || '3001')
 const ADMIN_KEY = process.env.MONITOR_ADMIN_KEY
@@ -139,6 +140,19 @@ function validateProductUrl(input) {
   if (u.protocol !== 'http:' && u.protocol !== 'https:') {
     return { ok: false, error: '`productUrl` must be http:// or https://' }
   }
+  return { ok: true, value: u.toString() }
+}
+
+// Validate an optional outbound webhook URL. Empty/null is OK (returns null).
+// Must parse as https:// — http:// is rejected to avoid sending payloads with
+// match content over plaintext. Used by POST/PATCH /v1/monitors and the test
+// endpoint.
+function validateWebhookUrl(input) {
+  if (input == null || input === '') return { ok: true, value: null }
+  if (typeof input !== 'string') return { ok: false, error: '`webhookUrl` must be a string' }
+  let u
+  try { u = new URL(input.trim()) } catch (_) { return { ok: false, error: '`webhookUrl` is not a valid URL' } }
+  if (u.protocol !== 'https:') return { ok: false, error: '`webhookUrl` must be https://' }
   return { ok: true, value: u.toString() }
 }
 
@@ -269,6 +283,8 @@ app.get('/v1/monitors', async (req, res) => {
           utm_source:   m.utmSource   || null,
           utm_medium:   m.utmMedium   || null,
           utm_campaign: m.utmCampaign || null,
+          // Outbound webhook (PR #23). Null until owner configures one.
+          webhook_url:  m.webhookUrl  || null,
         })
       }
     }
@@ -284,7 +300,7 @@ app.post('/v1/monitors', async (req, res) => {
   if (!auth.ok) return res.status(auth.status).json({ success: false, error: auth.error })
   const { name, keywords = [], productContext, alertEmail, slackWebhookUrl, replyTone,
     platforms,
-    productUrl, utmSource, utmMedium, utmCampaign,
+    productUrl, utmSource, utmMedium, utmCampaign, webhookUrl,
     includeMedium, includeSubstack, includeQuora, includeUpworkForum, includeFiverrForum } = req.body
 
   // Platforms — new monitors must specify at least 1; if omitted entirely we
@@ -343,6 +359,13 @@ app.post('/v1/monitors', async (req, res) => {
     const cleanUtmMedium   = String(utmMedium   ?? '').trim().slice(0, 60) || 'community'
     const cleanUtmCampaign = String(utmCampaign ?? '').trim().slice(0, 60) || slugify(name.trim())
 
+    // Outbound webhook URL (PR #23). Optional; must be https when present.
+    const cleanWebhookUrl = validateWebhookUrl(webhookUrl)
+    if (cleanWebhookUrl.ok === false) {
+      await redis.srem(ownerSetKey, id)
+      return res.status(400).json({ success: false, error: { code: 'INVALID_WEBHOOK_URL', message: cleanWebhookUrl.error } })
+    }
+
     // Unsubscribe token — issued at creation, used by the public /unsubscribe
     // and /delete-account routes (no login required for either).
     const unsubscribeToken = generateUnsubscribeToken()
@@ -351,6 +374,7 @@ app.post('/v1/monitors', async (req, res) => {
     const monitor = { id, owner: auth.owner, name: name.trim().slice(0, 100), keywords: cleanKws,
       productContext: (productContext || '').slice(0, 2000), alertEmail: alertEmail || auth.owner,
       slackWebhookUrl: (slackWebhookUrl || '').slice(0, 500),
+      webhookUrl:         cleanWebhookUrl.value,
       replyTone:          tone,
       productUrl:         cleanProductUrl.value,
       utmSource:          cleanUtmSource,
@@ -381,6 +405,7 @@ app.post('/v1/monitors', async (req, res) => {
       utm_source:    monitor.utmSource,
       utm_medium:    monitor.utmMedium,
       utm_campaign:  monitor.utmCampaign,
+      webhook_url:   monitor.webhookUrl,
       created_at: now, next_poll_eta: 'Within 15 minutes' })
   } catch (err) {
     res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
@@ -458,8 +483,17 @@ app.patch('/v1/monitors/:id', async (req, res) => {
       }
     }
 
+    // Field 7: webhookUrl — https URL or null (PR #23).
+    if (Object.prototype.hasOwnProperty.call(body, 'webhookUrl')) {
+      const v = validateWebhookUrl(body.webhookUrl)
+      if (!v.ok) {
+        return res.status(400).json({ success: false, error: { code: 'INVALID_WEBHOOK_URL', message: v.error } })
+      }
+      updates.webhookUrl = v.value
+    }
+
     if (Object.keys(updates).length === 0) {
-      return res.status(400).json({ success: false, error: { code: 'NO_UPDATES', message: 'No supported fields in body. Patchable: platforms, emailEnabled, productUrl, utmSource, utmMedium, utmCampaign' } })
+      return res.status(400).json({ success: false, error: { code: 'NO_UPDATES', message: 'No supported fields in body. Patchable: platforms, emailEnabled, productUrl, utmSource, utmMedium, utmCampaign, webhookUrl' } })
     }
     const next = { ...m, ...updates }
     await redis.set(`insights:monitor:${id}`, JSON.stringify(next))
@@ -472,7 +506,61 @@ app.patch('/v1/monitors/:id', async (req, res) => {
     if (updates.utmSource     !== undefined) echo.utm_source    = next.utmSource
     if (updates.utmMedium     !== undefined) echo.utm_medium    = next.utmMedium
     if (updates.utmCampaign   !== undefined) echo.utm_campaign  = next.utmCampaign
+    if (updates.webhookUrl    !== undefined) echo.webhook_url   = next.webhookUrl
     res.json(echo)
+  } catch (err) {
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
+  }
+})
+
+// ── POST /v1/monitors/:id/test-webhook ─────────────────────────────────────
+// Fires a sample `event:'test'` payload at the monitor's configured webhookUrl
+// synchronously so the dashboard's "Test webhook" button can show success or
+// failure inline. Auth-gated, ownership-checked. Returns 502 with structured
+// detail on delivery failure (so the UI can show e.g. "non-2xx (status 500)").
+app.post('/v1/monitors/:id/test-webhook', async (req, res) => {
+  const auth = await authenticate(req)
+  if (!auth.ok) return res.status(auth.status).json({ success: false, error: auth.error })
+  const { id } = req.params
+  try {
+    const redis = getRedis()
+    const raw = await redis.get(`insights:monitor:${id}`)
+    if (!raw) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Monitor not found' } })
+    const m = typeof raw === 'string' ? JSON.parse(raw) : raw
+    // Match feedback's pattern: 404 (not 403) on owner mismatch to avoid
+    // existence-leak.
+    if (m.owner !== auth.owner) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Monitor not found' } })
+    if (!m.webhookUrl) return res.status(400).json({ success: false, error: { code: 'NO_WEBHOOK', message: 'Monitor has no webhookUrl set' } })
+
+    const samplePayload = buildWebhookPayload({
+      event: 'test',
+      monitorId: m.id,
+      match: {
+        id: 'sample_match_1',
+        title: 'Sample test match — Ebenova Insights webhook',
+        url: 'https://example.com/sample',
+        subreddit: 'test',
+        author: 'sample_user',
+        score: 42,
+        comments: 5,
+        body: 'This is a test payload from the Ebenova Insights "Test webhook" button. Real matches will look like this.',
+        createdAt: new Date().toISOString(),
+        keyword: 'sample',
+        source: 'reddit',
+        sentiment: 'neutral',
+        intent: 'researching',
+        intentConfidence: 0.92,
+        draft: null,
+        approved: true,
+      },
+    })
+
+    const r = await sendOutboundWebhook(m.webhookUrl, samplePayload)
+    if (r.delivered) return res.json({ success: true, status: r.status })
+    return res.status(502).json({
+      success: false,
+      error: { code: 'WEBHOOK_FAILED', message: r.reason, status: r.status, networkError: r.error },
+    })
   } catch (err) {
     res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
   }
