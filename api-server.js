@@ -122,6 +122,26 @@ const PLAN_LIMITS = {
   scale:   { monitors: 100, keywords: 500 },
 }
 
+// Slugify a monitor name into a UTM campaign default. Lowercase, alphanum +
+// hyphens, capped at 40 chars. Empty input → ''.
+function slugify(s) {
+  return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40)
+}
+
+// Validate an optional product URL. Empty/null is OK (returns null). String
+// must parse as an http(s) URL or we reject. Used by POST/PATCH /v1/monitors
+// for the productUrl field that drives UTM injection in drafts.
+function validateProductUrl(input) {
+  if (input == null || input === '') return { ok: true, value: null }
+  if (typeof input !== 'string') return { ok: false, error: '`productUrl` must be a string' }
+  let u
+  try { u = new URL(input.trim()) } catch (_) { return { ok: false, error: '`productUrl` is not a valid URL' } }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') {
+    return { ok: false, error: '`productUrl` must be http:// or https://' }
+  }
+  return { ok: true, value: u.toString() }
+}
+
 // ── App ────────────────────────────────────────────────────────────────────
 const app = express()
 
@@ -244,6 +264,11 @@ app.get('/v1/monitors', async (req, res) => {
           // migrated from legacy includeXxx flags otherwise. Always returned
           // so the dashboard can render the right chip-selection state.
           platforms: migrateLegacyPlatforms(m),
+          // UTM tracking config (PR #22). Null until the user fills it in.
+          product_url:  m.productUrl  || null,
+          utm_source:   m.utmSource   || null,
+          utm_medium:   m.utmMedium   || null,
+          utm_campaign: m.utmCampaign || null,
         })
       }
     }
@@ -259,6 +284,7 @@ app.post('/v1/monitors', async (req, res) => {
   if (!auth.ok) return res.status(auth.status).json({ success: false, error: auth.error })
   const { name, keywords = [], productContext, alertEmail, slackWebhookUrl, replyTone,
     platforms,
+    productUrl, utmSource, utmMedium, utmCampaign,
     includeMedium, includeSubstack, includeQuora, includeUpworkForum, includeFiverrForum } = req.body
 
   // Platforms — new monitors must specify at least 1; if omitted entirely we
@@ -305,6 +331,18 @@ app.post('/v1/monitors', async (req, res) => {
     const VALID_TONES = new Set(['conversational', 'professional', 'empathetic', 'expert', 'playful'])
     const tone = VALID_TONES.has(replyTone) ? replyTone : 'conversational'
 
+    // UTM tracking fields (PR #22). All optional. productUrl, if set, must be
+    // a valid http(s) URL — invalid values are rejected with 400 rather than
+    // silently ignored, so users see the typo at create time.
+    const cleanProductUrl = validateProductUrl(productUrl)
+    if (cleanProductUrl.ok === false) {
+      await redis.srem(ownerSetKey, id)
+      return res.status(400).json({ success: false, error: { code: 'INVALID_PRODUCT_URL', message: cleanProductUrl.error } })
+    }
+    const cleanUtmSource   = String(utmSource   ?? '').trim().slice(0, 60) || 'ebenova-insights'
+    const cleanUtmMedium   = String(utmMedium   ?? '').trim().slice(0, 60) || 'community'
+    const cleanUtmCampaign = String(utmCampaign ?? '').trim().slice(0, 60) || slugify(name.trim())
+
     // Unsubscribe token — issued at creation, used by the public /unsubscribe
     // and /delete-account routes (no login required for either).
     const unsubscribeToken = generateUnsubscribeToken()
@@ -314,6 +352,10 @@ app.post('/v1/monitors', async (req, res) => {
       productContext: (productContext || '').slice(0, 2000), alertEmail: alertEmail || auth.owner,
       slackWebhookUrl: (slackWebhookUrl || '').slice(0, 500),
       replyTone:          tone,
+      productUrl:         cleanProductUrl.value,
+      utmSource:          cleanUtmSource,
+      utmMedium:          cleanUtmMedium,
+      utmCampaign:        cleanUtmCampaign,
       // Platforms — array of platform keys this monitor should scan.
       // Replaces the old includeXxx boolean flags. The legacy fields are
       // still written for one release so old workers keep functioning
@@ -335,6 +377,10 @@ app.post('/v1/monitors', async (req, res) => {
       keywords: cleanKws.map(k => k.keyword), plan, alert_email: monitor.alertEmail, active: true,
       email_enabled: true,
       platforms: resolvedPlatforms,
+      product_url:   monitor.productUrl,
+      utm_source:    monitor.utmSource,
+      utm_medium:    monitor.utmMedium,
+      utm_campaign:  monitor.utmCampaign,
       created_at: now, next_poll_eta: 'Within 15 minutes' })
   } catch (err) {
     res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
@@ -389,8 +435,31 @@ app.patch('/v1/monitors/:id', async (req, res) => {
       updates.emailEnabled = body.emailEnabled
     }
 
+    // Field 3: productUrl — http(s) URL or null (PR #22 UTM injection).
+    if (Object.prototype.hasOwnProperty.call(body, 'productUrl')) {
+      const v = validateProductUrl(body.productUrl)
+      if (!v.ok) {
+        return res.status(400).json({ success: false, error: { code: 'INVALID_PRODUCT_URL', message: v.error } })
+      }
+      updates.productUrl = v.value
+    }
+
+    // Fields 4-6: utmSource / utmMedium / utmCampaign — plain strings, capped 60 chars.
+    for (const fld of ['utmSource', 'utmMedium', 'utmCampaign']) {
+      if (Object.prototype.hasOwnProperty.call(body, fld)) {
+        const raw = body[fld]
+        if (raw == null) {
+          updates[fld] = null
+        } else if (typeof raw !== 'string') {
+          return res.status(400).json({ success: false, error: { code: 'INVALID_INPUT', message: `\`${fld}\` must be a string or null` } })
+        } else {
+          updates[fld] = raw.trim().slice(0, 60) || null
+        }
+      }
+    }
+
     if (Object.keys(updates).length === 0) {
-      return res.status(400).json({ success: false, error: { code: 'NO_UPDATES', message: 'No supported fields in body. Patchable: platforms, emailEnabled' } })
+      return res.status(400).json({ success: false, error: { code: 'NO_UPDATES', message: 'No supported fields in body. Patchable: platforms, emailEnabled, productUrl, utmSource, utmMedium, utmCampaign' } })
     }
     const next = { ...m, ...updates }
     await redis.set(`insights:monitor:${id}`, JSON.stringify(next))
@@ -399,6 +468,10 @@ app.patch('/v1/monitors/:id', async (req, res) => {
     const echo = { success: true, monitor_id: id }
     if (updates.platforms     !== undefined) echo.platforms     = next.platforms
     if (updates.emailEnabled  !== undefined) echo.email_enabled = next.emailEnabled
+    if (updates.productUrl    !== undefined) echo.product_url   = next.productUrl
+    if (updates.utmSource     !== undefined) echo.utm_source    = next.utmSource
+    if (updates.utmMedium     !== undefined) echo.utm_medium    = next.utmMedium
+    if (updates.utmCampaign   !== undefined) echo.utm_campaign  = next.utmCampaign
     res.json(echo)
   } catch (err) {
     res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
@@ -643,6 +716,12 @@ app.post('/v1/matches/draft', async (req, res) => {
       productContext: productContext.slice(0, 1200),
       productName: monitor.productName || monitor.name,
       tone: monitor.replyTone, // monitor's saved tone — falls back to 'conversational' inside buildDraftPrompt
+      // UTM injection (PR #22). All optional — injectUtm no-ops if productUrl
+      // is missing, so legacy monitors without these fields draft as before.
+      productUrl:  monitor.productUrl,
+      utmSource:   monitor.utmSource,
+      utmMedium:   monitor.utmMedium,
+      utmCampaign: monitor.utmCampaign,
     })
 
     // Backfill classification if this is a legacy match (no sentiment/intent

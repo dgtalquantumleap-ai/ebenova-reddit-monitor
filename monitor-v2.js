@@ -351,7 +351,7 @@ async function searchReddit(monitorId, keywordEntry) {
 // endpoint and Olumide's own monitor.js — single source of truth for prompt,
 // validation, AI-tell ban list, and stripMarkdown post-processing.
 // Returns { draft, model } so the caller can attach `draftedBy` to the match.
-async function generateReplyDraft(post, productContext, tone) {
+async function generateReplyDraft(post, productContext, tone, utmConfig) {
   if (!productContext || !productContext.trim()) return { draft: null, model: null }
   if (!post.approved) return { draft: null, model: null }
 
@@ -372,6 +372,11 @@ async function generateReplyDraft(post, productContext, tone) {
     productContext,
     productName:    post.productName, // optional; usually not present in v2
     tone,
+    // PR #22: UTM injection — empty/undefined utmConfig keeps drafts unchanged.
+    productUrl:     utmConfig?.productUrl,
+    utmSource:      utmConfig?.utmSource,
+    utmMedium:      utmConfig?.utmMedium,
+    utmCampaign:    utmConfig?.utmCampaign,
   })
 }
 
@@ -674,7 +679,12 @@ async function runMonitor(monitor) {
   for (let i = 0; i < allMatches.length; i += CONCURRENCY) {
     const batch = allMatches.slice(i, i + CONCURRENCY)
     await Promise.all(batch.map(async m => {
-      const r = await generateReplyDraft(m, m.productContext, monitor.replyTone)
+      const r = await generateReplyDraft(m, m.productContext, monitor.replyTone, {
+        productUrl:  monitor.productUrl,
+        utmSource:   monitor.utmSource,
+        utmMedium:   monitor.utmMedium,
+        utmCampaign: monitor.utmCampaign,
+      })
       m.draft = r.draft
       m.draftedBy = r.model
       if (m.draft) console.log(`${label} Draft by ${r.model}: "${m.title.slice(0, 50)}…"`)
