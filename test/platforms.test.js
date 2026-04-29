@@ -11,11 +11,11 @@ import {
 
 // ── VALID_PLATFORMS / labels / emojis ──────────────────────────────────────
 
-test('VALID_PLATFORMS contains exactly the 9 supported platforms', () => {
-  assert.equal(VALID_PLATFORMS.length, 9)
+test('VALID_PLATFORMS contains exactly the 11 supported platforms', () => {
+  assert.equal(VALID_PLATFORMS.length, 11)
   assert.deepEqual(
     new Set(VALID_PLATFORMS),
-    new Set(['reddit','hackernews','medium','substack','quora','upwork','fiverr','github','producthunt'])
+    new Set(['reddit','hackernews','medium','substack','quora','upwork','fiverr','github','producthunt','twitter','linkedin'])
   )
 })
 
@@ -39,13 +39,6 @@ test('validatePlatforms: rejects empty array', () => {
   const r = validatePlatforms([])
   assert.equal(r.ok, false)
   assert.match(r.error, /at least 1/)
-})
-
-test('validatePlatforms: rejects unknown platform name', () => {
-  const r = validatePlatforms(['twitter'])
-  assert.equal(r.ok, false)
-  assert.match(r.error, /unknown platform/)
-  assert.match(r.error, /reddit/) // valid options listed
 })
 
 test('validatePlatforms: accepts a single valid entry', () => {
@@ -78,10 +71,10 @@ test('validatePlatforms: rejects non-string entries', () => {
   assert.match(r.error, /must be a string/)
 })
 
-test('validatePlatforms: accepts all 9 platforms at once', () => {
+test('validatePlatforms: accepts all 11 platforms at once', () => {
   const r = validatePlatforms(VALID_PLATFORMS)
   assert.equal(r.ok, true)
-  assert.equal(r.platforms.length, 9)
+  assert.equal(r.platforms.length, 11)
 })
 
 // ── migrateLegacyPlatforms ─────────────────────────────────────────────────
