@@ -39,6 +39,7 @@ import { generateUnsubscribeToken, buildEmailFooter } from './lib/account-deleti
 import { classifyMatch, intentPriority, isHighPriority } from './lib/classify.js'
 import { recordAuthor } from './lib/author-profiles.js'
 import { fireWebhook, buildPayload as buildWebhookPayload } from './lib/outbound-webhook.js'
+import { runAllDigests } from './lib/weekly-digest.js'
 
 // F14: lazy daily cost caps. Soft-fail so the worker degrades gracefully
 // (skip-draft / skip-email / skip-embedding) rather than crashing.
@@ -882,4 +883,22 @@ if (!redis) {
   const cron_expr = `*/${POLL_MINUTES} * * * *`
   cron.schedule(cron_expr, poll)
   console.log(`[v2] Cron scheduled: ${cron_expr}`)
+
+  // PR #26: weekly digest cron — Mondays at 08:00 UTC. Best-effort: per-
+  // monitor errors are isolated inside runAllDigests, so one bad record
+  // never kills the cron. Toggleable via WEEKLY_DIGEST_ENABLED env (default on).
+  const weeklyEnabled = (process.env.WEEKLY_DIGEST_ENABLED || 'true').toLowerCase() !== 'false'
+  if (weeklyEnabled) {
+    cron.schedule('0 8 * * 1', async () => {
+      try {
+        const r = await runAllDigests({ redis, resend, fromEmail: FROM_EMAIL })
+        console.log(`[v2][digest] ran=${r.ran} sent=${r.sent} skipped=${r.skipped}`)
+      } catch (err) {
+        console.error(`[v2][digest] cron failed: ${err.message}`)
+      }
+    }, { timezone: 'UTC' })
+    console.log('[v2] Weekly digest cron scheduled: Monday 08:00 UTC')
+  } else {
+    console.log('[v2] Weekly digest disabled (WEEKLY_DIGEST_ENABLED=false)')
+  }
 }
