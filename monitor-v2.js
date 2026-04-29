@@ -41,6 +41,7 @@ import { recordAuthor } from './lib/author-profiles.js'
 import { fireWebhook, buildPayload as buildWebhookPayload } from './lib/outbound-webhook.js'
 import { runAllDigests } from './lib/weekly-digest.js'
 import { isoWeekLabel } from './lib/keyword-types.js'
+import { runEngagementSweep } from './lib/reply-tracker.js'
 
 // F14: lazy daily cost caps. Soft-fail so the worker degrades gracefully
 // (skip-draft / skip-email / skip-embedding) rather than crashing.
@@ -937,5 +938,28 @@ if (!redis) {
     console.log('[v2] Weekly digest cron scheduled: Monday 08:00 UTC')
   } else {
     console.log('[v2] Weekly digest disabled (WEEKLY_DIGEST_ENABLED=false)')
+  }
+
+  // PR #29: reply outcome tracking sweep — hourly at :15 past so it doesn't
+  // collide with the regular poll cycle. Walks active monitors' last 500
+  // matches each, processes any with postedAt > 24h ago + no engagement
+  // record yet. Per-match failures land in the engagement.error field;
+  // sweep-level failures log but never crash the worker.
+  // Toggleable via REPLY_TRACKING_ENABLED env (default on).
+  const trackingEnabled = (process.env.REPLY_TRACKING_ENABLED || 'true').toLowerCase() !== 'false'
+  if (trackingEnabled) {
+    cron.schedule('15 * * * *', async () => {
+      try {
+        const r = await runEngagementSweep({ redis })
+        if (r.scanned > 0) {
+          console.log(`[v2][reply-tracker] scanned=${r.scanned} eligible=${r.eligible} ok=${r.ok} error=${r.error}`)
+        }
+      } catch (err) {
+        console.error(`[v2][reply-tracker] cron failed: ${err.message}`)
+      }
+    }, { timezone: 'UTC' })
+    console.log('[v2] Reply outcome tracking cron scheduled: hourly at :15 UTC')
+  } else {
+    console.log('[v2] Reply outcome tracking disabled (REPLY_TRACKING_ENABLED=false)')
   }
 }
