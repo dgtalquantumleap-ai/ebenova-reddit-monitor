@@ -56,6 +56,7 @@ import { makeCostCap } from './lib/cost-cap.js'
 import { verifyCaptcha } from './lib/captcha.js'
 import { applyInviteToUser } from './lib/invite.js'
 import { draftCall } from './lib/draft-call.js'
+import { validatePlatforms, migrateLegacyPlatforms, VALID_PLATFORMS } from './lib/platforms.js'
 
 const PORT = parseInt(process.env.API_PORT || process.env.PORT || '3001')
 const ADMIN_KEY = process.env.MONITOR_ADMIN_KEY
@@ -236,6 +237,10 @@ app.get('/v1/monitors', async (req, res) => {
           // Surfaced so the dashboard can wire the "Delete account" button
           // (token is the public auth for the /delete-account flow).
           unsubscribe_token: m.unsubscribeToken || null,
+          // Platforms list — derived from monitor.platforms when present, or
+          // migrated from legacy includeXxx flags otherwise. Always returned
+          // so the dashboard can render the right chip-selection state.
+          platforms: migrateLegacyPlatforms(m),
         })
       }
     }
@@ -250,7 +255,21 @@ app.post('/v1/monitors', async (req, res) => {
   const auth = await authenticate(req)
   if (!auth.ok) return res.status(auth.status).json({ success: false, error: auth.error })
   const { name, keywords = [], productContext, alertEmail, slackWebhookUrl, replyTone,
+    platforms,
     includeMedium, includeSubstack, includeQuora, includeUpworkForum, includeFiverrForum } = req.body
+
+  // Platforms — new monitors must specify at least 1; if omitted entirely we
+  // default to ['reddit'] (per spec). Unknown values reject with 400.
+  let resolvedPlatforms
+  if (platforms === undefined || platforms === null) {
+    resolvedPlatforms = ['reddit']
+  } else {
+    const v = validatePlatforms(platforms)
+    if (!v.ok) {
+      return res.status(400).json({ success: false, error: { code: 'INVALID_PLATFORMS', message: v.error } })
+    }
+    resolvedPlatforms = v.platforms
+  }
   const plan = auth.keyData.insightsPlan || 'starter'
   const limits = PLAN_LIMITS[plan] || PLAN_LIMITS.starter
   if (!name?.trim()) return res.status(400).json({ success: false, error: { code: 'MISSING_FIELD', message: '"name" is required' } })
@@ -292,11 +311,17 @@ app.post('/v1/monitors', async (req, res) => {
       productContext: (productContext || '').slice(0, 2000), alertEmail: alertEmail || auth.owner,
       slackWebhookUrl: (slackWebhookUrl || '').slice(0, 500),
       replyTone:          tone,
-      includeMedium:      includeMedium      !== false,
-      includeSubstack:    includeSubstack    !== false,
-      includeQuora:       includeQuora       !== false,
-      includeUpworkForum: includeUpworkForum !== false,
-      includeFiverrForum: includeFiverrForum !== false,
+      // Platforms — array of platform keys this monitor should scan.
+      // Replaces the old includeXxx boolean flags. The legacy fields are
+      // still written for one release so old workers keep functioning
+      // during the rollout. Drop the legacy block in a follow-up.
+      platforms:          resolvedPlatforms,
+      includeMedium:      resolvedPlatforms.includes('medium'),
+      includeSubstack:    resolvedPlatforms.includes('substack'),
+      includeQuora:       resolvedPlatforms.includes('quora'),
+      includeUpworkForum: resolvedPlatforms.includes('upwork'),
+      includeFiverrForum: resolvedPlatforms.includes('fiverr'),
+      // Email opt-out + delete-account flow (per PR #13)
       emailEnabled:       true,
       unsubscribeToken,
       active: true, plan, createdAt: now, lastPollAt: null, totalMatchesFound: 0 }
@@ -306,6 +331,7 @@ app.post('/v1/monitors', async (req, res) => {
     res.status(201).json({ success: true, monitor_id: id, name: monitor.name, keyword_count: cleanKws.length,
       keywords: cleanKws.map(k => k.keyword), plan, alert_email: monitor.alertEmail, active: true,
       email_enabled: true,
+      platforms: resolvedPlatforms,
       created_at: now, next_poll_eta: 'Within 15 minutes' })
   } catch (err) {
     res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
@@ -313,8 +339,13 @@ app.post('/v1/monitors', async (req, res) => {
 })
 
 // ── PATCH /v1/monitors/:id ─────────────────────────────────────────────────
-// Currently scoped to fields the dashboard exposes: emailEnabled toggle.
-// Easy to extend later with name / replyTone / platform-include flags.
+// Whitelisted per-monitor field updates. Today supports `platforms` (full
+// re-set, validated) and `emailEnabled` (boolean opt-out toggle). Both are
+// optional in any single request — update only what's present in the body.
+// Reject 400 if neither is present.
+//
+// Owners cannot patch plan/owner/active/createdAt/etc. — only the
+// fields explicitly handled below.
 app.patch('/v1/monitors/:id', async (req, res) => {
   const auth = await authenticate(req)
   if (!auth.ok) return res.status(auth.status).json({ success: false, error: auth.error })
@@ -326,16 +357,46 @@ app.patch('/v1/monitors/:id', async (req, res) => {
     const m = typeof raw === 'string' ? JSON.parse(raw) : raw
     if (m.owner !== auth.owner) return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'Not your monitor' } })
 
-    // Whitelist of fields the dashboard can toggle. Anything else in the body
-    // is silently ignored — we don't want a tenant flipping `owner` or `plan`.
+    // Build the updates object from whatever fields the body contains.
+    // Each field is independent: caller can patch one or both.
+    const body = req.body || {}
     const updates = {}
-    if (typeof req.body?.emailEnabled === 'boolean') updates.emailEnabled = req.body.emailEnabled
+
+    // Field 1: platforms — validated against lib/platforms.js whitelist.
+    if (Object.prototype.hasOwnProperty.call(body, 'platforms')) {
+      const v = validatePlatforms(body.platforms)
+      if (!v.ok) {
+        return res.status(400).json({ success: false, error: { code: 'INVALID_PLATFORMS', message: v.error } })
+      }
+      updates.platforms = v.platforms
+      // Mirror to legacy includeXxx flags so any pre-platforms-PR workers
+      // still in flight continue to behave correctly during rollout.
+      updates.includeMedium      = v.platforms.includes('medium')
+      updates.includeSubstack    = v.platforms.includes('substack')
+      updates.includeQuora       = v.platforms.includes('quora')
+      updates.includeUpworkForum = v.platforms.includes('upwork')
+      updates.includeFiverrForum = v.platforms.includes('fiverr')
+    }
+
+    // Field 2: emailEnabled — boolean opt-out toggle (PR #13 unsubscribe flow).
+    if (Object.prototype.hasOwnProperty.call(body, 'emailEnabled')) {
+      if (typeof body.emailEnabled !== 'boolean') {
+        return res.status(400).json({ success: false, error: { code: 'INVALID_INPUT', message: '`emailEnabled` must be a boolean' } })
+      }
+      updates.emailEnabled = body.emailEnabled
+    }
+
     if (Object.keys(updates).length === 0) {
-      return res.status(400).json({ success: false, error: { code: 'NO_UPDATES', message: 'No supported fields in body. Patchable: emailEnabled' } })
+      return res.status(400).json({ success: false, error: { code: 'NO_UPDATES', message: 'No supported fields in body. Patchable: platforms, emailEnabled' } })
     }
     const next = { ...m, ...updates }
     await redis.set(`insights:monitor:${id}`, JSON.stringify(next))
-    res.json({ success: true, monitor_id: id, ...updates })
+    // Echo back exactly what the caller patched, plus any always-included
+    // mirrored fields (platforms[] is the canonical view).
+    const echo = { success: true, monitor_id: id }
+    if (updates.platforms     !== undefined) echo.platforms     = next.platforms
+    if (updates.emailEnabled  !== undefined) echo.email_enabled = next.emailEnabled
+    res.json(echo)
   } catch (err) {
     res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
   }

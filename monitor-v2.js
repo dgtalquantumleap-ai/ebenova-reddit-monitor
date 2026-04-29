@@ -20,6 +20,10 @@ import searchSubstack      from './lib/scrapers/substack.js'
 import searchQuora         from './lib/scrapers/quora.js'
 import searchUpwork        from './lib/scrapers/upwork.js'
 import searchFiverr        from './lib/scrapers/fiverr.js'
+import searchHackerNews    from './lib/scrapers/hackernews.js'
+import searchGitHub        from './lib/scrapers/github.js'
+import searchProductHunt   from './lib/scrapers/producthunt.js'
+import { migrateLegacyPlatforms, PLATFORM_LABELS, PLATFORM_EMOJIS } from './lib/platforms.js'
 import { escapeHtml }      from './lib/html-escape.js'
 import { sanitizeForPrompt } from './lib/llm-safe-prompt.js'
 import { embeddingCacheKey } from './lib/embedding-cache.js'
@@ -398,18 +402,15 @@ function buildAlertEmail(monitor, matches) {
       </div>`
   }).join('')
 
-  // Platform badges — surfaces which platforms are scanning so testers don't
-  // wonder why they only see one source. Reads the monitor's include* flags.
-  const platforms = [
-    { on: true,                            label: 'Reddit',   emoji: '👽' },
-    { on: monitor.includeMedium      !== false, label: 'Medium',   emoji: '📰' },
-    { on: monitor.includeSubstack    !== false, label: 'Substack', emoji: '📧' },
-    { on: monitor.includeQuora       !== false, label: 'Quora',    emoji: '💬' },
-    { on: monitor.includeUpworkForum !== false, label: 'Upwork',   emoji: '💼' },
-    { on: monitor.includeFiverrForum !== false, label: 'Fiverr',   emoji: '🟢' },
-  ]
-  const platformBadges = platforms
-    .map(p => `<span style="display:inline-block;padding:3px 9px;margin:2px 3px 2px 0;background:${p.on ? 'rgba(255,107,53,.10)' : '#1f1f1f'};color:${p.on ? '#FF6B35' : '#666'};border:1px solid ${p.on ? 'rgba(255,107,53,.30)' : '#2a2a2a'};border-radius:11px;font-size:11px;font-weight:600;">${p.emoji} ${p.label}</span>`)
+  // Platform badges — only show platforms this monitor is actively scanning.
+  // Pulled from monitor.platforms (or migrated from legacy includeXxx flags).
+  const activePlatforms = migrateLegacyPlatforms(monitor)
+  const platformBadges = activePlatforms
+    .map(key => {
+      const label = PLATFORM_LABELS[key] || key
+      const emoji = PLATFORM_EMOJIS[key] || ''
+      return `<span style="display:inline-block;padding:3px 9px;margin:2px 3px 2px 0;background:rgba(255,107,53,.10);color:#FF6B35;border:1px solid rgba(255,107,53,.30);border-radius:11px;font-size:11px;font-weight:600;">${emoji} ${label}</span>`
+    })
     .join('')
 
   return `<!DOCTYPE html><html><body style="font-family:system-ui,sans-serif;max-width:680px;margin:0 auto;padding:32px 24px;background:#f5f5f5;color:#1a1a1a;">
@@ -506,98 +507,76 @@ async function sendMonitorAlert(monitor, matches) {
 // generates drafts, stores matches, sends alert if any found.
 async function runMonitor(monitor) {
   const label = `[v2][${monitor.id}][${monitor.name}]`
-  console.log(`${label} Starting — ${monitor.keywords.length} keywords`)
+  // Resolve which platforms this monitor wants. New monitors set platforms[]
+  // explicitly; legacy monitors (no platforms field) get migrated from their
+  // includeXxx flags. See lib/platforms.js for the rules.
+  const platforms = migrateLegacyPlatforms(monitor)
+  console.log(`${label} Starting — ${monitor.keywords.length} keywords, ${platforms.length} platforms: ${platforms.join(', ')}`)
   const allMatches = []
-
-  for (const kw of monitor.keywords) {
-    // Merge per-keyword productContext with monitor-level context
-    const ctx = kw.productContext || monitor.productContext || ''
-
-    // Reddit — keyword search (always runs)
-    const redditMatches = await searchReddit(monitor.id, kw)
-    for (const m of redditMatches) {
-      m.productContext = ctx
-      allMatches.push(m)
-    }
-    if (redditMatches.length > 0) {
-      console.log(`${label} Reddit "${kw.keyword}": ${redditMatches.length} new`)
-    }
-    await delay(2000)
-
-    // Reddit — semantic search (V2, runs if embeddings configured + monitor on growth/scale plan)
-    const semanticEnabled = SEMANTIC_ENABLED && ['growth', 'scale'].includes(monitor.plan)
-    if (semanticEnabled && kw.subreddits?.length > 0) {
-      const queryEmbedding = await getEmbedding(
-        `${kw.keyword} ${kw.productContext || monitor.productContext || ''}`.slice(0, 500)
-      )
-      if (queryEmbedding) {
-        for (const sr of kw.subreddits.slice(0, 5)) {
-          const semanticMatches = await semanticSearchSubreddit(monitor.id, sr, kw, queryEmbedding)
-          for (const m of semanticMatches) {
-            m.productContext = ctx
-            allMatches.push(m)
-          }
-          if (semanticMatches.length > 0) {
-            console.log(`${label} Semantic r/${sr} "${kw.keyword}": ${semanticMatches.length} new`)
-          }
-          await delay(1500)
-        }
-      }
-    }
-
-  }
-
-  // ── Extended platform scrapers (per-monitor, respects plan) ──────────────
   const seenIds = { has: (id) => hasSeen(monitor.id, id), add: (id) => markSeen(monitor.id, id) }
   const maxAgeMs = 24 * 60 * 60 * 1000 // 24h for v2 monitors
 
-  if (monitor.includeMedium !== false) {
+  // Reddit — explicitly opt-in per platforms array. No longer always-on.
+  if (platforms.includes('reddit')) {
     for (const kw of monitor.keywords) {
       const ctx = kw.productContext || monitor.productContext || ''
-      const matches = await searchMedium(kw, { seenIds, delay, MAX_AGE_MS: maxAgeMs })
-      matches.forEach(m => { m.productContext = ctx; allMatches.push(m) })
-      if (matches.length) console.log(`${label} Medium "${kw.keyword}": ${matches.length} new`)
-      await delay(1500)
-    }
-  }
-
-  if (monitor.includeSubstack !== false) {
-    for (const kw of monitor.keywords) {
-      const ctx = kw.productContext || monitor.productContext || ''
-      const matches = await searchSubstack(kw, { seenIds, delay, MAX_AGE_MS: maxAgeMs })
-      matches.forEach(m => { m.productContext = ctx; allMatches.push(m) })
-      if (matches.length) console.log(`${label} Substack "${kw.keyword}": ${matches.length} new`)
-      await delay(1500)
-    }
-  }
-
-  if (monitor.includeQuora !== false) {
-    for (const kw of monitor.keywords) {
-      const ctx = kw.productContext || monitor.productContext || ''
-      const matches = await searchQuora(kw, { seenIds, delay, MAX_AGE_MS: maxAgeMs })
-      matches.forEach(m => { m.productContext = ctx; allMatches.push(m) })
-      if (matches.length) console.log(`${label} Quora "${kw.keyword}": ${matches.length} new`)
+      const redditMatches = await searchReddit(monitor.id, kw)
+      for (const m of redditMatches) {
+        m.productContext = ctx
+        allMatches.push(m)
+      }
+      if (redditMatches.length > 0) {
+        console.log(`${label} Reddit "${kw.keyword}": ${redditMatches.length} new`)
+      }
       await delay(2000)
+
+      // Reddit — semantic search (V2, runs if embeddings configured + monitor on growth/scale plan)
+      const semanticEnabled = SEMANTIC_ENABLED && ['growth', 'scale'].includes(monitor.plan)
+      if (semanticEnabled && kw.subreddits?.length > 0) {
+        const queryEmbedding = await getEmbedding(
+          `${kw.keyword} ${kw.productContext || monitor.productContext || ''}`.slice(0, 500)
+        )
+        if (queryEmbedding) {
+          for (const sr of kw.subreddits.slice(0, 5)) {
+            const semanticMatches = await semanticSearchSubreddit(monitor.id, sr, kw, queryEmbedding)
+            for (const m of semanticMatches) {
+              m.productContext = ctx
+              allMatches.push(m)
+            }
+            if (semanticMatches.length > 0) {
+              console.log(`${label} Semantic r/${sr} "${kw.keyword}": ${semanticMatches.length} new`)
+            }
+            await delay(1500)
+          }
+        }
+      }
     }
   }
 
-  if (monitor.includeUpworkForum !== false) {
-    for (const kw of monitor.keywords) {
-      const ctx = kw.productContext || monitor.productContext || ''
-      const matches = await searchUpwork(kw, { seenIds, delay, MAX_AGE_MS: maxAgeMs })
-      matches.forEach(m => { m.productContext = ctx; allMatches.push(m) })
-      if (matches.length) console.log(`${label} Upwork "${kw.keyword}": ${matches.length} new`)
-      await delay(3000)
-    }
-  }
+  // ── Other platforms ──────────────────────────────────────────────────────
+  // Each entry pairs a platforms[] key with its scraper + post-call delay.
+  // Order matters for cycle pacing and source-rank sort. Keep Reddit at top
+  // (handled above), then HN, Quora, Medium, Substack, Upwork, Fiverr,
+  // GitHub, ProductHunt — matches SOURCE_RANK below.
+  const platformRunners = [
+    { key: 'hackernews',  scraper: searchHackerNews,  delayMs: 1500 },
+    { key: 'medium',      scraper: searchMedium,      delayMs: 1500 },
+    { key: 'substack',    scraper: searchSubstack,    delayMs: 1500 },
+    { key: 'quora',       scraper: searchQuora,       delayMs: 2000 },
+    { key: 'upwork',      scraper: searchUpwork,      delayMs: 3000 },
+    { key: 'fiverr',      scraper: searchFiverr,      delayMs: 3000 },
+    { key: 'github',      scraper: searchGitHub,      delayMs: 2000 },
+    { key: 'producthunt', scraper: searchProductHunt, delayMs: 2000 },
+  ]
 
-  if (monitor.includeFiverrForum !== false) {
+  for (const { key, scraper, delayMs } of platformRunners) {
+    if (!platforms.includes(key)) continue
     for (const kw of monitor.keywords) {
       const ctx = kw.productContext || monitor.productContext || ''
-      const matches = await searchFiverr(kw, { seenIds, delay, MAX_AGE_MS: maxAgeMs })
+      const matches = await scraper(kw, { seenIds, delay, MAX_AGE_MS: maxAgeMs })
       matches.forEach(m => { m.productContext = ctx; allMatches.push(m) })
-      if (matches.length) console.log(`${label} Fiverr "${kw.keyword}": ${matches.length} new`)
-      await delay(3000)
+      if (matches.length) console.log(`${label} ${PLATFORM_LABELS[key] || key} "${kw.keyword}": ${matches.length} new`)
+      await delay(delayMs)
     }
   }
 

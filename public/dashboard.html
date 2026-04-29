@@ -125,6 +125,8 @@ select.inp{cursor:pointer}
 
 /* Shimmer */
 @keyframes shimmer{0%{background-position:-600px 0}100%{background-position:600px 0}}
+@keyframes nudge{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}50%{transform:translateX(4px)}75%{transform:translateX(-2px)}}
+.platform-chip-nudge{animation:nudge .35s ease}
 .shimmer{background:linear-gradient(90deg,#F1F5F9 25%,#E2E8F0 50%,#F1F5F9 75%);background-size:1200px 100%;animation:shimmer 1.8s infinite;border-radius:8px}
 
 /* Animations */
@@ -666,10 +668,29 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
   const [customKw, setCustomKw] = useState('')
   const [monitorName, setMonitorName] = useState('')
   const [replyTone, setReplyTone] = useState('conversational')
+  // Default selection per spec: Reddit only. At least 1 must remain selected.
+  const [platforms, setPlatforms] = useState(['reddit'])
+  const [shakeId, setShakeId] = useState('')   // brief visual nudge when user tries to deselect last chip
   const [savedMonitorId, setSavedMonitorId] = useState('')
   const [sampleMatches, setSampleMatches] = useState([])
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState('')
+
+  const togglePlatform = (id) => {
+    setPlatforms(prev => {
+      if (prev.includes(id)) {
+        if (prev.length === 1) {
+          // Last chip — refuse the deselect, animate the chip briefly so the
+          // user understands why nothing happened.
+          setShakeId(id)
+          setTimeout(() => setShakeId(''), 400)
+          return prev
+        }
+        return prev.filter(p => p !== id)
+      }
+      return [...prev, id]
+    })
+  }
 
   const intentMeta = {
     buying:     { icon: '🎯', label: 'BUYING INTENT' },
@@ -730,6 +751,7 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
       keywords: allKws.map(k => ({ keyword: k, productContext: suggestion?.productContext || description })),
       productContext: suggestion?.productContext || description,
       replyTone,
+      platforms,
     };
     const m = await apiFetch('/v1/monitors', { method:'POST', body: JSON.stringify(body) }, apiKey);
     if (!m.ok) { setErr(m.data?.error?.message || 'Could not create monitor.'); setLoading(false); setStep(3); return; }
@@ -948,6 +970,41 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
                 ))}
               </div>
             </div>
+            <div className="field" style={{marginBottom:14}}>
+              <label className="label">Where to scan <span style={{fontSize:11,fontWeight:400,color:'#94A3B8'}}>· {platforms.length} of 9 platforms · click chips to toggle</span></label>
+              <div style={{display:'flex',flexWrap:'wrap',gap:6,marginTop:6}}>
+                {[
+                  {id:'reddit',      emoji:'🔴', label:'Reddit'},
+                  {id:'hackernews',  emoji:'🟠', label:'Hacker News'},
+                  {id:'medium',      emoji:'📰', label:'Medium'},
+                  {id:'substack',    emoji:'📧', label:'Substack'},
+                  {id:'quora',       emoji:'💬', label:'Quora'},
+                  {id:'upwork',      emoji:'💼', label:'Upwork'},
+                  {id:'fiverr',      emoji:'🟢', label:'Fiverr'},
+                  {id:'github',      emoji:'🐙', label:'GitHub'},
+                  {id:'producthunt', emoji:'🚀', label:'Product Hunt'},
+                ].map(p => {
+                  const selected = platforms.includes(p.id)
+                  return (
+                    <button
+                      key={p.id} type="button"
+                      onClick={()=>togglePlatform(p.id)}
+                      onKeyDown={e=>{ if (e.key==='Enter' || e.key===' ') { e.preventDefault(); togglePlatform(p.id) } }}
+                      aria-pressed={selected}
+                      className={shakeId === p.id ? 'platform-chip-nudge' : ''}
+                      style={{
+                        padding:'7px 12px',borderRadius:6,fontSize:12.5,fontWeight:500,fontFamily:'inherit',cursor:'pointer',
+                        border:     selected ? '1px solid #FF6B35'         : '1px solid #E2E8F0',
+                        background: selected ? 'rgba(255,107,53,.10)'      : '#fff',
+                        color:      selected ? '#FF6B35'                   : '#94A3B8',
+                        display:'inline-flex',alignItems:'center',gap:6,
+                      }}>
+                      <span style={{fontSize:13}}>{p.emoji}</span> {p.label}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
             <div style={{padding:'12px 0',borderBottom:'1px solid #F1F5F9',display:'flex',justifyContent:'space-between'}}>
               <span style={{fontSize:12,color:'#94A3B8',fontFamily:"'JetBrains Mono',monospace",letterSpacing:1}}>KEYWORDS</span>
               <span style={{fontSize:13.5,fontWeight:500,color:'#0F172A'}}>{picked.size} selected</span>
@@ -955,10 +1012,6 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
             <div style={{padding:'12px 0',borderBottom:'1px solid #F1F5F9',display:'flex',justifyContent:'space-between'}}>
               <span style={{fontSize:12,color:'#94A3B8',fontFamily:"'JetBrains Mono',monospace",letterSpacing:1}}>EXPECTED VOLUME</span>
               <span style={{fontSize:13.5,fontWeight:500,color:'#16A34A'}}>~{totalMatches()} matches/week</span>
-            </div>
-            <div style={{padding:'12px 0',borderBottom:'1px solid #F1F5F9',display:'flex',justifyContent:'space-between'}}>
-              <span style={{fontSize:12,color:'#94A3B8',fontFamily:"'JetBrains Mono',monospace",letterSpacing:1}}>SCANNING</span>
-              <span style={{fontSize:13.5,fontWeight:500,color:'#475569'}}>Reddit · Medium · Substack · Quora · Upwork · Fiverr</span>
             </div>
             {err && <div className="alert alert-error" style={{marginTop:14}}><i className="ph ph-warning-circle"></i>{err}</div>}
             <div style={{display:'flex',gap:12,marginTop:18}}>
