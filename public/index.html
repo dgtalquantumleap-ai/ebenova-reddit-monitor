@@ -769,6 +769,93 @@
   </div>
 </footer>
 
+<!-- Live-tail mock feed for the hero terminal + (later) platform selector.
+     No fetches — pool stays inline. Pauses on tab-hidden, reduced-motion,
+     and small viewports. -->
+<script>
+(function () {
+  // Shared pool. window.__ebnvFeedPool exposed so the platform-selector
+  // script (loaded later in the page) can read the same source of truth.
+  var POOL = [
+    { src: 'reddit',     cls: 'src-reddit',   title: '"Anyone using AI to draft sales emails? Looking for recommendations…"', score: 9.2, summary: 'r/SaaS · 14 comments · author has shipped before' },
+    { src: 'hackernews', cls: 'src-hn',       title: 'Show HN: I want to monitor Reddit for buying signals',                  score: 8.7, summary: '94 points · 22 comments' },
+    { src: 'upwork',     cls: 'src-upwork',   title: 'Need a Shopify dev — looking for ongoing relationship',                 score: 7.4, summary: 'job posted 12m ago · fixed-price' },
+    { src: 'quora',      cls: 'src-quora',    title: "What's the best alternative to Brand24 for monitoring mentions?",       score: 8.9, summary: '47 followers · 3 answers' },
+    { src: 'fiverr',     cls: 'src-fiverr',   title: 'Looking for a freelance copywriter who has worked with B2B SaaS',       score: 7.8, summary: 'buyer request · open' },
+    { src: 'github',     cls: 'src-github',   title: 'Issue: best library for AI prompt sanitization?',                       score: 6.5, summary: 'opened 8m ago · 2 reactions' },
+    { src: 'producthunt',cls: 'src-ph',       title: 'Frustrated by manual outreach — what\'s the modern stack?',             score: 8.1, summary: 'discussion · 6 comments' },
+    { src: 'substack',   cls: 'src-substack', title: 'Comment on "AI tools that actually save me time" → asks recs',         score: 7.0, summary: 'inline comment · 11 likes' },
+    { src: 'medium',     cls: 'src-medium',   title: 'How I built a dripped-out outbound stack on $50/mo',                    score: 6.8, summary: 'article · 240 claps' },
+    { src: 'reddit',     cls: 'src-reddit',   title: 'Need help finding leads in r/Entrepreneur without getting banned',      score: 8.4, summary: 'r/Entrepreneur · 9 comments' },
+    { src: 'hackernews', cls: 'src-hn',       title: 'Ask HN: how do you replace cold email in 2026?',                         score: 7.9, summary: '38 points · 19 comments' },
+    { src: 'quora',      cls: 'src-quora',    title: 'Has anyone moved off Brand24? Looking for cheaper options',             score: 8.2, summary: '12 followers · 1 answer' },
+    { src: 'upwork',     cls: 'src-upwork',   title: 'Need ongoing AI engineer — comfortable with LangChain + Python',        score: 8.6, summary: 'hourly · long-term' },
+    { src: 'fiverr',     cls: 'src-fiverr',   title: 'Want a designer who has shipped a SaaS marketing site before',          score: 7.1, summary: 'open brief · negotiable' },
+    { src: 'github',     cls: 'src-github',   title: 'PR comment: "Could we use OpenRouter instead of direct Groq?"',          score: 6.9, summary: 'review thread · merged' },
+    { src: 'producthunt',cls: 'src-ph',       title: 'Founders: what\'s actually working for new-customer acquisition?',     score: 8.0, summary: 'maker discussion · 14 comments' },
+    { src: 'substack',   cls: 'src-substack', title: 'Reply on "The death of paid ads" → asks for tool recs',                 score: 7.5, summary: 'comment · 8 likes' },
+    { src: 'medium',     cls: 'src-medium',   title: 'My honest review of every social-listening tool I tried in Q1',         score: 7.3, summary: 'article · 180 claps' },
+  ];
+  window.__ebnvFeedPool = POOL;
+
+  var heroFeed = document.getElementById('hero-feed');
+  if (!heroFeed) return;
+
+  var reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var smallViewport = window.matchMedia && window.matchMedia('(max-width: 480px)').matches;
+  if (reducedMotion || smallViewport) return; // leave the static rows in place
+
+  function pad(n) { return n < 10 ? '0' + n : '' + n; }
+  function nowStamp() {
+    var d = new Date();
+    return pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+  }
+  function rowMarkup(item) {
+    var titleClass = item.score >= 8 ? 'feed-title' : 'feed-title-low';
+    var summary = item.summary
+      ? '<span class="feed-summary">' + item.summary + '</span>'
+      : '';
+    return ''
+      + '<div class="feed-row">'
+      +   '<span class="feed-time">' + nowStamp() + '</span>'
+      +   '<span class="feed-source ' + item.cls + '">' + item.src.toUpperCase().replace('PRODUCTHUNT', 'PH').replace('HACKERNEWS', 'HN') + '</span>'
+      +   '<span class="' + titleClass + '">' + item.title + '</span>'
+      +   '<span class="feed-score">' + item.score.toFixed(1) + '</span>'
+      +   summary
+      + '</div>';
+  }
+  function pickItem() {
+    return POOL[Math.floor(Math.random() * POOL.length)];
+  }
+
+  var timer = null;
+  function tick() {
+    if (document.hidden) return;
+    var item = pickItem();
+    var temp = document.createElement('div');
+    temp.innerHTML = rowMarkup(item);
+    var newRow = temp.firstChild;
+    heroFeed.insertBefore(newRow, heroFeed.firstChild);
+    while (heroFeed.children.length > 8) {
+      heroFeed.removeChild(heroFeed.lastChild);
+    }
+  }
+  function schedule() {
+    var delay = 4000 + Math.floor(Math.random() * 2000); // 4–6 s jitter
+    timer = setTimeout(function () { tick(); schedule(); }, delay);
+  }
+  schedule();
+
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) {
+      if (timer) { clearTimeout(timer); timer = null; }
+    } else if (!timer) {
+      schedule();
+    }
+  });
+})();
+</script>
+
 <!-- Invite-code propagation: if landed via ?invite=CODE, rewrite /dashboard
      links to carry the code through to the AuthModal signup flow. -->
 <script>
