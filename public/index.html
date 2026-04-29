@@ -210,6 +210,49 @@
   .feed-cta-blink::after { content: '_'; animation: blink 1s infinite; }
   @keyframes blink { 50% { opacity: 0; } }
 
+  /* Platform selector marketing block */
+  #how .how-intro {
+    color: var(--ink-2); font-size: 16px; line-height: 1.7;
+    max-width: 640px; margin: 12px 0 36px;
+  }
+  .selector-grid {
+    display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 18px;
+  }
+  .selector-chip {
+    font-family: var(--mono); font-size: 12px; letter-spacing: 1px;
+    padding: 9px 14px; border-radius: 999px;
+    background: var(--bg-2); color: var(--ink-2);
+    border: 1px solid var(--line); cursor: pointer;
+    transition: transform 0.1s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .selector-chip:hover { transform: translateY(-1px); border-color: var(--ink-3); }
+  .selector-chip:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+  .selector-chip:active { transform: scale(0.97); }
+  .selector-chip.on {
+    color: var(--ink); border-color: var(--gold);
+    box-shadow: inset 0 0 0 1px rgba(255,107,53,0.2);
+  }
+  .selector-meta {
+    font-family: var(--mono); font-size: 11px; color: var(--ink-3);
+    letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 24px;
+  }
+  .selector-count { color: var(--gold); font-weight: 700; transition: opacity 0.12s ease; }
+  .selector-count.flicker { opacity: 0.4; }
+  .selector-feed {
+    background: var(--bg-2); border: 1px solid var(--line);
+    border-radius: 8px; padding: 8px 0; min-height: 240px; max-height: 360px;
+    overflow: hidden; position: relative; font-family: var(--mono); font-size: 12px;
+  }
+  .selector-feed::after {
+    content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 60px;
+    background: linear-gradient(to bottom, transparent, var(--bg-2));
+    pointer-events: none;
+  }
+  @media (max-width: 640px) {
+    .selector-grid { gap: 8px; }
+    .selector-chip { font-size: 11px; padding: 8px 12px; }
+  }
+
   /* Section frame */
   section { max-width: 1280px; margin: 0 auto; padding: 80px 24px; }
   .label {
@@ -569,27 +612,29 @@
   <div class="platforms-meta">9 STREAMS // 1 INTERFACE</div>
 </div>
 
-<!-- HOW IT WORKS -->
+<!-- PROTOCOL — interactive platform selector -->
 <section id="how">
   <span class="label">PROTOCOL</span>
-  <h2 class="h-display">Three signals. <em>Three minutes.</em><br>One unfair advantage.</h2>
-  <div style="margin-top: 64px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden;">
-    <div style="padding: 36px 32px; background: var(--bg-2);">
-      <div class="mono" style="font-size: 11px; color: var(--gold); letter-spacing: 3px; margin-bottom: 16px;">// 01</div>
-      <h3 style="font-family: var(--serif); font-size: 22px; font-weight: 600; margin-bottom: 10px;">Describe what you sell</h3>
-      <p style="color: var(--ink-2); font-size: 14px; line-height: 1.7;">A short paragraph. Who buys, what problem you solve, the kind of customer you want. Your monitor uses this to filter signal from noise — and to draft replies that sound like you.</p>
-    </div>
-    <div style="padding: 36px 32px; background: var(--bg-2);">
-      <div class="mono" style="font-size: 11px; color: var(--gold); letter-spacing: 3px; margin-bottom: 16px;">// 02</div>
-      <h3 style="font-family: var(--serif); font-size: 22px; font-weight: 600; margin-bottom: 10px;">We watch the open web</h3>
-      <p style="color: var(--ink-2); font-size: 14px; line-height: 1.7;">Every 15 minutes, nine platforms. Buying-intent scoring — questions, comparison searches, frustration with competitors, hiring inquiries. We skip the noise.</p>
-    </div>
-    <div style="padding: 36px 32px; background: var(--bg-2);">
-      <div class="mono" style="font-size: 11px; color: var(--gold); letter-spacing: 3px; margin-bottom: 16px;">// 03</div>
-      <h3 style="font-family: var(--serif); font-size: 22px; font-weight: 600; margin-bottom: 10px;">Reply ready in seconds</h3>
-      <p style="color: var(--ink-2); font-size: 14px; line-height: 1.7;">Each match arrives with a draft that sounds like a community member, not a salesperson. Tweak, copy, post. Your name in the right thread, fast.</p>
-    </div>
+  <h2 class="h-display">Pick what you want <em>watched.</em></h2>
+  <p class="how-intro">Toggle a source off and the feed below stops carrying it. The selection follows you to the dashboard when you sign up.</p>
+
+  <div class="selector-grid" role="group" aria-label="Platform selection">
+    <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="reddit"     aria-label="Toggle Reddit">REDDIT</button>
+    <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="hackernews" aria-label="Toggle Hacker News">HACKER NEWS</button>
+    <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="upwork"     aria-label="Toggle Upwork">UPWORK</button>
+    <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="fiverr"     aria-label="Toggle Fiverr">FIVERR</button>
+    <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="quora"      aria-label="Toggle Quora">QUORA</button>
+    <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="github"     aria-label="Toggle GitHub">GITHUB</button>
+    <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="medium"     aria-label="Toggle Medium">MEDIUM</button>
+    <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="substack"   aria-label="Toggle Substack">SUBSTACK</button>
+    <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="producthunt" aria-label="Toggle Product Hunt">PRODUCT HUNT</button>
   </div>
+
+  <div class="selector-meta">
+    Watching <span class="selector-count" id="selector-count">9</span> of 9 · all plans
+  </div>
+
+  <div class="selector-feed" id="selector-feed" role="log" aria-live="off"></div>
 </section>
 
 <!-- ANATOMY -->
