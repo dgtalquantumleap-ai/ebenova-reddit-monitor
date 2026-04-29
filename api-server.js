@@ -61,6 +61,7 @@ import { draftCall } from './lib/draft-call.js'
 import { validatePlatforms, migrateLegacyPlatforms, VALID_PLATFORMS } from './lib/platforms.js'
 import { classifyMatch, intentPriority } from './lib/classify.js'
 import { sendOutboundWebhook, buildPayload as buildWebhookPayload } from './lib/outbound-webhook.js'
+import { toCsv, matchToExportRow, MATCH_EXPORT_COLUMNS } from './lib/csv-export.js'
 
 const PORT = parseInt(process.env.API_PORT || process.env.PORT || '3001')
 const ADMIN_KEY = process.env.MONITOR_ADMIN_KEY
@@ -620,6 +621,53 @@ app.get('/v1/matches', async (req, res) => {
       return new Date(b.createdAt || 0) - new Date(a.createdAt || 0)
     })
     res.json({ success: true, monitor_id, matches, count: matches.length, offset: off, limit: lim })
+  } catch (err) {
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
+  }
+})
+
+// ── GET /v1/monitors/:id/export.csv ────────────────────────────────────────
+// Streams the last 30 days of matches for a single monitor as a CSV
+// attachment. Auth-gated, ownership-checked. Empty CSV (header row only)
+// is a valid response when the monitor has no recent matches — caller can
+// distinguish from "monitor not found" via the 200 vs 404.
+//
+// Field set is locked-in via lib/csv-export.js MATCH_EXPORT_COLUMNS so
+// downstream pipelines (Builder Tracker export, customer reports) get a
+// predictable schema. RFC 4180 escaping for fields with commas / quotes /
+// newlines (drafts often contain commas; titles occasionally have quotes).
+app.get('/v1/monitors/:id/export.csv', async (req, res) => {
+  const auth = await authenticate(req)
+  if (!auth.ok) return res.status(auth.status).json({ success: false, error: auth.error })
+  const { id } = req.params
+  try {
+    const redis = getRedis()
+    const monRaw = await redis.get(`insights:monitor:${id}`)
+    if (!monRaw) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Monitor not found' } })
+    const monitor = typeof monRaw === 'string' ? JSON.parse(monRaw) : monRaw
+    if (monitor.owner !== auth.owner) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Monitor not found' } })
+
+    // Pull the last 500 match IDs (existing list size — match TTL caps at 7d
+    // anyway, so 30-day-window is naturally bounded by storage retention).
+    const ids = await redis.lrange(`insights:matches:${id}`, 0, 499) || []
+    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000
+    const rows = []
+    for (const matchId of ids) {
+      const mr = await redis.get(`insights:match:${id}:${matchId}`)
+      if (!mr) continue
+      const m = typeof mr === 'string' ? JSON.parse(mr) : mr
+      const ts = new Date(m.createdAt || m.storedAt || 0).getTime()
+      if (!Number.isFinite(ts) || ts < cutoff) continue
+      rows.push(matchToExportRow(m))
+    }
+    // Sort newest first so the export reads top-down chronologically.
+    rows.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
+
+    const csv = toCsv(MATCH_EXPORT_COLUMNS, rows)
+    const dateStr = new Date().toISOString().slice(0, 10)
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+    res.setHeader('Content-Disposition', `attachment; filename="monitor-${id}-${dateStr}.csv"`)
+    res.send(csv)
   } catch (err) {
     res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
   }
