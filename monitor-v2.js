@@ -38,6 +38,7 @@ import { parseRedditRSS, buildRedditSearchUrl, parseRetryAfter } from './lib/red
 import { generateUnsubscribeToken, buildEmailFooter } from './lib/account-deletion.js'
 import { classifyMatch, intentPriority, isHighPriority } from './lib/classify.js'
 import { recordAuthor } from './lib/author-profiles.js'
+import { fireWebhook, buildPayload as buildWebhookPayload } from './lib/outbound-webhook.js'
 
 // F14: lazy daily cost caps. Soft-fail so the worker degrades gracefully
 // (skip-draft / skip-email / skip-embedding) rather than crashing.
@@ -743,6 +744,25 @@ async function runMonitor(monitor) {
     }
   } catch (err) {
     console.error(`${label} Redis store error:`, err.message)
+  }
+
+  // PR #23: outbound webhook (fire-and-forget) for approved matches. We
+  // intentionally do NOT await — failed deliveries log a warning and the
+  // cycle proceeds. Only matches with approved===true are sent so monitor
+  // owners don't get a Zapier ping for posts where Slack/Email already
+  // told us "do not engage".
+  if (monitor.webhookUrl) {
+    let fired = 0
+    for (const m of allMatches) {
+      if (!m.approved) continue
+      fireWebhook(
+        monitor.webhookUrl,
+        buildWebhookPayload({ event: 'new_match', monitorId: monitor.id, match: m }),
+        monitor.id,
+      )
+      fired++
+    }
+    if (fired > 0) console.log(`${label} Webhook: dispatched ${fired} payloads to ${monitor.webhookUrl}`)
   }
 
   await sendMonitorAlert(monitor, allMatches)
