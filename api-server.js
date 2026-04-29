@@ -62,6 +62,7 @@ import { validatePlatforms, migrateLegacyPlatforms, VALID_PLATFORMS } from './li
 import { classifyMatch, intentPriority } from './lib/classify.js'
 import { sendOutboundWebhook, buildPayload as buildWebhookPayload } from './lib/outbound-webhook.js'
 import { toCsv, matchToExportRow, MATCH_EXPORT_COLUMNS } from './lib/csv-export.js'
+import { gatherReportData, buildExecutiveSummary, renderReportHtml, resolveReportToken } from './lib/client-report.js'
 
 const PORT = parseInt(process.env.API_PORT || process.env.PORT || '3001')
 const ADMIN_KEY = process.env.MONITOR_ADMIN_KEY
@@ -371,6 +372,11 @@ app.post('/v1/monitors', async (req, res) => {
     // and /delete-account routes (no login required for either).
     const unsubscribeToken = generateUnsubscribeToken()
 
+    // Share token (PR #27) — gates the public white-label report at /report?token=…
+    // Same length / hex shape as the unsubscribe token. Stored separately so
+    // that revoking one doesn't kill the other.
+    const shareToken = randomBytes(24).toString('hex')
+
     const now = new Date().toISOString()
     const monitor = { id, owner: auth.owner, name: name.trim().slice(0, 100), keywords: cleanKws,
       productContext: (productContext || '').slice(0, 2000), alertEmail: alertEmail || auth.owner,
@@ -394,9 +400,11 @@ app.post('/v1/monitors', async (req, res) => {
       // Email opt-out + delete-account flow (per PR #13)
       emailEnabled:       true,
       unsubscribeToken,
+      shareToken,
       active: true, plan, createdAt: now, lastPollAt: null, totalMatchesFound: 0 }
     await redis.set(`insights:monitor:${id}`, JSON.stringify(monitor))
     await redis.set(`unsubscribe:${unsubscribeToken}`, id)
+    await redis.set(`report:token:${shareToken}`, id)
     await redis.sadd('insights:active_monitors', id)
     res.status(201).json({ success: true, monitor_id: id, name: monitor.name, keyword_count: cleanKws.length,
       keywords: cleanKws.map(k => k.keyword), plan, alert_email: monitor.alertEmail, active: true,
@@ -407,6 +415,7 @@ app.post('/v1/monitors', async (req, res) => {
       utm_medium:    monitor.utmMedium,
       utm_campaign:  monitor.utmCampaign,
       webhook_url:   monitor.webhookUrl,
+      share_token:   shareToken,
       created_at: now, next_poll_eta: 'Within 15 minutes' })
   } catch (err) {
     res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
@@ -513,6 +522,77 @@ app.patch('/v1/monitors/:id', async (req, res) => {
     res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
   }
 })
+
+// ── GET /v1/monitors/:id/share-link ────────────────────────────────────────
+// Auth-gated. Returns the public, no-login share URL for the monitor's
+// white-label client report. Backfills the shareToken if a legacy monitor
+// (created before PR #27) doesn't have one yet — saves the operator a trip
+// to recreate the monitor just to get a token.
+app.get('/v1/monitors/:id/share-link', async (req, res) => {
+  const auth = await authenticate(req)
+  if (!auth.ok) return res.status(auth.status).json({ success: false, error: auth.error })
+  const { id } = req.params
+  try {
+    const redis = getRedis()
+    const raw = await redis.get(`insights:monitor:${id}`)
+    if (!raw) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Monitor not found' } })
+    const m = typeof raw === 'string' ? JSON.parse(raw) : raw
+    if (m.owner !== auth.owner) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Monitor not found' } })
+
+    // Backfill for legacy monitors
+    let token = m.shareToken
+    if (!token) {
+      token = randomBytes(24).toString('hex')
+      const next = { ...m, shareToken: token }
+      await redis.set(`insights:monitor:${id}`, JSON.stringify(next))
+      await redis.set(`report:token:${token}`, id)
+    }
+
+    const baseUrl = process.env.APP_URL || 'https://ebenova.org'
+    const reportUrl = `${baseUrl.replace(/\/+$/, '')}/report?token=${encodeURIComponent(token)}`
+    res.json({ success: true, monitor_id: id, reportUrl })
+  } catch (err) {
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
+  }
+})
+
+// ── GET /report?token=… (public) ───────────────────────────────────────────
+// White-label client report. Token-gated, no API key required. Renders 30
+// days of match data, sentiment / intent / platform breakdowns, top 5 matches,
+// author highlights, and weekly trend. Branded as the monitor's own name —
+// "Powered by Ebenova" appears only in the footer.
+//
+// Failure modes return user-readable HTML pages, not JSON, since this is a
+// public route a marketer might link to from a slide deck or email.
+async function reportHandler(req, res) {
+  res.set('Content-Type', 'text/html; charset=utf-8')
+  const token = req.query?.token
+  try {
+    const redis = getRedis()
+    const monitor = await resolveReportToken(redis, token)
+    if (!monitor) {
+      return res.status(404).send(htmlPage({
+        title: 'Report not found',
+        accent: '#DC2626',
+        body: `<h1>This report link is no longer valid</h1>
+          <p>The link may have expired, been revoked, or the monitor it pointed to has been deleted.</p>
+          <p>If you received this from someone, ask them to send a fresh link from their dashboard.</p>`,
+      }))
+    }
+    const stats = await gatherReportData(monitor, redis, 30)
+    const summary = await buildExecutiveSummary({ monitor, stats })
+    const html = renderReportHtml({ monitor, stats, summary })
+    res.send(html)
+  } catch (err) {
+    console.error('[report] error:', err.message)
+    res.status(500).send(htmlPage({
+      title: 'Report unavailable',
+      accent: '#DC2626',
+      body: `<h1>Report temporarily unavailable</h1><p>Something went wrong rendering this page. Try again in a moment.</p>`,
+    }))
+  }
+}
+app.get('/report', reportHandler)
 
 // ── POST /v1/monitors/:id/test-webhook ─────────────────────────────────────
 // Fires a sample `event:'test'` payload at the monitor's configured webhookUrl
