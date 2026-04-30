@@ -786,6 +786,124 @@ function BuildersFeed({ apiKey, monitor }) {
 // FIX 12 — Reply Outcomes panel. Renders the /v1/monitors/:id/outcomes
 // data as a small KPI strip. Empty-state copy makes it clear that
 // "Reply performance" requires posting replies, not just having matches.
+// Batch B — IntentSummaryPanel. Renders the 7-day intent + sentiment +
+// share-of-voice breakdown from GET /v1/matches/intent-summary (PR #28).
+// Compact KPI strip + intent histogram. Empty state when nothing in
+// the window so a brand-new monitor doesn't show a "0 matches" wall.
+function IntentSummaryPanel({ apiKey, monitorId }) {
+  const [data, setData] = useState(null)
+  useEffect(() => {
+    if (!monitorId) return
+    apiFetch(`/v1/matches/intent-summary?monitor_id=${monitorId}`, {}, apiKey)
+      .then(r => { if (r.ok) setData(r.data) })
+      .catch(() => {})
+  }, [monitorId, apiKey])
+  if (!data) return null
+  const { total = 0, by_intent = {}, by_sentiment = {}, high_value_count = 0, sov } = data
+  if (total === 0) return null   // dropped to keep the feed visually clean for empty monitors
+
+  const intentRows = Object.entries(by_intent)
+    .filter(([, n]) => n > 0)
+    .sort((a, b) => b[1] - a[1])
+  const intentMax = intentRows.reduce((m, [, n]) => Math.max(m, n), 1)
+  const INTENT_LABEL = {
+    asking_for_tool: '🎯 Wants a tool',
+    buying:          '💰 Buying',
+    complaining:     '💢 Complaining',
+    researching:     '🔍 Researching',
+    venting:         '😤 Venting',
+    recommending:    '👍 Recommending',
+    unclassified:    '· Unclassified',
+  }
+
+  return (
+    <div className="card" style={{padding:'14px 18px',marginBottom:14}}>
+      <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}>
+        <i className="ph-bold ph-chart-bar" style={{color:'#0F172A'}}></i>
+        <span style={{fontSize:11,fontWeight:700,letterSpacing:1.5,color:'#475569',textTransform:'uppercase'}}>7-day intent breakdown</span>
+        <span style={{marginLeft:'auto',fontSize:11,color:'#94A3B8'}}>{total} match{total === 1 ? '' : 'es'}</span>
+      </div>
+      <div style={{display:'flex',gap:14,flexWrap:'wrap',fontSize:13,color:'#334155',marginBottom:10}}>
+        <span><strong style={{color:'#FF6B35'}}>{high_value_count}</strong> high-value</span>
+        <span style={{color:'#16A34A'}}>{by_sentiment.positive || 0} positive</span>
+        <span style={{color:'#DC2626'}}>{by_sentiment.negative || 0} negative</span>
+        <span style={{color:'#94A3B8'}}>{by_sentiment.neutral || 0} neutral</span>
+      </div>
+      {intentRows.length > 0 && (
+        <div style={{display:'grid',gap:4}}>
+          {intentRows.map(([intent, count]) => {
+            const pct = Math.round((count / intentMax) * 100)
+            return (
+              <div key={intent} style={{display:'grid',gridTemplateColumns:'140px 1fr 32px',gap:10,alignItems:'center',fontSize:12}}>
+                <span style={{color:'#475569'}}>{INTENT_LABEL[intent] || intent}</span>
+                <div style={{background:'#F1F5F9',height:14,borderRadius:4,overflow:'hidden'}}>
+                  <div style={{width:`${pct}%`,height:'100%',background:'#FF6B35',borderRadius:4}}></div>
+                </div>
+                <span style={{color:'#0F172A',fontWeight:600,fontVariantNumeric:'tabular-nums',textAlign:'right'}}>{count}</span>
+              </div>
+            )
+          })}
+        </div>
+      )}
+      {sov && (sov.own > 0 || sov.competitor > 0) && (
+        <div style={{marginTop:10,paddingTop:10,borderTop:'1px dashed #E2E8F0',fontSize:12,color:'#475569',display:'flex',gap:14,flexWrap:'wrap'}}>
+          <span style={{color:'#94A3B8',fontSize:11,fontWeight:700,letterSpacing:1,textTransform:'uppercase'}}>Share of voice</span>
+          <span><strong style={{color:'#0F172A'}}>{sov.own || 0}</strong> own keywords</span>
+          <span><strong style={{color:'#0F172A'}}>{sov.competitor || 0}</strong> competitor</span>
+          {sov.trend && <span style={{color: sov.trend === 'up' ? '#16A34A' : sov.trend === 'down' ? '#DC2626' : '#475569'}}>· trend {sov.trend}</span>}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Batch B — AuthorProfilesPanel. Renders GET /v1/monitors/:id/authors —
+// the same author:profile:* data that already feeds the weekly digest.
+// Compact table of top 5; "View all" link expands to the full list.
+function AuthorProfilesPanel({ apiKey, monitorId }) {
+  const [data, setData] = useState(null)
+  const [expanded, setExpanded] = useState(false)
+  useEffect(() => {
+    if (!monitorId) return
+    apiFetch(`/v1/monitors/${monitorId}/authors`, {}, apiKey)
+      .then(r => { if (r.ok) setData(r.data) })
+      .catch(() => {})
+  }, [monitorId, apiKey])
+  if (!data || !data.authors || data.authors.length === 0) return null
+  const visible = expanded ? data.authors : data.authors.slice(0, 5)
+  return (
+    <div className="card" style={{padding:'14px 18px',marginBottom:14}}>
+      <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}>
+        <i className="ph-bold ph-users" style={{color:'#0F172A'}}></i>
+        <span style={{fontSize:11,fontWeight:700,letterSpacing:1.5,color:'#475569',textTransform:'uppercase'}}>Top authors</span>
+        <span style={{marginLeft:'auto',fontSize:11,color:'#94A3B8'}}>{data.total} total</span>
+      </div>
+      <div style={{display:'grid',gap:6}}>
+        {visible.map(a => (
+          <div key={`${a.platform}:${a.username}`} style={{display:'grid',gridTemplateColumns:'1fr auto auto',gap:10,alignItems:'center',fontSize:12.5,padding:'4px 0',borderBottom:'1px solid #F8FAFC'}}>
+            <div style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+              <span style={{fontWeight:600,color:'#0F172A'}}>{a.username}</span>
+              <span style={{color:'#94A3B8',marginLeft:6}}>· {a.platform}</span>
+              {a.latestPostTitle && (
+                <a href={a.latestPostUrl || '#'} target="_blank" rel="noreferrer" style={{display:'block',color:'#475569',textDecoration:'none',fontSize:11.5,marginTop:2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                  {a.latestPostTitle.slice(0, 70)}
+                </a>
+              )}
+            </div>
+            <span style={{fontSize:11,color:'#94A3B8'}}>{a.lastSeen ? new Date(a.lastSeen).toISOString().slice(0, 10) : ''}</span>
+            <span style={{padding:'2px 8px',background:'#F1F5F9',color:'#0F172A',borderRadius:4,fontSize:11,fontWeight:700,fontVariantNumeric:'tabular-nums'}}>{a.postCount}</span>
+          </div>
+        ))}
+      </div>
+      {data.authors.length > 5 && (
+        <button className="btn btn-ghost btn-sm" onClick={()=>setExpanded(e=>!e)} style={{marginTop:8,padding:'4px 0',color:'#475569'}}>
+          {expanded ? 'Show top 5' : `View all ${data.authors.length} →`}
+        </button>
+      )}
+    </div>
+  )
+}
+
 function OutcomesPanel({ apiKey, monitorId }) {
   const [data, setData] = useState(null);
   useEffect(() => {
@@ -995,6 +1113,11 @@ function MatchesFeed({ apiKey, monitors }) {
                 of the feed for keyword-mode monitors. */}
             {selMonitor && <OutcomesPanel apiKey={apiKey} monitorId={selId} />}
             {selMonitor && <AIVisibilityPanel apiKey={apiKey} monitorId={selId} />}
+            {/* Batch B — 7-day intent breakdown (PR #28) + top authors (PR #24).
+                Both render only when the monitor has data; quietly hide
+                otherwise. */}
+            {selMonitor && <IntentSummaryPanel apiKey={apiKey} monitorId={selId} />}
+            {selMonitor && <AuthorProfilesPanel apiKey={apiKey} monitorId={selId} />}
             {selMonitor && !loading && matches.length>0 && (
               <div className="metric-row">
                 <div className="metric-card"><div className="metric-label">Matches loaded</div><div className="metric-value">{matches.length}</div></div>
@@ -1961,6 +2084,26 @@ function Settings({ apiKey, userEmail, plan, onSignOut, monitors, onRefresh }) {
   const [confirmText, setConfirmText] = useState('');
   const [danger, setDanger] = useState({ submitting: false, err: '', done: false });
   const planLabel = {starter:'Starter',growth:'Growth',scale:'Scale'}[plan]||'Starter';
+  // Batch B — currently-editing monitor (null = no modal open).
+  const [editingMonitor, setEditingMonitor] = useState(null);
+  // Batch B — track per-monitor share-link copy feedback ("Copied!").
+  const [sharedId, setSharedId] = useState('');
+  const copyShareLink = async (monitorId) => {
+    const r = await apiFetch(`/v1/monitors/${monitorId}/share-link`, {}, apiKey);
+    if (!r.ok || !r.data?.reportUrl) {
+      alert(r.data?.error?.message || 'Could not get share link.');
+      return;
+    }
+    try { await navigator.clipboard.writeText(r.data.reportUrl) }
+    catch (_) {
+      // Clipboard API can fail in some browsers / contexts — fall back
+      // to a prompt() so the user can copy manually.
+      prompt('Share URL — copy this:', r.data.reportUrl)
+      return
+    }
+    setSharedId(monitorId)
+    setTimeout(() => setSharedId(''), 2000)
+  };
 
   const copyKey = () => { navigator.clipboard.writeText(apiKey); setCopied(true); setTimeout(()=>setCopied(false),2000); };
 
@@ -2113,6 +2256,22 @@ function Settings({ apiKey, userEmail, plan, onSignOut, monitors, onRefresh }) {
                       : `${m.keyword_count} keywords · ${m.total_matches_found || 0} matches found`}
                   </div>
                 </div>
+                {/* Batch B — Edit button. Opens EditMonitorModal pre-populated
+                    with this monitor's current fields, calls PATCH on save. */}
+                <button className="btn btn-white btn-sm" title="Edit monitor settings" onClick={()=>setEditingMonitor(m)}>
+                  <i className="ph ph-pencil-simple"></i> Edit
+                </button>
+                {/* Batch B — Share button. Copies the white-label client report
+                    URL to clipboard. Hidden in builder mode (the report
+                    template is keyword-mode only). */}
+                {!isBuilder && (
+                  <button className="btn btn-white btn-sm" title="Copy white-label report URL"
+                    onClick={()=>copyShareLink(m.id)}
+                    style={{color: sharedId===m.id ? '#16A34A' : '#475569'}}>
+                    <i className={`ph ph-${sharedId===m.id ? 'check' : 'share-network'}`}></i>
+                    {sharedId===m.id ? 'Copied!' : 'Share'}
+                  </button>
+                )}
                 <button
                   className="btn btn-ghost btn-sm"
                   title={emailOn ? 'Pause email alerts for this monitor' : 'Resume email alerts'}
@@ -2199,8 +2358,225 @@ function Settings({ apiKey, userEmail, plan, onSignOut, monitors, onRefresh }) {
           )}
         </div>
       </div>
+      {/* Batch B — edit-monitor modal. Renders only when editingMonitor is
+          set; clears state on close so reopening another monitor doesn't
+          carry over fields. Calls onRefresh on save so the parent reloads
+          the monitor list with the new values. */}
+      {editingMonitor && (
+        <EditMonitorModal
+          apiKey={apiKey}
+          monitor={editingMonitor}
+          corridors={corridors}
+          onClose={()=>setEditingMonitor(null)}
+          onSaved={()=>{ setEditingMonitor(null); onRefresh && onRefresh(); }}
+        />
+      )}
     </>
   );
+}
+
+// ── Edit Monitor Modal (Batch B) ────────────────────────────────────────────
+// Centered overlay with all 14 patchable fields. Pre-populated from the
+// monitor's GET response (the same shape the parent already passed in).
+// Saves via PATCH /v1/monitors/:id; only sends changed fields so a stale
+// re-render of the modal doesn't accidentally clobber unrelated state.
+function EditMonitorModal({ apiKey, monitor, corridors, onClose, onSaved }) {
+  // Local form state — initialized from `monitor` snake_case fields.
+  const [name,        setName]        = useState(monitor.name || '')
+  const [replyTone,   setReplyTone]   = useState(monitor.reply_tone || 'conversational')
+  const [brandName,   setBrandName]   = useState(monitor.brand_name || '')
+  const [productUrl,  setProductUrl]  = useState(monitor.product_url || '')
+  const [utmSource,   setUtmSource]   = useState(monitor.utm_source || '')
+  const [utmMedium,   setUtmMedium]   = useState(monitor.utm_medium || '')
+  const [utmCampaign, setUtmCampaign] = useState(monitor.utm_campaign || '')
+  const [webhookUrl,  setWebhookUrl]  = useState(monitor.webhook_url || '')
+  const [slackUrl,    setSlackUrl]    = useState(monitor.slack_webhook_url || '')
+  const [platforms,   setPlatforms]   = useState(monitor.platforms || ['reddit'])
+  const [corridorId,  setCorridorId]  = useState(monitor.diaspora_corridor || '')
+  const [saving, setSaving] = useState(false)
+  const [err, setErr]       = useState('')
+  const [availablePlatforms, setAvailablePlatforms] = useState([])
+  useEffect(() => {
+    fetch('/v1/platforms')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.platforms?.length) setAvailablePlatforms(d.platforms) })
+      .catch(() => {})
+  }, [])
+
+  const togglePlatform = (id) => {
+    setPlatforms(prev => {
+      if (prev.includes(id)) {
+        if (prev.length === 1) return prev   // refuse to deselect the last chip
+        return prev.filter(p => p !== id)
+      }
+      return [...prev, id]
+    })
+  }
+
+  const save = async () => {
+    setSaving(true); setErr('')
+    // Build a diff body — only include fields that changed. Avoids
+    // clobbering unrelated fields if the modal got stale.
+    const body = {}
+    if (name.trim() !== (monitor.name || '')) body.name = name.trim()
+    if (replyTone !== (monitor.reply_tone || 'conversational')) body.replyTone = replyTone
+    if (brandName.trim()  !== (monitor.brand_name  || '')) body.brandName  = brandName.trim()
+    if (productUrl.trim() !== (monitor.product_url || '')) body.productUrl = productUrl.trim() || null
+    if (utmSource.trim()  !== (monitor.utm_source  || '')) body.utmSource  = utmSource.trim()  || null
+    if (utmMedium.trim()  !== (monitor.utm_medium  || '')) body.utmMedium  = utmMedium.trim()  || null
+    if (utmCampaign.trim()!== (monitor.utm_campaign|| '')) body.utmCampaign= utmCampaign.trim()|| null
+    if (webhookUrl.trim() !== (monitor.webhook_url || '')) body.webhookUrl = webhookUrl.trim() || null
+    if (slackUrl.trim()   !== (monitor.slack_webhook_url || '')) body.slackWebhookUrl = slackUrl.trim() || null
+    if (corridorId !== (monitor.diaspora_corridor || '')) body.diasporaCorridor = corridorId || null
+    const platformsChanged = JSON.stringify([...platforms].sort()) !== JSON.stringify([...(monitor.platforms || [])].sort())
+    if (platformsChanged) body.platforms = platforms
+
+    if (Object.keys(body).length === 0) {
+      setErr('Nothing changed.')
+      setSaving(false)
+      return
+    }
+    const r = await apiFetch(`/v1/monitors/${monitor.id}`, { method: 'PATCH', body: JSON.stringify(body) }, apiKey)
+    setSaving(false)
+    if (!r.ok) {
+      setErr(r.data?.error?.message || 'Could not save changes.')
+      return
+    }
+    onSaved && onSaved()
+  }
+
+  const isBuilder = monitor.mode === 'builder_tracker'
+
+  return (
+    <div onClick={onClose} style={{position:'fixed',inset:0,background:'rgba(15,23,42,.55)',display:'flex',alignItems:'flex-start',justifyContent:'center',zIndex:200,overflowY:'auto',padding:'40px 16px'}}>
+      <div onClick={e=>e.stopPropagation()} className="card card-p" style={{maxWidth:560,width:'100%',background:'#fff'}}>
+        <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18,paddingBottom:14,borderBottom:'1px solid #F1F5F9'}}>
+          <i className="ph-bold ph-pencil-simple" style={{color:'#FF6B35',fontSize:18}}></i>
+          <div style={{flex:1}}>
+            <div style={{fontSize:15,fontWeight:700,color:'#0F172A'}}>Edit monitor</div>
+            <div style={{fontSize:12,color:'#94A3B8'}}>{monitor.name}</div>
+          </div>
+          <button className="btn btn-ghost btn-sm" onClick={onClose}><i className="ph ph-x"></i></button>
+        </div>
+
+        <div className="field" style={{marginBottom:14}}>
+          <label className="label">Monitor name</label>
+          <input className="inp" value={name} onChange={e=>setName(e.target.value)} />
+        </div>
+
+        {!isBuilder && (
+          <div className="field" style={{marginBottom:14}}>
+            <label className="label">Brand name <span style={{fontSize:11,fontWeight:400,color:'#94A3B8'}}>· for AI Visibility tracking</span></label>
+            <input className="inp" value={brandName} onChange={e=>setBrandName(e.target.value)} placeholder="e.g. Acme Inc." />
+          </div>
+        )}
+
+        {!isBuilder && (
+          <div className="field" style={{marginBottom:14}}>
+            <label className="label">Reply tone</label>
+            <div style={{display:'flex',flexWrap:'wrap',gap:6,marginTop:6}}>
+              {['conversational','professional','empathetic','expert','playful'].map(t => (
+                <button key={t} type="button" onClick={()=>setReplyTone(t)}
+                  style={{
+                    padding:'7px 12px',borderRadius:6,fontSize:12.5,fontWeight:500,fontFamily:'inherit',cursor:'pointer',
+                    border: replyTone===t ? '1px solid #FF6B35' : '1px solid #E2E8F0',
+                    background: replyTone===t ? 'rgba(255,107,53,.10)' : '#fff',
+                    color: replyTone===t ? '#FF6B35' : '#475569',
+                  }}>{t.charAt(0).toUpperCase()+t.slice(1)}</button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="field" style={{marginBottom:14}}>
+          <label className="label">Where to scan <span style={{fontSize:11,fontWeight:400,color:'#94A3B8'}}>· {platforms.length} of {availablePlatforms.length || platforms.length} platforms</span></label>
+          <div style={{display:'flex',flexWrap:'wrap',gap:6,marginTop:6}}>
+            {(availablePlatforms.length ? availablePlatforms : platforms.map(id => ({id, label: id, emoji: '•'}))).map(p => {
+              const selected = platforms.includes(p.id)
+              return (
+                <button key={p.id} type="button" onClick={()=>togglePlatform(p.id)}
+                  style={{
+                    padding:'7px 12px',borderRadius:6,fontSize:12.5,fontWeight:500,fontFamily:'inherit',cursor:'pointer',
+                    border:     selected ? '1px solid #FF6B35'    : '1px solid #E2E8F0',
+                    background: selected ? 'rgba(255,107,53,.10)' : '#fff',
+                    color:      selected ? '#FF6B35'              : '#94A3B8',
+                    display:'inline-flex',alignItems:'center',gap:6,
+                  }}>
+                  <span style={{fontSize:13}}>{p.emoji}</span> {p.label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {!isBuilder && corridors && corridors.length > 0 && (
+          <div className="field" style={{marginBottom:14}}>
+            <label className="label">Diaspora corridor <span style={{fontSize:11,fontWeight:400,color:'#94A3B8'}}>· optional</span></label>
+            <div style={{display:'flex',flexWrap:'wrap',gap:6,marginTop:6}}>
+              {[{ id: '', label: 'None', emoji: '—' }, ...corridors].map(c => {
+                const selected = corridorId === c.id
+                return (
+                  <button key={c.id || 'none'} type="button" onClick={()=>setCorridorId(c.id)}
+                    style={{
+                      padding:'6px 10px',borderRadius:6,fontSize:12,fontWeight:500,fontFamily:'inherit',cursor:'pointer',
+                      border:     selected ? '1px solid #FF6B35'    : '1px solid #E2E8F0',
+                      background: selected ? 'rgba(255,107,53,.10)' : '#fff',
+                      color:      selected ? '#FF6B35'              : '#475569',
+                      display:'inline-flex',alignItems:'center',gap:4,
+                    }}>
+                    <span>{c.emoji}</span><span>{c.label}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {!isBuilder && (
+          <details style={{marginBottom:14}}>
+            <summary style={{fontSize:12,color:'#64748B',cursor:'pointer',padding:'4px 0'}}>Advanced — UTM tracking, webhooks</summary>
+            <div style={{marginTop:10,padding:14,background:'#F8FAFC',border:'1px solid #E2E8F0',borderRadius:6}}>
+              <div className="field" style={{marginBottom:10}}>
+                <label className="label" style={{fontSize:11}}>Product URL</label>
+                <input className="inp" placeholder="https://yourproduct.com" value={productUrl} onChange={e=>setProductUrl(e.target.value)} />
+              </div>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:10}}>
+                <div>
+                  <label className="label" style={{fontSize:11}}>utm_source</label>
+                  <input className="inp" placeholder="ebenova-insights" value={utmSource} onChange={e=>setUtmSource(e.target.value)} />
+                </div>
+                <div>
+                  <label className="label" style={{fontSize:11}}>utm_medium</label>
+                  <input className="inp" placeholder="community" value={utmMedium} onChange={e=>setUtmMedium(e.target.value)} />
+                </div>
+              </div>
+              <div className="field" style={{marginBottom:10}}>
+                <label className="label" style={{fontSize:11}}>utm_campaign</label>
+                <input className="inp" value={utmCampaign} onChange={e=>setUtmCampaign(e.target.value)} />
+              </div>
+              <div className="field" style={{marginBottom:10}}>
+                <label className="label" style={{fontSize:11}}>Outbound webhook URL <span style={{color:'#94A3B8'}}>(https://)</span></label>
+                <input className="inp" placeholder="https://hooks.zapier.com/..." value={webhookUrl} onChange={e=>setWebhookUrl(e.target.value)} />
+              </div>
+              <div className="field">
+                <label className="label" style={{fontSize:11}}>Slack webhook URL</label>
+                <input className="inp" placeholder="https://hooks.slack.com/..." value={slackUrl} onChange={e=>setSlackUrl(e.target.value)} />
+              </div>
+            </div>
+          </details>
+        )}
+
+        {err && <div className="alert alert-error" style={{marginBottom:14}}><i className="ph ph-warning-circle"></i>{err}</div>}
+
+        <div style={{display:'flex',gap:10,justifyContent:'flex-end',paddingTop:14,borderTop:'1px solid #F1F5F9'}}>
+          <button className="btn btn-ghost btn-sm" onClick={onClose} disabled={saving}>Cancel</button>
+          <button className="btn btn-primary btn-sm" onClick={save} disabled={saving}>
+            {saving ? <><i className="ph ph-circle-notch spin"></i> Saving…</> : <><i className="ph-bold ph-check"></i> Save changes</>}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 // ── Feedback Widget ────────────────────────────────────────────────────
