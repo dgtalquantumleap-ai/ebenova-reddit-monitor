@@ -250,10 +250,12 @@ async function apiFetch(path, opts={}, apiKey) {
 }
 
 // ── Landing-page platform prefs ─────────────────────────────────────────────
-// Known platforms for the new-monitor chip selector (matches lib/platforms.js
-// VALID_PLATFORMS; twitter included as it is technically valid even though the
-// marketing page does not surface it).
-var KNOWN_PLATFORMS = ['reddit','hackernews','medium','substack','quora','upwork','fiverr','github','producthunt','twitter'];
+// Fallback list of platform ids — used at component-init time before the
+// async /v1/platforms fetch resolves. Must include every id in
+// VALID_PLATFORMS in lib/platforms.js. The live chip grid in step 4 reads
+// from the fetched list (drift-proof); this list only gates the initial
+// localStorage prefs hydration.
+var KNOWN_PLATFORMS = ['reddit','hackernews','medium','substack','quora','upwork','fiverr','github','producthunt','twitter','jijing','youtube','amazon'];
 
 function readLandingPlatformPrefs(known) {
   try {
@@ -1119,6 +1121,31 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
       .then(d => { if (d?.presets) setPresets(d.presets) })
       .catch(() => {})
   }, [])
+  // Live platform catalog. Fetched from GET /v1/platforms (single source of
+  // truth = lib/platforms.js). Falls back to a hardcoded list if the fetch
+  // hasn't resolved yet — matches VALID_PLATFORMS so the chip grid renders
+  // identically either way during the brief async window.
+  const [availablePlatforms, setAvailablePlatforms] = useState([
+    {id:'reddit',      emoji:'🔴', label:'Reddit'},
+    {id:'hackernews',  emoji:'🟠', label:'Hacker News'},
+    {id:'medium',      emoji:'📰', label:'Medium'},
+    {id:'substack',    emoji:'📧', label:'Substack'},
+    {id:'quora',       emoji:'💬', label:'Quora'},
+    {id:'upwork',      emoji:'💼', label:'Upwork'},
+    {id:'fiverr',      emoji:'🟢', label:'Fiverr'},
+    {id:'github',      emoji:'🐙', label:'GitHub'},
+    {id:'producthunt', emoji:'🚀', label:'Product Hunt'},
+    {id:'twitter',     emoji:'🐦', label:'Twitter/X'},
+    {id:'jijing',      emoji:'🇳🇬', label:'Jiji.ng'},
+    {id:'youtube',     emoji:'▶️', label:'YouTube'},
+    {id:'amazon',      emoji:'📦', label:'Amazon Reviews'},
+  ])
+  useEffect(() => {
+    fetch('/v1/platforms')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.platforms?.length) setAvailablePlatforms(d.platforms) })
+      .catch(() => {})
+  }, [])
   const [description, setDescription] = useState('')
   const [suggestion, setSuggestion] = useState(null)
   const [counts, setCounts] = useState({})
@@ -1646,19 +1673,9 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
             </div>
             )}
             <div className="field" style={{marginBottom:14}}>
-              <label className="label">Where to scan <span style={{fontSize:11,fontWeight:400,color:'#94A3B8'}}>· {platforms.length} of 9 platforms · click chips to toggle</span></label>
+              <label className="label">Where to scan <span style={{fontSize:11,fontWeight:400,color:'#94A3B8'}}>· {platforms.length} of {availablePlatforms.length} platforms · click chips to toggle</span></label>
               <div style={{display:'flex',flexWrap:'wrap',gap:6,marginTop:6}}>
-                {[
-                  {id:'reddit',      emoji:'🔴', label:'Reddit'},
-                  {id:'hackernews',  emoji:'🟠', label:'Hacker News'},
-                  {id:'medium',      emoji:'📰', label:'Medium'},
-                  {id:'substack',    emoji:'📧', label:'Substack'},
-                  {id:'quora',       emoji:'💬', label:'Quora'},
-                  {id:'upwork',      emoji:'💼', label:'Upwork'},
-                  {id:'fiverr',      emoji:'🟢', label:'Fiverr'},
-                  {id:'github',      emoji:'🐙', label:'GitHub'},
-                  {id:'producthunt', emoji:'🚀', label:'Product Hunt'},
-                ].map(p => {
+                {availablePlatforms.map(p => {
                   const selected = platforms.includes(p.id)
                   return (
                     <button
