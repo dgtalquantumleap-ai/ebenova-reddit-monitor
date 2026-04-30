@@ -42,6 +42,7 @@ import { fireWebhook, buildPayload as buildWebhookPayload } from './lib/outbound
 import { runAllDigests } from './lib/weekly-digest.js'
 import { isoWeekLabel } from './lib/keyword-types.js'
 import { runEngagementSweep } from './lib/reply-tracker.js'
+import { isBuilderPost, extractTopics, recordBuilderProfile, getBuilderProfiles, sendBuilderDigest, PLATFORMS_WITH_REAL_USERNAMES } from './lib/builder-tracker.js'
 
 // F14: lazy daily cost caps. Soft-fail so the worker degrades gracefully
 // (skip-draft / skip-email / skip-embedding) rather than crashing.
@@ -569,7 +570,127 @@ async function sendMonitorAlert(monitor, matches) {
 // ── Run a single monitor ──────────────────────────────────────────────────────
 // Fetches all keywords for a monitor, searches Reddit + Nairaland,
 // generates drafts, stores matches, sends alert if any found.
+// PR #31: Builder Tracker mode constants. When monitor.mode === 'builder_tracker'
+// these replace the user's keywords/subreddits — Builder Tracker is opinionated
+// about what to look for ("people sharing what they're building"), not
+// configurable on a per-monitor basis.
+const BUILDER_KEYWORDS = [
+  'building in public', 'buildinpublic', 'launched my',
+  'shipped today', 'just launched', 'soft launch',
+  'day 1 of building', 'week 1 of building',
+  'my saas', 'my startup', 'side project update',
+  'indie hacker', 'working on a product',
+  'just released', 'MVP launch', 'product update',
+]
+const BUILDER_SUBREDDITS = [
+  'buildinpublic', 'SideProject', 'startups',
+  'IndieHackers', 'SaaS', 'webdev', 'entrepreneur',
+]
+
+async function runBuilderTrackerMonitor(monitor) {
+  const label = `[v2][${monitor.id}][${monitor.name}][builder]`
+  console.log(`${label} Starting Builder Tracker mode`)
+
+  const allMatches = []
+  const seenIds = { has: id => hasSeen(monitor.id, id), add: id => markSeen(monitor.id, id) }
+  const maxAgeMs = 7 * 24 * 60 * 60 * 1000   // 7 days — builder posts have longer relevance
+
+  // Builder Tracker uses a hardcoded keyword + subreddit set. Each pseudo-
+  // keyword carries the BUILDER_SUBREDDITS so Reddit RSS searches them.
+  const builderKws = BUILDER_KEYWORDS.map(k => ({
+    keyword: k,
+    subreddits: BUILDER_SUBREDDITS,
+    productContext: monitor.productContext || '',
+    type: 'keyword',
+  }))
+
+  // Reddit
+  for (const kw of builderKws) {
+    const matches = await searchReddit(monitor.id, kw)
+    matches.forEach(m => allMatches.push(m))
+    await delay(2000)
+  }
+
+  // Other supported platforms — only the ones with real usernames per spec.
+  const builderPlatformRunners = [
+    { key: 'hackernews',  scraper: searchHackerNews,  delayMs: 1500 },
+    { key: 'github',      scraper: searchGitHub,      delayMs: 2000 },
+    { key: 'producthunt', scraper: searchProductHunt, delayMs: 2000 },
+    { key: 'twitter',     scraper: searchTwitter,     delayMs: 2500 },
+    { key: 'substack',    scraper: searchSubstack,    delayMs: 1500 },
+  ]
+  for (const { key, scraper, delayMs } of builderPlatformRunners) {
+    if (!PLATFORMS_WITH_REAL_USERNAMES.includes(key)) continue
+    for (const kw of builderKws) {
+      const matches = await scraper(kw, { seenIds, delay, MAX_AGE_MS: maxAgeMs })
+      matches.forEach(m => allMatches.push(m))
+      await delay(delayMs)
+    }
+  }
+  console.log(`${label} ${allMatches.length} candidate matches gathered`)
+
+  // Cheap heuristic filter — drops complaint / help-seeking posts.
+  const builderMatches = allMatches.filter(isBuilderPost)
+  console.log(`${label} ${builderMatches.length} pass builder filter`)
+
+  // Extract topics and record profiles. Best-effort: per-match failures
+  // log inside the helpers but don't abort the cycle.
+  const newProfiles = []
+  let recorded = 0
+  const redisClient = getRedis()
+  for (const match of builderMatches) {
+    if (!PLATFORMS_WITH_REAL_USERNAMES.includes(match.source)) continue
+    const topics = await extractTopics(match)
+    const r = await recordBuilderProfile({ redis: redisClient, monitorId: monitor.id, match, topics })
+    if (r?.recorded) {
+      recorded++
+      if (r.isNew) {
+        newProfiles.push({
+          username: match.author, platform: match.source,
+          postCount: r.postCount, consistency: r.consistency, topics,
+          latestPostTitle: match.title, latestPostUrl: match.url,
+          profileUrl: '',  // sendBuilderDigest renders without unless we look it up
+        })
+      }
+    }
+  }
+  console.log(`${label} ${recorded} profiles recorded (${newProfiles.length} new)`)
+
+  // Update monitor's lastPollAt + totalBuildersFound.
+  try {
+    if (redisClient) {
+      const updatedMonitor = {
+        ...monitor,
+        lastPollAt: new Date().toISOString(),
+        totalBuildersFound: (monitor.totalBuildersFound || 0) + newProfiles.length,
+      }
+      await redisClient.set(`insights:monitor:${monitor.id}`, JSON.stringify(updatedMonitor))
+    }
+  } catch (err) {
+    console.error(`${label} Redis store error:`, err.message)
+  }
+
+  // Send digest only when we actually found new builders this cycle —
+  // builders are time-sensitive but a "0 new" email trains users to ignore.
+  if (newProfiles.length > 0 && resend) {
+    const topProfiles = await getBuilderProfiles({ redis: redisClient, monitorId: monitor.id, limit: 3 })
+    const r = await sendBuilderDigest({
+      monitor, newProfiles, topProfiles, resend, fromEmail: FROM_EMAIL,
+      appUrl: process.env.APP_URL,
+    })
+    if (r.sent) console.log(`${label} Builder digest sent — ${r.count} new`)
+  }
+}
+
 async function runMonitor(monitor) {
+  // PR #31: Builder Tracker mode — completely separate processing path.
+  // Skips classification + drafts + alerts; instead extracts topics and
+  // records per-author profiles in Redis. Sends a builder-digest email
+  // when new profiles are recorded.
+  if (monitor.mode === 'builder_tracker') {
+    return runBuilderTrackerMonitor(monitor)
+  }
+
   const label = `[v2][${monitor.id}][${monitor.name}]`
   // Resolve which platforms this monitor wants. New monitors set platforms[]
   // explicitly; legacy monitors (no platforms field) get migrated from their
