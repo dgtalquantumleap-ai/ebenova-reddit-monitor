@@ -248,10 +248,19 @@ app.use(helmet({
     useDefaults: true,
     directives: {
       'script-src': ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com", "https://unpkg.com", "'unsafe-eval'", "https://js.hcaptcha.com"],
-      'connect-src': ["'self'", "https://hooks.slack.com", "https://hcaptcha.com", "https://*.hcaptcha.com"],
+      // HOTFIX — connect-src must include unpkg.com so Babel-standalone can
+      // fetch its source map (the dev console was throwing CSP violations
+      // on every dashboard load). Production deployments will eventually
+      // bundle, but until then the source map fetch is harmless.
+      'connect-src': ["'self'", "https://hooks.slack.com", "https://hcaptcha.com", "https://*.hcaptcha.com", "https://unpkg.com"],
       'img-src': ["'self'", 'data:', "https://imgs.hcaptcha.com"],
       'frame-src': ["'self'", "https://hcaptcha.com", "https://*.hcaptcha.com"],
-      'style-src': ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      // HOTFIX — style-src must allow unpkg.com (Phosphor Icons injects a
+      // <link rel="stylesheet" href="https://unpkg.com/...">) and explicit
+      // style-src-elem so modern browsers don't fall back to a stricter
+      // policy. Google Fonts already permitted.
+      'style-src':      ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://unpkg.com"],
+      'style-src-elem': ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://unpkg.com"],
       'font-src': ["'self'", 'https:', 'data:'],
     },
   },
