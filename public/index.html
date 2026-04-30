@@ -590,7 +590,7 @@
 <!-- HERO -->
 <section class="hero" id="main">
   <div>
-    <div class="hero-eyebrow">SIGNAL // 9 PLATFORMS</div>
+    <div class="hero-eyebrow" id="hero-platform-count">SIGNAL // 13 PLATFORMS</div>
     <h1 class="hero-title">
       Your next customer<br>
       is <em>already typing.</em>
@@ -702,10 +702,13 @@
     <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="substack"   aria-label="Toggle Substack">SUBSTACK</button>
     <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="producthunt" aria-label="Toggle Product Hunt">PRODUCT HUNT</button>
     <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="twitter"     aria-label="Toggle Twitter">TWITTER</button>
+    <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="jijing"      aria-label="Toggle Jiji.ng">JIJI.NG</button>
+    <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="youtube"     aria-label="Toggle YouTube">YOUTUBE</button>
+    <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="amazon"      aria-label="Toggle Amazon Reviews">AMAZON REVIEWS</button>
   </div>
 
   <div class="selector-meta">
-    Watching <span class="selector-count" id="selector-count">10</span> of 10 · all plans
+    Watching <span class="selector-count" id="selector-count">13</span> of <span id="selector-total">13</span> · all plans
   </div>
 
   <div class="selector-feed" id="selector-feed" role="log" aria-live="off"></div>
@@ -999,7 +1002,24 @@
 <script>
 (function () {
   var STORAGE_KEY = 'ebnv_landing_platform_prefs';
-  var KNOWN = ['reddit','hackernews','medium','substack','quora','upwork','fiverr','github','producthunt','twitter'];
+  // Mirrors VALID_PLATFORMS in lib/platforms.js. The static chip strip
+  // above ships with all 13 baked into the markup so SEO + first paint
+  // don't depend on a fetch. The fetch below reconciles for future drift —
+  // if the server adds a 14th platform, the eyebrow + count update on
+  // page load without redeploying the marketing markup.
+  var KNOWN = ['reddit','hackernews','medium','substack','quora','upwork','fiverr','github','producthunt','twitter','jijing','youtube','amazon'];
+
+  // Drift-proof reconciliation: pull live platform list from the API and
+  // update the eyebrow + total count if the server has more than what's
+  // baked in here. Best-effort; the static markup is the SEO floor.
+  fetch('/v1/platforms').then(function (r) { return r.ok ? r.json() : null }).then(function (d) {
+    if (!d || !Array.isArray(d.platforms) || d.platforms.length === 0) return;
+    var n = d.platforms.length;
+    var hero = document.getElementById('hero-platform-count');
+    var totalEl = document.getElementById('selector-total');
+    if (hero)    hero.textContent    = 'SIGNAL // ' + n + ' PLATFORMS';
+    if (totalEl) totalEl.textContent = String(n);
+  }).catch(function () { /* best-effort */ });
 
   var grid = document.querySelector('.selector-grid');
   var countEl = document.getElementById('selector-count');
