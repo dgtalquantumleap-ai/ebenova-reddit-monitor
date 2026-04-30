@@ -40,6 +40,7 @@ import { classifyMatch, intentPriority, isHighPriority } from './lib/classify.js
 import { recordAuthor } from './lib/author-profiles.js'
 import { fireWebhook, buildPayload as buildWebhookPayload } from './lib/outbound-webhook.js'
 import { runAllDigests } from './lib/weekly-digest.js'
+import { runVisibilitySweep } from './lib/ai-visibility.js'
 import { isoWeekLabel } from './lib/keyword-types.js'
 import { runEngagementSweep } from './lib/reply-tracker.js'
 import { isBuilderPost, extractTopics, recordBuilderProfile, getBuilderProfiles, sendBuilderDigest, PLATFORMS_WITH_REAL_USERNAMES } from './lib/builder-tracker.js'
@@ -1074,6 +1075,19 @@ if (!redis) {
         console.log(`[v2][digest] ran=${r.ran} sent=${r.sent} skipped=${r.skipped}`)
       } catch (err) {
         console.error(`[v2][digest] cron failed: ${err.message}`)
+      }
+      // PR #34 — AI visibility sweep. Runs alongside the weekly digest so
+      // founders get the LLM-mention picture in the same weekly heartbeat.
+      // Best-effort: a sweep crash never blocks future runs and never crashes
+      // the worker. Toggleable via AI_VISIBILITY_ENABLED (default on).
+      const visibilityEnabled = (process.env.AI_VISIBILITY_ENABLED || 'true').toLowerCase() !== 'false'
+      if (visibilityEnabled) {
+        try {
+          const v = await runVisibilitySweep({ redis })
+          console.log(`[v2][ai-visibility] eligible=${v.eligible} ran=${v.ran} stored=${v.stored} skipped=${v.skipped} failed=${v.failed}`)
+        } catch (err) {
+          console.error(`[v2][ai-visibility] sweep failed: ${err.message}`)
+        }
       }
     }, { timezone: 'UTC' })
     console.log(`[v2] Weekly digest cron scheduled: Monday 08:00 UTC (${WEEKLY_DIGEST_EXPR})`)
