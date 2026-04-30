@@ -67,6 +67,7 @@ import { normalizeKeywordList, isoWeekLabel, previousIsoWeekLabel } from './lib/
 import { getBuilderProfiles, buildersToCSV } from './lib/builder-tracker.js'
 import { getRecentReports, topCompetitorsAcross, computeTrend } from './lib/ai-visibility.js'
 import { listPresets, getPreset } from './lib/keyword-presets.js'
+import { scheduleEngagementCheck, getRecentOutcomes } from './lib/reply-tracker.js'
 
 const PORT = parseInt(process.env.API_PORT || process.env.PORT || '3001')
 const ADMIN_KEY = process.env.MONITOR_ADMIN_KEY
@@ -889,6 +890,44 @@ app.get('/v1/monitors/:id/builders.csv', async (req, res) => {
   }
 })
 
+// ── GET /v1/monitors/:id/outcomes ──────────────────────────────────────────
+// Reply outcome tracking — the ROI-proof endpoint. Reads the last 30 days of
+// posted matches for the monitor and surfaces:
+//   - totalPosted    — replies the user marked as posted
+//   - gotEngagement  — replies that picked up commentsDelta > 0 OR scoreDelta > 2
+//   - engagementRate — formatted percentage string
+//   - topPerforming  — top 3 by commentsDelta (desc)
+//   - recentOutcomes — last 10 posted matches with their delta record
+//
+// Auth-gated, ownership-checked, returns 200 with zeroed fields when there
+// are no posted replies (so the dashboard can render an "encouraging-empty"
+// state instead of treating it as a 404).
+app.get('/v1/monitors/:id/outcomes', async (req, res) => {
+  const auth = await authenticate(req)
+  if (!auth.ok) return res.status(auth.status).json({ success: false, error: auth.error })
+  const { id } = req.params
+  try {
+    const redis = getRedis()
+    const monRaw = await redis.get(`insights:monitor:${id}`)
+    if (!monRaw) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Monitor not found' } })
+    const monitor = typeof monRaw === 'string' ? JSON.parse(monRaw) : monRaw
+    if (monitor.owner !== auth.owner) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Monitor not found' } })
+
+    const o = await getRecentOutcomes({ redis, monitorId: id, days: 30 })
+    res.json({
+      success:        true,
+      period:         '30d',
+      totalPosted:    o.posted,
+      gotEngagement:  o.engaged,
+      engagementRate: o.rateLabel,
+      topPerforming:  o.topPerforming,
+      recentOutcomes: o.recent,
+    })
+  } catch (err) {
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
+  }
+})
+
 // ── GET /v1/monitors/:id/ai-visibility ─────────────────────────────────────
 // AI visibility report (PR #34). Returns up to the last 4 weekly reports
 // for the monitor, plus the current overall score, the trend bucket vs the
@@ -1078,6 +1117,14 @@ app.patch('/v1/matches/posted', async (req, res) => {
     const currentCount = Number(monitor.posted_count) || 0
     const nextCount = wasPosted ? Math.max(0, currentCount - 1) : currentCount + 1
     await redis.set(monitorKey, JSON.stringify({ ...monitor, posted_count: nextCount }))
+
+    // Reply outcome tracking: on the off→on transition, schedule a
+    // +24h engagement check on this monitor's pending queue. Best-effort;
+    // failure to schedule never blocks the posted-state update.
+    if (!wasPosted) {
+      try { await scheduleEngagementCheck({ redis, monitorId: monitor_id, match: nextMatch }) }
+      catch (err) { console.warn(`[posted] scheduleEngagementCheck failed for ${monitor_id}:${match_id}: ${err.message}`) }
+    }
 
     res.json({
       success: true,
