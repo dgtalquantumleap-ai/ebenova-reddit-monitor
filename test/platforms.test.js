@@ -11,11 +11,11 @@ import {
 
 // ── VALID_PLATFORMS / labels / emojis ──────────────────────────────────────
 
-test('VALID_PLATFORMS contains exactly the 11 supported platforms', () => {
-  assert.equal(VALID_PLATFORMS.length, 11)
+test('VALID_PLATFORMS contains exactly the 12 supported platforms', () => {
+  assert.equal(VALID_PLATFORMS.length, 12)
   assert.deepEqual(
     new Set(VALID_PLATFORMS),
-    new Set(['reddit','hackernews','medium','substack','quora','upwork','fiverr','github','producthunt','twitter','jijing'])
+    new Set(['reddit','hackernews','medium','substack','quora','upwork','fiverr','github','producthunt','twitter','jijing','youtube'])
   )
 })
 
@@ -71,10 +71,10 @@ test('validatePlatforms: rejects non-string entries', () => {
   assert.match(r.error, /must be a string/)
 })
 
-test('validatePlatforms: accepts all 11 platforms at once', () => {
+test('validatePlatforms: accepts all 12 platforms at once', () => {
   const r = validatePlatforms(VALID_PLATFORMS)
   assert.equal(r.ok, true)
-  assert.equal(r.platforms.length, 11)
+  assert.equal(r.platforms.length, 12)
 })
 
 test('validatePlatforms: rejects linkedin (parked until a real source is wired)', () => {
