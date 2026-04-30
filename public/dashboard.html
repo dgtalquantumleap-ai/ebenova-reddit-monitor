@@ -828,8 +828,14 @@ function MatchesFeed({ apiKey, monitors }) {
       <div className="page-header">
         <div><h1 className="page-title">Monitor Feed</h1><p className="page-subtitle">Real-time matches from your background monitors</p></div>
         <div style={{display:'flex',gap:8,alignItems:'center',marginTop:4}}>
+          {/* PR #32 — mode emoji prefix in the dropdown so the user sees at
+              a glance which monitor is which kind. <option> can't render
+              JSX, so we inline the emoji from MONITOR_MODE_META. */}
           <select className="inp" value={selId} onChange={e=>setSelId(e.target.value)} style={{width:'auto',minWidth:180}}>
-            {monitors.map(m=><option key={m.id} value={m.id}>{m.name}</option>)}
+            {monitors.map(m => {
+              const meta = MONITOR_MODE_META[m.mode] || MONITOR_MODE_META.keyword
+              return <option key={m.id} value={m.id}>{meta.badgeEmoji} {m.name}</option>
+            })}
           </select>
           <button className="btn btn-white btn-sm" onClick={()=>load(selId)} disabled={loading}>
             <i className={`ph ph-arrow-clockwise${loading?' spin':''}`}></i> Refresh
@@ -873,10 +879,92 @@ function MatchesFeed({ apiKey, monitors }) {
 }
 
 // ΓöÇΓöÇ Create Monitor ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
-// ── Find Customers (unified flow) ────────────────────────────────────────────
-// Builder Tracker mode (PR #31) — platforms with real human handles only.
-// Keep in sync with PLATFORMS_WITH_REAL_USERNAMES in lib/builder-tracker.js.
-const BUILDER_DEFAULT_PLATFORMS = ['reddit', 'hackernews', 'github', 'producthunt', 'twitter', 'substack']
+// ── Monitor Mode primitives (PR #32) ───────────────────────────────────────
+// Per-mode metadata in one place so the selector card, the in-list badge,
+// and the confirm-screen badge all read from the same source. Add a new mode
+// here once and it shows up everywhere.
+const MONITOR_MODE_META = {
+  keyword: {
+    icon:        'ph-magnifying-glass',
+    label:       'Customer Monitor',
+    badgeEmoji:  '🔍',
+    description: 'Track threads matching your keywords. AI drafts a reply for each match.',
+  },
+  builder_tracker: {
+    icon:        'ph-users-three',
+    label:       'Builder Tracker',
+    badgeEmoji:  '👥',
+    description: 'Track founders + indie builders publicly sharing what they’re shipping. Profile + topics + consistency. CSV export.',
+    isNew:       true,
+  },
+}
+
+// Default platforms when builder_tracker mode is selected. Per PR #32 spec —
+// excludes Twitter from the default (Twitter requires paid API access for
+// engagement and isn't a healthy default for new users); kept selectable
+// in the platform chip grid in case a power user wants it. Server-side
+// PLATFORMS_WITH_REAL_USERNAMES is the broader allow-list (still 6).
+const BUILDER_DEFAULT_PLATFORMS = ['reddit', 'hackernews', 'github', 'producthunt', 'substack']
+
+// Mode selector card pair — extracted from the inline JSX in step 1 so it
+// can be reused (e.g. on a future "create monitor" modal) and so the
+// FindCustomers component stays readable.
+function MonitorModeSelector({ value, onChange }) {
+  const Card = ({ id }) => {
+    const meta = MONITOR_MODE_META[id]
+    const selected = value === id
+    return (
+      <button type="button" onClick={() => onChange(id)} aria-pressed={selected}
+        style={{
+          textAlign: 'left', padding: '16px 18px', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit',
+          border:     selected ? '1.5px solid #FF6B35'   : '1px solid #E2E8F0',
+          background: selected ? 'rgba(255,107,53,.06)'  : '#fff',
+        }}>
+        <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:6}}>
+          <i className={`ph-bold ${meta.icon}`} style={{color: selected ? '#FF6B35' : '#64748B'}}></i>
+          <span style={{fontSize:14,fontWeight:600,color:'#0F172A'}}>{meta.label}</span>
+          {meta.isNew && (
+            <span style={{marginLeft:6,fontSize:9,padding:'2px 6px',borderRadius:4,background:'#FFF7F2',color:'#9A3412',fontWeight:700,letterSpacing:1}}>NEW</span>
+          )}
+          {selected && (
+            <span style={{marginLeft:'auto',fontSize:10,letterSpacing:1.5,color:'#FF6B35',fontWeight:700}}>SELECTED</span>
+          )}
+        </div>
+        <div style={{fontSize:12.5,color:'#475569',lineHeight:1.5}}>{meta.description}</div>
+      </button>
+    )
+  }
+  return (
+    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:28}}>
+      <Card id="keyword" />
+      <Card id="builder_tracker" />
+    </div>
+  )
+}
+
+// Compact mode badge for monitor lists, the selector dropdown, and the
+// confirm-card header. Three sizes: 'sm' (default — list rows), 'md'
+// (dropdown options), 'lg' (confirm-card hero badge). All read the same
+// MONITOR_MODE_META so visuals stay consistent.
+function MonitorModeBadge({ mode = 'keyword', size = 'sm' }) {
+  const meta = MONITOR_MODE_META[mode] || MONITOR_MODE_META.keyword
+  const sizing = {
+    sm: { padding:'2px 7px',  fontSize:10,   gap:3 },
+    md: { padding:'3px 9px',  fontSize:11.5, gap:4 },
+    lg: { padding:'7px 14px', fontSize:13,   gap:6 },
+  }[size] || {}
+  return (
+    <span style={{
+      display:'inline-flex', alignItems:'center',
+      borderRadius:999, fontWeight:600, letterSpacing:.3,
+      background:'#FFF7F2', color:'#9A3412', border:'1px solid #FED7AA',
+      ...sizing,
+    }} title={meta.label}>
+      <span>{meta.badgeEmoji}</span>
+      <span>{meta.label}</span>
+    </span>
+  )
+}
 
 function FindCustomers({ apiKey, onMonitorCreated }) {
   const [step, setStep] = useState(1) // 1=input, 2=generating, 3=review, 4=confirm, 5=confirmed
@@ -1052,38 +1140,10 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
           </span>
         </div>
         <div className="page-body" style={{maxWidth:780}}>
-          {/* PR #31 — mode selector. Two cards side-by-side. Builder Tracker
-              is the "no competitor has this" feature, so we surface it
-              prominently rather than burying it as a checkbox. */}
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:28}}>
-            <button type="button" onClick={()=>setMode('keyword')} aria-pressed={mode==='keyword'}
-              style={{
-                textAlign:'left',padding:'16px 18px',borderRadius:8,cursor:'pointer',fontFamily:'inherit',
-                border: mode==='keyword' ? '1.5px solid #FF6B35' : '1px solid #E2E8F0',
-                background: mode==='keyword' ? 'rgba(255,107,53,.06)' : '#fff',
-              }}>
-              <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:6}}>
-                <i className="ph-bold ph-magnifying-glass" style={{color:mode==='keyword'?'#FF6B35':'#64748B'}}></i>
-                <span style={{fontSize:14,fontWeight:600,color:'#0F172A'}}>Keyword Mode</span>
-                {mode==='keyword' && <span style={{marginLeft:'auto',fontSize:10,letterSpacing:1.5,color:'#FF6B35',fontWeight:700}}>SELECTED</span>}
-              </div>
-              <div style={{fontSize:12.5,color:'#475569',lineHeight:1.5}}>Track threads matching your keywords. AI drafts a reply for each match.</div>
-            </button>
-            <button type="button" onClick={()=>setMode('builder_tracker')} aria-pressed={mode==='builder_tracker'}
-              style={{
-                textAlign:'left',padding:'16px 18px',borderRadius:8,cursor:'pointer',fontFamily:'inherit',
-                border: mode==='builder_tracker' ? '1.5px solid #FF6B35' : '1px solid #E2E8F0',
-                background: mode==='builder_tracker' ? 'rgba(255,107,53,.06)' : '#fff',
-              }}>
-              <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:6}}>
-                <i className="ph-bold ph-users-three" style={{color:mode==='builder_tracker'?'#FF6B35':'#64748B'}}></i>
-                <span style={{fontSize:14,fontWeight:600,color:'#0F172A'}}>Builder Tracker</span>
-                <span style={{marginLeft:6,fontSize:9,padding:'2px 6px',borderRadius:4,background:'#FFF7F2',color:'#9A3412',fontWeight:700,letterSpacing:1}}>NEW</span>
-                {mode==='builder_tracker' && <span style={{marginLeft:'auto',fontSize:10,letterSpacing:1.5,color:'#FF6B35',fontWeight:700}}>SELECTED</span>}
-              </div>
-              <div style={{fontSize:12.5,color:'#475569',lineHeight:1.5}}>Track founders + indie builders publicly sharing what they're shipping. Profile + topics + consistency. CSV export.</div>
-            </button>
-          </div>
+          {/* PR #32 — mode selector extracted to its own component so the
+              metadata (label, icon, badge emoji) lives in one place and is
+              shared with monitor-list badges + the confirm-card hero badge. */}
+          <MonitorModeSelector value={mode} onChange={setMode} />
           {mode === 'builder_tracker' ? (
             <>
               <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:'#FF6B35',letterSpacing:3,marginBottom:18}}>// BUILDER TRACKER · ONE-CLICK SETUP</div>
@@ -1109,12 +1169,12 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
             </>
           ) : (
           <>
-          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:'#FF6B35',letterSpacing:3,marginBottom:18}}>// PROMPT · WHAT YOU SELL</div>
+          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:'#FF6B35',letterSpacing:3,marginBottom:18}}>// PROMPT · WHAT TO TRACK</div>
           <h2 style={{fontFamily:"'Crimson Pro',Georgia,serif",fontSize:36,fontWeight:700,letterSpacing:-1,lineHeight:1.05,marginBottom:14}}>
-            Tell me what you sell.<br/>I'll find your <em style={{fontStyle:'italic',color:'#FF6B35',fontWeight:400}}>next customer</em> in 4 seconds.
+            What to <em style={{fontStyle:'italic',color:'#FF6B35',fontWeight:400}}>track</em>.<br/>I'll find your next customer in 4 seconds.
           </h2>
           <p style={{color:'#475569',fontSize:15,lineHeight:1.65,maxWidth:620,marginBottom:30}}>
-            2–3 sentences. Mention what you sell, who buys, and what frustrates them about existing options.
+            Enter topics, pain points, or competitor names your potential customers discuss. 2–3 sentences works best.
           </p>
           <textarea className="inp" rows={5} value={description} onChange={e=>setDescription(e.target.value)}
             style={{padding:'18px 20px',fontSize:15,lineHeight:1.65,fontFamily:'inherit'}}
@@ -1294,6 +1354,14 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
         </div>
         <div className="page-body" style={{maxWidth:560}}>
           <div className="card card-p">
+            {/* PR #32 — mode hero badge at the top of the confirm card so the
+                user sees, in one glance, which kind of monitor they're about
+                to create. Reads from the same MONITOR_MODE_META that drives
+                the selector + monitor-list badges. */}
+            <div style={{marginBottom:18,paddingBottom:14,borderBottom:'1px solid #F1F5F9',display:'flex',alignItems:'center',gap:10}}>
+              <MonitorModeBadge mode={mode} size="lg" />
+              <span style={{fontSize:12,color:'#94A3B8'}}>You're creating a {MONITOR_MODE_META[mode]?.label.toLowerCase()}.</span>
+            </div>
             <div className="field" style={{marginBottom:14}}>
               <label className="label">Monitor name</label>
               <input className="inp" value={monitorName} onChange={e=>setMonitorName(e.target.value)} />
@@ -1661,12 +1729,23 @@ function Settings({ apiKey, userEmail, plan, onSignOut, monitors, onRefresh }) {
           {!monitors.length && <p style={{fontSize:13,color:'#94A3B8'}}>No monitors yet.</p>}
           {monitors.map(m=>{
             const emailOn = emailToggles[m.id] ?? (m.email_enabled !== false);
+            const isBuilder = m.mode === 'builder_tracker';
             return (
               <div key={m.id} className="monitor-row" style={{flexWrap:'wrap'}}>
                 <div className={m.active?'active-dot':'paused-dot'}></div>
                 <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontSize:13,fontWeight:600,color:'#0F172A',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{m.name}</div>
-                  <div style={{fontSize:12,color:'#94A3B8',marginTop:2}}>{m.keyword_count} keywords · {m.total_matches_found||0} matches found</div>
+                  <div style={{fontSize:13,fontWeight:600,color:'#0F172A',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',display:'flex',alignItems:'center',gap:8,minWidth:0}}>
+                    <span style={{overflow:'hidden',textOverflow:'ellipsis'}}>{m.name}</span>
+                    {/* PR #32 — mode badge inline with the name so the user
+                        can distinguish builder-tracker from keyword monitors
+                        without opening either. */}
+                    <MonitorModeBadge mode={m.mode || 'keyword'} size="sm" />
+                  </div>
+                  <div style={{fontSize:12,color:'#94A3B8',marginTop:2}}>
+                    {isBuilder
+                      ? `${m.total_builders_found || 0} builders tracked`
+                      : `${m.keyword_count} keywords · ${m.total_matches_found || 0} matches found`}
+                  </div>
                 </div>
                 <button
                   className="btn btn-ghost btn-sm"
