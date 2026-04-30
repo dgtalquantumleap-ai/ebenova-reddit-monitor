@@ -51,21 +51,29 @@ const __dirname  = dirname(__filename)
 // Load .env via shared dotenv loader (replaces hand-rolled parser).
 loadEnv()
 
-// Fail-fast required-env validator. Runs BEFORE Redis client init or any
-// middleware/route registration so a misconfigured deploy crashes loudly
-// instead of booting and 500-ing on every request.
+// Hotfix-narrowed env validation. Hard-required set is the four vars whose
+// absence makes the API nonfunctional (no Redis = no monitors; no Resend
+// = no emails; no Groq = no drafts). Everything else is warn-only because
+// the code has a working fallback OR a graceful 5xx degrade — and PR #43's
+// broader hard-fail brought production down on a deploy that had been
+// quietly relying on those fallbacks for a long time.
 //
 // STRIPE_PRICE_STARTER (per audit spec) is intentionally omitted — starter
-// is the free tier, has no Stripe product, and the webhook code never
-// looks one up. We use the actual env var names that routes/stripe.js
-// consumes (STRIPE_GROWTH_PRICE_ID, STRIPE_SCALE_PRICE_ID).
-import { requireEnv } from './lib/env-required.js'
+// is the free tier with no Stripe product. We use the actual env var names
+// that routes/stripe.js consumes.
+import { requireEnv, warnEnv } from './lib/env-required.js'
 requireEnv([
   'UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN',
-  'RESEND_API_KEY', 'ANTHROPIC_API_KEY', 'GROQ_API_KEY',
-  'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET',
-  'STRIPE_GROWTH_PRICE_ID', 'STRIPE_SCALE_PRICE_ID',
-  'FROM_EMAIL', 'APP_URL',
+  'RESEND_API_KEY', 'GROQ_API_KEY',
+])
+warnEnv([
+  { name: 'ANTHROPIC_API_KEY',       reason: 'Claude tasks will fall back to Groq' },
+  { name: 'STRIPE_SECRET_KEY',       reason: 'billing endpoints will return 503' },
+  { name: 'STRIPE_WEBHOOK_SECRET',   reason: 'plan upgrades from checkout will not apply' },
+  { name: 'STRIPE_GROWTH_PRICE_ID',  reason: 'Growth plan checkout will return 503' },
+  { name: 'STRIPE_SCALE_PRICE_ID',   reason: 'Scale plan checkout will return 503' },
+  { name: 'FROM_EMAIL',              reason: 'defaults to insights@ebenova.org' },
+  { name: 'APP_URL',                 reason: 'defaults to https://ebenova.org' },
 ])
 
 import { Redis } from '@upstash/redis'
@@ -1531,8 +1539,8 @@ app.post('/v1/auth/signup', async (req, res) => {
       if (resendKey && d.key) {
         const { Resend } = await import('resend')
         const resend = new Resend(resendKey)
-        const from = process.env.FROM_EMAIL || 'insights@ebenova.dev'
-        const appUrl = process.env.APP_URL || 'https://ebenova-insights-production.up.railway.app'
+        const from = process.env.FROM_EMAIL || 'insights@ebenova.org'
+        const appUrl = process.env.APP_URL || 'https://ebenova.org'
         await resend.emails.send({
           from: `Ebenova Insights <${from}>`, to: norm,
           subject: 'Your Ebenova Insights login link',
@@ -1581,8 +1589,8 @@ app.post('/v1/auth/signup', async (req, res) => {
     if (resendKey) {
       const { Resend } = await import('resend')
       const resend = new Resend(resendKey)
-      const from = process.env.FROM_EMAIL || 'insights@ebenova.dev'
-      const appUrl = process.env.APP_URL || 'https://ebenova-insights-production.up.railway.app'
+      const from = process.env.FROM_EMAIL || 'insights@ebenova.org'
+      const appUrl = process.env.APP_URL || 'https://ebenova.org'
       const limits = PLAN_LIMITS[keyData.insightsPlan] || PLAN_LIMITS.starter
       const isDemo = keyData.source === 'demo-invite'
       const planLabel = isDemo ? 'Growth plan (30-day demo)' : keyData.insightsPlan === 'starter' ? 'Starter plan' : `${keyData.insightsPlan.charAt(0).toUpperCase()}${keyData.insightsPlan.slice(1)} plan`
@@ -1781,7 +1789,7 @@ app.get('/unsubscribe', async (req, res) => {
       }))
     }
     await setMonitorEmailEnabled(redis, resolved.monitorId, false)
-    const appUrl = process.env.APP_URL || 'https://ebenova-insights-production.up.railway.app'
+    const appUrl = process.env.APP_URL || 'https://ebenova.org'
     const tokenParam = encodeURIComponent(token)
     res.send(htmlPage({
       title: 'Unsubscribed',
@@ -1942,7 +1950,7 @@ async function notifyOperatorOfDeletion({ monitorId, monitorName, accountAlsoDel
   try {
     const { Resend } = await import('resend')
     const resend = new Resend(process.env.RESEND_API_KEY)
-    const fromAddress = process.env.FROM_EMAIL || 'insights@ebenova.dev'
+    const fromAddress = process.env.FROM_EMAIL || 'insights@ebenova.org'
     await resend.emails.send({
       from:    `Ebenova Insights <${fromAddress}>`,
       to:      operatorEmail,
