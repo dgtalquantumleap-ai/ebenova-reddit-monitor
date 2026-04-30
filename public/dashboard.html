@@ -974,6 +974,19 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
   // platforms preset to those with real human handles, hide reply tone/UTM
   // /webhook in step 4 (irrelevant — builder mode doesn't generate drafts).
   const [mode, setMode] = useState('keyword')
+  // PR #36 — diaspora corridor (optional). When set, the dashboard
+  // pre-populates the keyword step with the corridor's keywords and
+  // labels the screen "Pre-configured for [corridor label]". Defaults
+  // to '' (None). Corridors are fetched from /v1/corridors on mount.
+  const [corridorId, setCorridorId] = useState('')
+  const [corridors, setCorridors] = useState([])
+  useEffect(() => {
+    fetch('/v1/corridors')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.corridors) setCorridors(d.corridors) })
+      .catch(() => {})
+  }, [])
+  const selectedCorridor = corridors.find(c => c.id === corridorId) || null
   const [description, setDescription] = useState('')
   const [suggestion, setSuggestion] = useState(null)
   const [counts, setCounts] = useState({})
@@ -1098,6 +1111,10 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
       utmCampaign: utmCampaign.trim() || null,
       // PR #23 — outbound webhook. Server validates https on its end; null if blank.
       webhookUrl:  webhookUrl.trim()  || null,
+      // PR #36 — diaspora corridor (optional). When set, the server stores
+      // the id and the worker overrides keywords/platforms/subreddits at
+      // every poll. Null when the user picks "None".
+      diasporaCorridor: corridorId || null,
     };
     const m = await apiFetch('/v1/monitors', { method:'POST', body: JSON.stringify(body) }, apiKey);
     if (!m.ok) { setErr(m.data?.error?.message || 'Could not create monitor.'); setLoading(false); setStep(3); return; }
@@ -1144,6 +1161,42 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
               metadata (label, icon, badge emoji) lives in one place and is
               shared with monitor-list badges + the confirm-card hero badge. */}
           <MonitorModeSelector value={mode} onChange={setMode} />
+
+          {/* PR #36 — Diaspora Corridor picker. Optional. When selected,
+              keywords + platforms get pre-populated from the corridor at
+              monitor-creation time and the worker overrides them on every
+              poll. Hidden in builder_tracker mode (corridors are
+              keyword-mode only). */}
+          {mode === 'keyword' && corridors.length > 0 && (
+            <div style={{marginBottom:28}}>
+              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:'#94A3B8',letterSpacing:2,marginBottom:10}}>
+                // OPTIONAL · DIASPORA CORRIDOR
+              </div>
+              <div style={{fontSize:13,color:'#475569',marginBottom:10}}>
+                Targeting a diaspora market? Pick a corridor to pre-configure keywords and platforms.
+              </div>
+              <div style={{display:'flex',flexWrap:'wrap',gap:8}}>
+                {[{ id: '', label: 'None', emoji: '—' }, ...corridors].map(c => {
+                  const selected = corridorId === c.id
+                  return (
+                    <button key={c.id || 'none'} type="button"
+                      onClick={() => setCorridorId(c.id)}
+                      aria-pressed={selected}
+                      style={{
+                        padding:'8px 12px',borderRadius:6,fontSize:12.5,fontWeight:500,fontFamily:'inherit',cursor:'pointer',
+                        border:     selected ? '1px solid #FF6B35'    : '1px solid #E2E8F0',
+                        background: selected ? 'rgba(255,107,53,.10)' : '#fff',
+                        color:      selected ? '#FF6B35'              : '#475569',
+                        display:'inline-flex',alignItems:'center',gap:6,
+                      }}>
+                      <span>{c.emoji}</span>
+                      <span>{c.label}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
           {mode === 'builder_tracker' ? (
             <>
               <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:'#FF6B35',letterSpacing:3,marginBottom:18}}>// BUILDER TRACKER · ONE-CLICK SETUP</div>
@@ -1169,13 +1222,31 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
             </>
           ) : (
           <>
-          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:'#FF6B35',letterSpacing:3,marginBottom:18}}>// PROMPT · WHAT TO TRACK</div>
+          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:'#FF6B35',letterSpacing:3,marginBottom:18}}>
+            // PROMPT · WHAT TO TRACK{selectedCorridor ? ` · PRE-CONFIGURED FOR ${selectedCorridor.label.toUpperCase()}` : ''}
+          </div>
           <h2 style={{fontFamily:"'Crimson Pro',Georgia,serif",fontSize:36,fontWeight:700,letterSpacing:-1,lineHeight:1.05,marginBottom:14}}>
             What to <em style={{fontStyle:'italic',color:'#FF6B35',fontWeight:400}}>track</em>.<br/>I'll find your next customer in 4 seconds.
           </h2>
-          <p style={{color:'#475569',fontSize:15,lineHeight:1.65,maxWidth:620,marginBottom:30}}>
-            Enter topics, pain points, or competitor names your potential customers discuss. 2–3 sentences works best.
-          </p>
+          {selectedCorridor ? (
+            <div style={{padding:'14px 18px',background:'#FFF7F2',border:'1px solid #FED7AA',borderRadius:8,marginBottom:24}}>
+              <div style={{fontSize:14,color:'#9A3412',fontWeight:600,marginBottom:6}}>
+                {selectedCorridor.emoji} Pre-configured for {selectedCorridor.label}
+              </div>
+              <div style={{fontSize:12.5,color:'#475569',marginBottom:8,lineHeight:1.55}}>
+                {selectedCorridor.description}. Keywords and platforms below are starting points — you can edit them on the next screen.
+              </div>
+              <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
+                {(selectedCorridor.keywords || []).map(kw => (
+                  <span key={kw} style={{padding:'3px 9px',background:'#fff',border:'1px solid #FED7AA',borderRadius:5,fontSize:11.5,color:'#9A3412',fontFamily:"'JetBrains Mono',monospace"}}>{kw}</span>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <p style={{color:'#475569',fontSize:15,lineHeight:1.65,maxWidth:620,marginBottom:30}}>
+              Enter topics, pain points, or competitor names your potential customers discuss. 2–3 sentences works best.
+            </p>
+          )}
           <textarea className="inp" rows={5} value={description} onChange={e=>setDescription(e.target.value)}
             style={{padding:'18px 20px',fontSize:15,lineHeight:1.65,fontFamily:'inherit'}}
             placeholder="e.g. I run a small SEO agency. We help SaaS startups get their first 10k organic visitors. Most clients come to us frustrated with content agencies that didn't move the needle."
@@ -1601,6 +1672,15 @@ function Settings({ apiKey, userEmail, plan, onSignOut, monitors, onRefresh }) {
   const [emailToggles, setEmailToggles] = useState(() =>
     Object.fromEntries(monitors.map(m => [m.id, m.email_enabled !== false]))
   );
+  // PR #36 — diaspora corridor metadata for the in-list badge. Fetched
+  // independently from FindCustomers (cheap, public, infrequent endpoint).
+  const [corridors, setCorridors] = useState([]);
+  useEffect(() => {
+    fetch('/v1/corridors')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.corridors) setCorridors(d.corridors) })
+      .catch(() => {});
+  }, []);
   const [showDanger, setShowDanger] = useState(false);
   const [confirmText, setConfirmText] = useState('');
   const [danger, setDanger] = useState({ submitting: false, err: '', done: false });
@@ -1740,6 +1820,16 @@ function Settings({ apiKey, userEmail, plan, onSignOut, monitors, onRefresh }) {
                         can distinguish builder-tracker from keyword monitors
                         without opening either. */}
                     <MonitorModeBadge mode={m.mode || 'keyword'} size="sm" />
+                    {/* PR #36 — diaspora corridor flag-pair when active. */}
+                    {m.diaspora_corridor && (() => {
+                      const c = corridors.find(c => c.id === m.diaspora_corridor)
+                      return c ? (
+                        <span style={{padding:'2px 7px',borderRadius:999,background:'#F1F5F9',color:'#475569',border:'1px solid #E2E8F0',fontSize:10,fontWeight:600,display:'inline-flex',alignItems:'center',gap:3}} title={c.label}>
+                          <span>{c.emoji}</span>
+                          <span>{c.label}</span>
+                        </span>
+                      ) : null
+                    })()}
                   </div>
                   <div style={{fontSize:12,color:'#94A3B8',marginTop:2}}>
                     {isBuilder

@@ -68,6 +68,7 @@ import { getBuilderProfiles, buildersToCSV } from './lib/builder-tracker.js'
 import { getRecentReports, topCompetitorsAcross, computeTrend } from './lib/ai-visibility.js'
 import { listPresets, getPreset } from './lib/keyword-presets.js'
 import { scheduleEngagementCheck, getRecentOutcomes } from './lib/reply-tracker.js'
+import { listCorridors, getCorridor, isValidCorridorId } from './lib/diaspora-corridors.js'
 
 const PORT = parseInt(process.env.API_PORT || process.env.PORT || '3001')
 const ADMIN_KEY = process.env.MONITOR_ADMIN_KEY
@@ -250,6 +251,24 @@ app.get('/v1/presets/:id', (req, res) => {
   res.json({ success: true, preset })
 })
 
+// ── GET /v1/corridors, GET /v1/corridors/:id ───────────────────────────────
+// Diaspora corridor library (PR #36). Public — no auth — same rationale as
+// /v1/presets: the dashboard's create-monitor flow hits these on the
+// unauthenticated landing path, the data is non-sensitive curated content,
+// and the subreddits worker-hint is omitted from the list endpoint.
+app.get('/v1/corridors', (req, res) => {
+  const corridors = listCorridors()
+  res.json({ success: true, corridors, count: corridors.length })
+})
+
+app.get('/v1/corridors/:id', (req, res) => {
+  const corridor = getCorridor(req.params.id)
+  if (!corridor) {
+    return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Corridor not found' } })
+  }
+  res.json({ success: true, corridor })
+})
+
 // ── GET /health ────────────────────────────────────────────────────────────
 app.get('/health', async (req, res) => {
   let redisOk = false
@@ -321,6 +340,10 @@ app.get('/v1/monitors', async (req, res) => {
           // PR #34: AI visibility brand name. Empty for legacy monitors —
           // resolveBrandName falls back to first keyword at run time.
           brand_name:           m.brandName          || '',
+          // PR #36 — diaspora corridor (paired-geography monitor blueprint).
+          // Null on legacy monitors; the worker treats null as "use the
+          // monitor's own keywords + platforms" (the existing behavior).
+          diaspora_corridor:    m.diasporaCorridor   || null,
         })
       }
     }
@@ -339,7 +362,20 @@ app.post('/v1/monitors', async (req, res) => {
     productUrl, utmSource, utmMedium, utmCampaign, webhookUrl,
     mode, minConsistency,
     brandName,
+    diasporaCorridor,
     includeMedium, includeSubstack, includeQuora, includeUpworkForum, includeFiverrForum } = req.body
+
+  // PR #36 — diaspora corridor (optional). When set, the worker overrides
+  // keywords + platforms + Reddit subreddits with the corridor blueprint.
+  // Validate up-front so an invalid id returns 400 instead of silently
+  // falling back to the monitor's own (probably empty) defaults.
+  let resolvedCorridor = null
+  if (diasporaCorridor != null && diasporaCorridor !== '') {
+    if (!isValidCorridorId(diasporaCorridor)) {
+      return res.status(400).json({ success: false, error: { code: 'INVALID_CORRIDOR', message: '`diasporaCorridor` must be one of the ids returned by GET /v1/corridors' } })
+    }
+    resolvedCorridor = diasporaCorridor
+  }
 
   // PR #31: monitor mode. 'keyword' (default) or 'builder_tracker'. Unknown
   // values fall back to 'keyword' so a typo doesn't accidentally lock a
@@ -457,6 +493,7 @@ app.post('/v1/monitors', async (req, res) => {
       // back to the first keyword when this is empty. Trim + cap to keep
       // prompt sizes bounded.
       brandName:          (brandName || '').toString().trim().slice(0, 80),
+      diasporaCorridor:   resolvedCorridor,
       active: true, plan, createdAt: now, lastPollAt: null, totalMatchesFound: 0 }
     await redis.set(`insights:monitor:${id}`, JSON.stringify(monitor))
     await redis.set(`unsubscribe:${unsubscribeToken}`, id)
@@ -474,7 +511,8 @@ app.post('/v1/monitors', async (req, res) => {
       share_token:   shareToken,
       mode:            monitor.mode,
       min_consistency: monitor.minConsistency,
-      brand_name:      monitor.brandName,
+      brand_name:        monitor.brandName,
+      diaspora_corridor: monitor.diasporaCorridor,
       created_at: now, next_poll_eta: 'Within 15 minutes' })
   } catch (err) {
     res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
@@ -587,8 +625,21 @@ app.patch('/v1/monitors/:id', async (req, res) => {
       updates.brandName = (body.brandName || '').toString().trim().slice(0, 80)
     }
 
+    // Field 11: PR #36 — diaspora corridor. null/'' clears it (worker falls
+    // back to the monitor's own keywords + platforms); a valid id swaps the
+    // monitor onto the corridor's blueprint at next poll.
+    if (Object.prototype.hasOwnProperty.call(body, 'diasporaCorridor')) {
+      if (body.diasporaCorridor === null || body.diasporaCorridor === '') {
+        updates.diasporaCorridor = null
+      } else if (typeof body.diasporaCorridor === 'string' && isValidCorridorId(body.diasporaCorridor)) {
+        updates.diasporaCorridor = body.diasporaCorridor
+      } else {
+        return res.status(400).json({ success: false, error: { code: 'INVALID_CORRIDOR', message: '`diasporaCorridor` must be a valid corridor id or null' } })
+      }
+    }
+
     if (Object.keys(updates).length === 0) {
-      return res.status(400).json({ success: false, error: { code: 'NO_UPDATES', message: 'No supported fields in body. Patchable: platforms, emailEnabled, productUrl, utmSource, utmMedium, utmCampaign, webhookUrl, mode, minConsistency, brandName' } })
+      return res.status(400).json({ success: false, error: { code: 'NO_UPDATES', message: 'No supported fields in body. Patchable: platforms, emailEnabled, productUrl, utmSource, utmMedium, utmCampaign, webhookUrl, mode, minConsistency, brandName, diasporaCorridor' } })
     }
     const next = { ...m, ...updates }
     await redis.set(`insights:monitor:${id}`, JSON.stringify(next))
@@ -602,7 +653,8 @@ app.patch('/v1/monitors/:id', async (req, res) => {
     if (updates.utmMedium     !== undefined) echo.utm_medium    = next.utmMedium
     if (updates.utmCampaign   !== undefined) echo.utm_campaign  = next.utmCampaign
     if (updates.webhookUrl    !== undefined) echo.webhook_url   = next.webhookUrl
-    if (updates.brandName     !== undefined) echo.brand_name    = next.brandName
+    if (updates.brandName        !== undefined) echo.brand_name        = next.brandName
+    if (updates.diasporaCorridor !== undefined) echo.diaspora_corridor = next.diasporaCorridor
     res.json(echo)
   } catch (err) {
     res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
