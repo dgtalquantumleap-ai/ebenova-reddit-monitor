@@ -778,6 +778,104 @@ function BuildersFeed({ apiKey, monitor }) {
   );
 }
 
+// FIX 12 — Reply Outcomes panel. Renders the /v1/monitors/:id/outcomes
+// data as a small KPI strip. Empty-state copy makes it clear that
+// "Reply performance" requires posting replies, not just having matches.
+function OutcomesPanel({ apiKey, monitorId }) {
+  const [data, setData] = useState(null);
+  useEffect(() => {
+    if (!monitorId) return;
+    apiFetch(`/v1/monitors/${monitorId}/outcomes`, {}, apiKey)
+      .then(r => { if (r.ok) setData(r.data); })
+      .catch(() => {});
+  }, [monitorId, apiKey]);
+  if (!data) return null;
+  const top = (data.topPerforming || [])[0] || null;
+  const empty = (data.totalPosted || 0) === 0;
+  return (
+    <div className="card" style={{padding:'14px 18px',marginBottom:14}}>
+      <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
+        <i className="ph-bold ph-chart-line" style={{color:'#FF6B35'}}></i>
+        <span style={{fontSize:11,fontWeight:700,letterSpacing:1.5,color:'#9A3412',textTransform:'uppercase'}}>Reply Performance · {data.period || '30d'}</span>
+      </div>
+      {empty ? (
+        <div style={{fontSize:12.5,color:'#94A3B8',fontStyle:'italic'}}>No replies posted yet — mark a match as posted from the feed below to start tracking.</div>
+      ) : (
+        <>
+          <div style={{display:'flex',gap:18,flexWrap:'wrap',fontSize:13.5,color:'#334155'}}>
+            <span><strong style={{color:'#0F172A'}}>{data.totalPosted}</strong> posted</span>
+            <span><strong style={{color:'#16A34A'}}>{data.gotEngagement}</strong> got engagement</span>
+            <span><strong style={{color:'#FF6B35'}}>{data.engagementRate}</strong> rate</span>
+          </div>
+          {top && (
+            <div style={{marginTop:10,paddingTop:10,borderTop:'1px dashed #E2E8F0',fontSize:12.5,color:'#475569'}}>
+              <span style={{color:'#94A3B8',fontSize:11,fontWeight:700,letterSpacing:1,textTransform:'uppercase',marginRight:6}}>Top reply</span>
+              <a href={top.url} target="_blank" rel="noreferrer" style={{color:'#0F172A',fontWeight:600,textDecoration:'none'}}>{(top.title || '').slice(0,90)}</a>
+              <span style={{marginLeft:6,padding:'2px 8px',background:'#DCFCE7',color:'#166534',borderRadius:10,fontSize:11,fontWeight:700}}>+{top.commentsDelta} comments</span>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// FIX 12 — AI Visibility panel. Renders the /v1/monitors/:id/ai-visibility
+// data. Trend pill + score + competitor mentions. Empty-state when no
+// weekly run has fired yet (new monitor or builder_tracker monitor).
+function AIVisibilityPanel({ apiKey, monitorId }) {
+  const [data, setData] = useState(null);
+  useEffect(() => {
+    if (!monitorId) return;
+    apiFetch(`/v1/monitors/${monitorId}/ai-visibility`, {}, apiKey)
+      .then(r => { if (r.ok) setData(r.data); })
+      .catch(() => {});
+  }, [monitorId, apiKey]);
+  if (!data) return null;
+  const empty = !data.reports || data.reports.length === 0;
+  const latest = !empty ? data.reports[0] : null;
+  const mentioned = latest ? (latest.queries || []).filter(q => q.brandMentioned).length : 0;
+  const trendStyle = ({
+    improving: { background:'#DCFCE7', color:'#166534' },
+    declining: { background:'#FEE2E2', color:'#991B1B' },
+    stable:    { background:'#F1F5F9', color:'#475569' },
+    new:       { background:'#FEF3C7', color:'#92400E' },
+  })[data.trend] || { background:'#F1F5F9', color:'#475569' };
+  return (
+    <div className="card" style={{padding:'14px 18px',marginBottom:14}}>
+      <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
+        <i className="ph-bold ph-brain" style={{color:'#7C3AED'}}></i>
+        <span style={{fontSize:11,fontWeight:700,letterSpacing:1.5,color:'#5B21B6',textTransform:'uppercase'}}>AI Visibility</span>
+        <span style={{marginLeft:'auto',fontSize:10,color:'#94A3B8'}}>Runs weekly</span>
+      </div>
+      {empty ? (
+        <div style={{fontSize:12.5,color:'#94A3B8',fontStyle:'italic'}}>Not yet run — first weekly check fires Monday 08:00 UTC. Set a brand name in monitor settings to track Claude mentions.</div>
+      ) : (
+        <>
+          <div style={{display:'flex',alignItems:'baseline',gap:14,flexWrap:'wrap'}}>
+            <div>
+              <span style={{fontSize:24,fontWeight:800,color:'#0F172A',fontVariantNumeric:'tabular-nums'}}>{data.currentScore ?? 0}</span>
+              <span style={{fontSize:13,color:'#94A3B8',marginLeft:4}}>/ 100</span>
+            </div>
+            <span style={{...trendStyle, padding:'3px 10px',borderRadius:10,fontSize:11,fontWeight:700,letterSpacing:.3,textTransform:'uppercase'}}>
+              {data.trend}
+            </span>
+            <span style={{fontSize:12.5,color:'#475569'}}>Claude mentions <strong>{data.brandName || 'your brand'}</strong> in {mentioned} of 3 queries</span>
+          </div>
+          {(data.topCompetitorsMentioned || []).length > 0 && (
+            <div style={{marginTop:10,paddingTop:10,borderTop:'1px dashed #E2E8F0',fontSize:12.5,color:'#475569'}}>
+              <span style={{color:'#94A3B8',fontSize:11,fontWeight:700,letterSpacing:1,textTransform:'uppercase',marginRight:6}}>Competitors mentioned</span>
+              {data.topCompetitorsMentioned.slice(0,5).map(c => (
+                <span key={c} style={{display:'inline-block',padding:'2px 7px',background:'#F1F5F9',color:'#475569',borderRadius:4,fontSize:11,marginRight:5,marginBottom:3}}>{c}</span>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 function MatchesFeed({ apiKey, monitors }) {
   const [selId, setSelId] = useState('');
   const [matches, setMatches] = useState([]);
@@ -840,6 +938,21 @@ function MatchesFeed({ apiKey, monitors }) {
           <button className="btn btn-white btn-sm" onClick={()=>load(selId)} disabled={loading}>
             <i className={`ph ph-arrow-clockwise${loading?' spin':''}`}></i> Refresh
           </button>
+          {/* FIX 11 — Scan now button. Calls POST /v1/monitors/:id/poll-now
+              which sets a Redis flag the worker reads at the top of every
+              cycle. Rate-limited 1/hour per monitor at the API. */}
+          <button className="btn btn-primary btn-sm" disabled={!selId} onClick={async () => {
+            const r = await apiFetch(`/v1/monitors/${selId}/poll-now`, { method: 'POST' }, apiKey)
+            if (r.ok) {
+              alert('Scan queued — your monitor will run within the next 60 seconds.')
+            } else if (r.data?.error?.code === 'RATE_LIMITED') {
+              alert('Already scanned in the last hour — try again later.')
+            } else {
+              alert(r.data?.error?.message || 'Could not queue scan.')
+            }
+          }}>
+            <i className="ph-bold ph-lightning"></i> Scan now
+          </button>
         </div>
       </div>
       <div className="page-body">
@@ -850,6 +963,11 @@ function MatchesFeed({ apiKey, monitors }) {
           <BuildersFeed apiKey={apiKey} monitor={selMonitor} />
         ) : (
           <>
+            {/* FIX 12 — Outcomes + AI Visibility panels. Both shipped to
+                the API but had no UI surface until now. Render at the top
+                of the feed for keyword-mode monitors. */}
+            {selMonitor && <OutcomesPanel apiKey={apiKey} monitorId={selId} />}
+            {selMonitor && <AIVisibilityPanel apiKey={apiKey} monitorId={selId} />}
             {selMonitor && !loading && matches.length>0 && (
               <div className="metric-row">
                 <div className="metric-card"><div className="metric-label">Matches loaded</div><div className="metric-value">{matches.length}</div></div>
@@ -987,6 +1105,20 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
       .catch(() => {})
   }, [])
   const selectedCorridor = corridors.find(c => c.id === corridorId) || null
+  // FIX 12 — preset picker. The /v1/presets endpoint shipped in PR #37 but
+  // had no UI. Fetch on mount; the picker renders below the corridor row
+  // when in keyword mode. Selecting a preset populates the description
+  // field with a synthesized prompt that produces the preset's keywords
+  // (so the existing Step-2 generator path still works) AND short-circuits
+  // by setting picked + suggestion directly so the user can skip Step 2.
+  const [presets, setPresets] = useState([])
+  const [appliedPresetId, setAppliedPresetId] = useState('')
+  useEffect(() => {
+    fetch('/v1/presets')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.presets) setPresets(d.presets) })
+      .catch(() => {})
+  }, [])
   const [description, setDescription] = useState('')
   const [suggestion, setSuggestion] = useState(null)
   const [counts, setCounts] = useState({})
@@ -1197,6 +1329,58 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
               </div>
             </div>
           )}
+
+          {/* FIX 12 — Vertical preset picker. Renders only in keyword mode
+              when no corridor is selected (corridor + preset overlap; pick
+              one). Click a preset to populate keywords + platforms and
+              jump straight to step 4 (the user can edit on the next screen). */}
+          {mode === 'keyword' && !selectedCorridor && presets.length > 0 && (
+            <div style={{marginBottom:28}}>
+              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:'#94A3B8',letterSpacing:2,marginBottom:10}}>
+                // OPTIONAL · START FROM A TEMPLATE
+              </div>
+              <div style={{fontSize:13,color:'#475569',marginBottom:10}}>
+                Pick a vertical to pre-fill keywords + platforms. You can edit everything on the next screen.
+              </div>
+              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(220px,1fr))',gap:8}}>
+                {presets.map(p => {
+                  const selected = appliedPresetId === p.id
+                  return (
+                    <button key={p.id} type="button"
+                      onClick={() => {
+                        // Populate state from the preset and short-circuit to step 4.
+                        const kws = (p.keywords || []).map(k => k.term)
+                        const types = new Map((p.keywords || []).map(k => [k.term, k.type || 'keyword']))
+                        setPicked(new Set(kws))
+                        setKeywordTypes(types)
+                        setPlatforms(p.platforms || ['reddit'])
+                        setMonitorName(p.label || 'My Monitor')
+                        setSuggestion({ productContext: p.description || '', keywords: kws.map(k => ({ keyword: k })), suggestedName: p.label })
+                        setDescription(p.description || '')
+                        setAppliedPresetId(p.id)
+                        setErr('')
+                        setStep(4)
+                      }}
+                      style={{
+                        textAlign:'left',padding:'12px 14px',borderRadius:8,cursor:'pointer',fontFamily:'inherit',
+                        border:     selected ? '1.5px solid #FF6B35'  : '1px solid #E2E8F0',
+                        background: selected ? 'rgba(255,107,53,.06)' : '#fff',
+                      }}>
+                      <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:4}}>
+                        <span style={{fontSize:18}}>{p.emoji}</span>
+                        <span style={{fontSize:13,fontWeight:600,color:'#0F172A'}}>{p.label}</span>
+                      </div>
+                      <div style={{fontSize:11.5,color:'#475569',lineHeight:1.5}}>{p.description}</div>
+                      <div style={{fontSize:10,color:'#94A3B8',marginTop:6,fontFamily:"'JetBrains Mono',monospace",letterSpacing:.5}}>
+                        {(p.keywords || []).length} keywords · {(p.platforms || []).length} platforms
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           {mode === 'builder_tracker' ? (
             <>
               <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:'#FF6B35',letterSpacing:3,marginBottom:18}}>// BUILDER TRACKER · ONE-CLICK SETUP</div>

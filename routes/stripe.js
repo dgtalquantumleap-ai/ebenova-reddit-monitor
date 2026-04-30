@@ -50,7 +50,8 @@ async function authenticate(req) {
     const keyData = typeof raw === 'string' ? JSON.parse(raw) : raw
     return { ok: true, apiKey: key, keyData, owner: keyData.owner }
   } catch (err) {
-    return { ok: false, status: 500, error: err.message }
+    console.error('[stripe auth]:', err.message)
+    return { ok: false, status: 500, error: 'Internal server error' }
   }
 }
 
@@ -77,7 +78,8 @@ router.post('/checkout', async (req, res) => {
     })
     res.json({ success: true, checkoutUrl: session.url })
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message })
+    console.error('[stripe checkout]:', err.message)
+    res.status(500).json({ success: false, error: 'Internal server error' })
   }
 })
 
@@ -97,7 +99,8 @@ router.post('/portal', async (req, res) => {
     })
     res.json({ success: true, portalUrl: session.url })
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message })
+    console.error('[stripe portal]:', err.message)
+    res.status(500).json({ success: false, error: 'Internal server error' })
   }
 })
 
@@ -175,6 +178,7 @@ async function handleEvent(event) {
           upgradedAt: new Date().toISOString(),
         }
         await redis.set(`apikey:${apiKey}`, JSON.stringify(updated))
+    await redis.expire(`apikey:${apiKey}`, 365 * 24 * 60 * 60).catch(() => {})
         await redis.set(`stripe:customer:${customerId}`, apiKey)
         // Reset failure counter on successful payment
         await redis.del(`apikey:${apiKey}:payment_failures`).catch(() => {})
@@ -195,8 +199,10 @@ async function handleEvent(event) {
         source: 'stripe-checkout',
       }
       await redis.set(`apikey:${newKey}`, JSON.stringify(keyData))
+      await redis.expire(`apikey:${newKey}`, 365 * 24 * 60 * 60).catch(() => {})
       await redis.set(`stripe:customer:${customerId}`, newKey)  // F4 reverse index
       await redis.set(`insights:signup:${customerEmail}`, JSON.stringify({ key: newKey, createdAt: now }))
+      await redis.expire(`insights:signup:${customerEmail}`, 365 * 24 * 60 * 60).catch(() => {})
 
       // Send welcome email with new key
       const resendKey = process.env.RESEND_API_KEY
