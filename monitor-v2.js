@@ -11,12 +11,18 @@ import { loadEnv } from './lib/env.js'
 // Load .env via shared loader (dotenv) — replaces hand-rolled parser.
 loadEnv()
 
-// Fail-fast required-env validator. Crashes the worker loudly on a
-// misconfigured deploy instead of entering a silent idle loop forever.
-import { requireEnv } from './lib/env-required.js'
+// Hotfix-narrowed env validation. Hard-required set is the four vars
+// whose absence makes the worker nonfunctional. FROM_EMAIL and APP_URL
+// have working inline fallbacks (ebenova.org), so they're warn-only —
+// PR #43's hard-fail on these caused a production outage.
+import { requireEnv, warnEnv } from './lib/env-required.js'
 requireEnv([
   'UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN',
-  'RESEND_API_KEY', 'GROQ_API_KEY', 'FROM_EMAIL', 'APP_URL',
+  'RESEND_API_KEY', 'GROQ_API_KEY',
+])
+warnEnv([
+  { name: 'FROM_EMAIL', reason: 'defaults to insights@ebenova.org' },
+  { name: 'APP_URL',    reason: 'defaults to https://ebenova.org' },
 ])
 
 import { Resend }  from 'resend'
@@ -81,7 +87,7 @@ const RESEND_API_KEY   = process.env.RESEND_API_KEY
 const GROQ_API_KEY     = process.env.GROQ_API_KEY
 const OPENAI_API_KEY   = process.env.OPENAI_API_KEY   // embeddings for semantic search
 const VOYAGE_API_KEY   = process.env.VOYAGE_API_KEY   // alternative: cheaper than OpenAI
-const FROM_EMAIL       = process.env.FROM_EMAIL || 'insights@ebenova.dev'
+const FROM_EMAIL       = process.env.FROM_EMAIL || 'insights@ebenova.org'
 const POLL_MINUTES     = parseInt(process.env.POLL_INTERVAL_MINUTES || '15')
 const MAX_SEEN         = 50_000
 const SEMANTIC_ENABLED = !!(OPENAI_API_KEY || VOYAGE_API_KEY)

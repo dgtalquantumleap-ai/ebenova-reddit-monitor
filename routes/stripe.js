@@ -209,8 +209,8 @@ async function handleEvent(event) {
       if (resendKey) {
         const { Resend } = await import('resend')
         const resend = new Resend(resendKey)
-        const from = process.env.FROM_EMAIL || 'insights@ebenova.dev'
-        const appUrl = process.env.APP_URL || 'https://ebenova-insights-production.up.railway.app'
+        const from = process.env.FROM_EMAIL || 'insights@ebenova.org'
+        const appUrl = process.env.APP_URL || 'https://ebenova.org'
         await resend.emails.send({
           from, to: customerEmail,
           subject: `Your Ebenova Insights API key (${(plan||'growth').charAt(0).toUpperCase()+(plan||'growth').slice(1)} plan)`,

@@ -14,7 +14,7 @@
 import { test } from 'node:test'
 import { strict as assert } from 'node:assert'
 import { createMockRedis } from './helpers/mock-redis.js'
-import { requireEnv } from '../lib/env-required.js'
+import { requireEnv, warnEnv } from '../lib/env-required.js'
 import { buildEmailHeaders, stripHtml, buildBulkEmailExtras } from '../lib/email-headers.js'
 import { fetchWithBackoff, _internals as backoffInternals } from '../lib/scrapers/_fetch-backoff.js'
 import { _internals as routerInternals } from '../lib/ai-router.js'
@@ -56,6 +56,30 @@ test('FIX 1: requireEnv treats empty string as missing', () => {
   requireEnv(['__TEST_EMPTY__'], { log: () => {}, exit: c => { exitCode = c } })
   assert.equal(exitCode, 1)
   delete process.env.__TEST_EMPTY__
+})
+
+// HOTFIX — warnEnv should never exit, just log WARN: lines.
+
+test('HOTFIX: warnEnv never exits, even when every var is missing', () => {
+  delete process.env.__WARN_A__
+  delete process.env.__WARN_B__
+  const logs = []
+  const r = warnEnv(['__WARN_A__', { name: '__WARN_B__', reason: 'optional thing' }], {
+    log: (...a) => logs.push(a.join(' ')),
+  })
+  // No exit — this test would have crashed if warnEnv called process.exit.
+  assert.equal(r.warned.length, 2)
+  assert.ok(logs.some(l => l.includes('WARN') && l.includes('__WARN_A__')))
+  assert.ok(logs.some(l => l.includes('WARN') && l.includes('__WARN_B__') && l.includes('optional thing')))
+})
+
+test('HOTFIX: warnEnv passes through when vars are present', () => {
+  process.env.__WARN_PRESENT__ = 'value'
+  const logs = []
+  const r = warnEnv(['__WARN_PRESENT__'], { log: (...a) => logs.push(a.join(' ')) })
+  assert.equal(r.warned.length, 0)
+  assert.equal(logs.length, 0)
+  delete process.env.__WARN_PRESENT__
 })
 
 test('FIX 1: requireEnv reports every missing var, not just the first', () => {
