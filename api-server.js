@@ -65,6 +65,7 @@ import { toCsv, matchToExportRow, MATCH_EXPORT_COLUMNS } from './lib/csv-export.
 import { gatherReportData, buildExecutiveSummary, renderReportHtml, resolveReportToken } from './lib/client-report.js'
 import { normalizeKeywordList, isoWeekLabel, previousIsoWeekLabel } from './lib/keyword-types.js'
 import { getBuilderProfiles, buildersToCSV } from './lib/builder-tracker.js'
+import { getRecentReports, topCompetitorsAcross, computeTrend } from './lib/ai-visibility.js'
 
 const PORT = parseInt(process.env.API_PORT || process.env.PORT || '3001')
 const ADMIN_KEY = process.env.MONITOR_ADMIN_KEY
@@ -293,6 +294,9 @@ app.get('/v1/monitors', async (req, res) => {
           mode:                 m.mode               || 'keyword',
           min_consistency:      m.minConsistency     || 'all',
           total_builders_found: m.totalBuildersFound || 0,
+          // PR #34: AI visibility brand name. Empty for legacy monitors —
+          // resolveBrandName falls back to first keyword at run time.
+          brand_name:           m.brandName          || '',
         })
       }
     }
@@ -310,6 +314,7 @@ app.post('/v1/monitors', async (req, res) => {
     platforms,
     productUrl, utmSource, utmMedium, utmCampaign, webhookUrl,
     mode, minConsistency,
+    brandName,
     includeMedium, includeSubstack, includeQuora, includeUpworkForum, includeFiverrForum } = req.body
 
   // PR #31: monitor mode. 'keyword' (default) or 'builder_tracker'. Unknown
@@ -424,6 +429,10 @@ app.post('/v1/monitors', async (req, res) => {
       mode:               resolvedMode,
       minConsistency:     resolvedMinConsistency,
       totalBuildersFound: 0,
+      // PR #34: AI visibility brand name. Optional; resolveBrandName falls
+      // back to the first keyword when this is empty. Trim + cap to keep
+      // prompt sizes bounded.
+      brandName:          (brandName || '').toString().trim().slice(0, 80),
       active: true, plan, createdAt: now, lastPollAt: null, totalMatchesFound: 0 }
     await redis.set(`insights:monitor:${id}`, JSON.stringify(monitor))
     await redis.set(`unsubscribe:${unsubscribeToken}`, id)
@@ -441,6 +450,7 @@ app.post('/v1/monitors', async (req, res) => {
       share_token:   shareToken,
       mode:            monitor.mode,
       min_consistency: monitor.minConsistency,
+      brand_name:      monitor.brandName,
       created_at: now, next_poll_eta: 'Within 15 minutes' })
   } catch (err) {
     res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
@@ -543,8 +553,18 @@ app.patch('/v1/monitors/:id', async (req, res) => {
       updates.minConsistency = body.minConsistency
     }
 
+    // Field 10: PR #34 — AI visibility brand name (optional, plain string).
+    // Empty string is a legitimate value (clears the field; we then fall
+    // back to first-keyword at run time).
+    if (Object.prototype.hasOwnProperty.call(body, 'brandName')) {
+      if (body.brandName !== null && typeof body.brandName !== 'string') {
+        return res.status(400).json({ success: false, error: { code: 'INVALID_BRAND_NAME', message: '`brandName` must be a string or null' } })
+      }
+      updates.brandName = (body.brandName || '').toString().trim().slice(0, 80)
+    }
+
     if (Object.keys(updates).length === 0) {
-      return res.status(400).json({ success: false, error: { code: 'NO_UPDATES', message: 'No supported fields in body. Patchable: platforms, emailEnabled, productUrl, utmSource, utmMedium, utmCampaign, webhookUrl, mode, minConsistency' } })
+      return res.status(400).json({ success: false, error: { code: 'NO_UPDATES', message: 'No supported fields in body. Patchable: platforms, emailEnabled, productUrl, utmSource, utmMedium, utmCampaign, webhookUrl, mode, minConsistency, brandName' } })
     }
     const next = { ...m, ...updates }
     await redis.set(`insights:monitor:${id}`, JSON.stringify(next))
@@ -558,6 +578,7 @@ app.patch('/v1/monitors/:id', async (req, res) => {
     if (updates.utmMedium     !== undefined) echo.utm_medium    = next.utmMedium
     if (updates.utmCampaign   !== undefined) echo.utm_campaign  = next.utmCampaign
     if (updates.webhookUrl    !== undefined) echo.webhook_url   = next.webhookUrl
+    if (updates.brandName     !== undefined) echo.brand_name    = next.brandName
     res.json(echo)
   } catch (err) {
     res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
@@ -840,6 +861,52 @@ app.get('/v1/monitors/:id/builders.csv', async (req, res) => {
     res.setHeader('Content-Type', 'text/csv; charset=utf-8')
     res.setHeader('Content-Disposition', `attachment; filename="builders-${id}-${dateStr}.csv"`)
     res.send(csv)
+  } catch (err) {
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
+  }
+})
+
+// ── GET /v1/monitors/:id/ai-visibility ─────────────────────────────────────
+// AI visibility report (PR #34). Returns up to the last 4 weekly reports
+// for the monitor, plus the current overall score, the trend bucket vs the
+// prior week, and the most-frequently-mentioned competitors across the
+// returned window. Auth-gated, ownership-checked.
+//
+// Empty response (no reports yet, or no resolvable brand name) returns 200
+// with `reports: []` and `currentScore: null` so the dashboard can show a
+// "first weekly run hasn't fired yet" empty state instead of treating it as
+// an error.
+app.get('/v1/monitors/:id/ai-visibility', async (req, res) => {
+  const auth = await authenticate(req)
+  if (!auth.ok) return res.status(auth.status).json({ success: false, error: auth.error })
+  const { id } = req.params
+  try {
+    const redis = getRedis()
+    const monRaw = await redis.get(`insights:monitor:${id}`)
+    if (!monRaw) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Monitor not found' } })
+    const monitor = typeof monRaw === 'string' ? JSON.parse(monRaw) : monRaw
+    if (monitor.owner !== auth.owner) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Monitor not found' } })
+
+    const reports = await getRecentReports({ redis, monitorId: id, weeks: 4 })
+    const currentScore = reports.length > 0 ? reports[0].overallScore : null
+    const previousScore = reports.length > 1 ? reports[1].overallScore : null
+    const trend = currentScore != null
+      ? computeTrend(currentScore, previousScore)
+      : 'new'
+    const topCompetitorsMentioned = topCompetitorsAcross(reports)
+    const brandName = monitor.brandName ||
+      (Array.isArray(monitor.keywords) && monitor.keywords[0]
+        ? (monitor.keywords[0].keyword || monitor.keywords[0])
+        : '')
+    res.json({
+      success: true,
+      monitorId: id,
+      brandName,
+      reports,
+      currentScore,
+      trend,
+      topCompetitorsMentioned,
+    })
   } catch (err) {
     res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
   }
