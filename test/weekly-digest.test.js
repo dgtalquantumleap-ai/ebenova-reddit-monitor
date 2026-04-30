@@ -3,6 +3,7 @@ import { strict as assert } from 'node:assert'
 import {
   gatherDigestData, renderDigestEmail, digestSubject,
   runMonitorDigest, runAllDigests,
+  gatherAuthorProfilesForDigest, buildIntelligenceBriefing, parseBriefingBullets,
 } from '../lib/weekly-digest.js'
 
 // ── Mock redis: just enough surface for digest reads ───────────────────────
@@ -13,10 +14,14 @@ function mockRedis(state = {}) {
   //   monitors: { [id]: monitorRecord },
   //   matchLists: { [monitorId]: matchId[] },
   //   matches: { [`${monitorId}:${matchId}`]: matchRecord },
+  //   authorLists:    { [monitorId]: ['platform:username', ...] },
+  //   authorProfiles: { [`author:profile:${monitorId}:${platform}:${username}`]: hashFields },
   // }
   return {
     async smembers(key) {
       if (key === 'insights:active_monitors') return state.activeMonitorIds || []
+      const auth = key.match(/^author:list:(.+)$/)
+      if (auth) return state.authorLists?.[auth[1]] || []
       return []
     },
     async lrange(key, start, end) {
@@ -37,6 +42,9 @@ function mockRedis(state = {}) {
         return r ? JSON.stringify(r) : null
       }
       return null
+    },
+    async hgetall(key) {
+      return state.authorProfiles?.[key] || null
     },
   }
 }
@@ -278,6 +286,193 @@ test('runAllDigests: returns ran/sent/skipped counts with no active monitors', a
   const r = await runAllDigests({ redis: mockRedis(), resend: mockResend(), fromEmail: 'f@x.co' })
   assert.deepEqual(r, { ran: 0, sent: 0, skipped: 0 })
 })
+
+// ── PR #30: parseBriefingBullets ───────────────────────────────────────────
+
+test('parseBriefingBullets: empty / null input → empty array', () => {
+  assert.deepEqual(parseBriefingBullets(null),      [])
+  assert.deepEqual(parseBriefingBullets(undefined), [])
+  assert.deepEqual(parseBriefingBullets(''),        [])
+  assert.deepEqual(parseBriefingBullets('   '),     [])
+})
+
+test('parseBriefingBullets: strips bullet prefixes (•, -, *)', () => {
+  const text = `• First point.
+- Second point.
+* Third point.
+Fourth without prefix.`
+  assert.deepEqual(parseBriefingBullets(text), [
+    'First point.', 'Second point.', 'Third point.', 'Fourth without prefix.',
+  ])
+})
+
+test('parseBriefingBullets: caps at 5 lines', () => {
+  const text = `• 1\n• 2\n• 3\n• 4\n• 5\n• 6\n• 7`
+  assert.equal(parseBriefingBullets(text).length, 5)
+})
+
+test('parseBriefingBullets: ignores blank lines', () => {
+  const text = `\n\n• A\n\n\n• B\n   \n• C\n\n`
+  assert.deepEqual(parseBriefingBullets(text), ['A', 'B', 'C'])
+})
+
+// ── PR #30: gatherAuthorProfilesForDigest ──────────────────────────────────
+
+test('gatherAuthorProfilesForDigest: empty state → []', async () => {
+  const r = await gatherAuthorProfilesForDigest({ id: 'm' }, mockRedis())
+  assert.deepEqual(r, [])
+})
+
+test('gatherAuthorProfilesForDigest: reads via author:list:* index, sorts by postCount desc', async () => {
+  const redis = mockRedis({
+    authorLists: { m: ['reddit:alex', 'twitter:rae', 'github:dev'] },
+    authorProfiles: {
+      'author:profile:m:reddit:alex':  { author: 'alex', platform: 'reddit',  postCount: '12', latestPostTitle: 'Reddit post' },
+      'author:profile:m:twitter:rae':  { author: 'rae',  platform: 'twitter', postCount: '4',  latestPostTitle: 'Tweet'       },
+      'author:profile:m:github:dev':   { author: 'dev',  platform: 'github',  postCount: '1',  latestPostTitle: 'PR title'    },
+    },
+  })
+  const r = await gatherAuthorProfilesForDigest({ id: 'm' }, redis)
+  assert.equal(r.length, 3)
+  assert.equal(r[0].username, 'alex')
+  assert.equal(r[0].postCount, 12)
+  assert.equal(r[1].username, 'rae')
+  assert.equal(r[2].username, 'dev')
+})
+
+test('gatherAuthorProfilesForDigest: respects limit', async () => {
+  const redis = mockRedis({
+    authorLists: { m: ['p:a', 'p:b', 'p:c', 'p:d', 'p:e'] },
+    authorProfiles: {
+      'author:profile:m:p:a': { postCount: '10' },
+      'author:profile:m:p:b': { postCount: '8'  },
+      'author:profile:m:p:c': { postCount: '6'  },
+      'author:profile:m:p:d': { postCount: '4'  },
+      'author:profile:m:p:e': { postCount: '2'  },
+    },
+  })
+  const r = await gatherAuthorProfilesForDigest({ id: 'm' }, redis, 3)
+  assert.equal(r.length, 3)
+  assert.deepEqual(r.map(a => a.postCount), [10, 8, 6])
+})
+
+test('gatherAuthorProfilesForDigest: gracefully handles missing index / hash', async () => {
+  // index references members whose hashes don't exist; should skip silently
+  const redis = mockRedis({
+    authorLists: { m: ['reddit:ghost', 'twitter:other'] },
+    authorProfiles: {
+      'author:profile:m:twitter:other': { postCount: '3' },
+    },
+  })
+  const r = await gatherAuthorProfilesForDigest({ id: 'm' }, redis)
+  assert.equal(r.length, 1)
+  assert.equal(r[0].username, 'other')
+})
+
+// ── PR #30: buildIntelligenceBriefing thresholds ──────────────────────────
+
+test('buildIntelligenceBriefing: returns null when stats.total < 5 (skip threshold)', async () => {
+  // No router env, no AI call needed — early return on threshold.
+  const r = await buildIntelligenceBriefing({
+    monitor: { id: 'm', name: 'Test' },
+    stats: { total: 4, postedCount: 1, allMatches: [] },
+  })
+  assert.equal(r, null)
+})
+
+test('buildIntelligenceBriefing: returns null when stats is null/undefined', async () => {
+  assert.equal(await buildIntelligenceBriefing({ monitor: { id: 'm' }, stats: null }), null)
+  assert.equal(await buildIntelligenceBriefing({ monitor: { id: 'm' } }), null)
+})
+
+test('buildIntelligenceBriefing: router-failure → null (digest still sends without it)', async () => {
+  // No GROQ/DEEPSEEK/ANTHROPIC keys in env, so router falls through all
+  // providers and we expect null. stats.total >= threshold to get past the
+  // early return.
+  delete process.env.GROQ_API_KEY
+  delete process.env.DEEPSEEK_API_KEY
+  delete process.env.ANTHROPIC_API_KEY
+  const r = await buildIntelligenceBriefing({
+    monitor: { id: 'm', name: 'Test', productContext: 'A SaaS tool' },
+    stats: {
+      total: 10, postedCount: 2, engagedCount: 1,
+      allMatches: [{ title: 'sample', url: 'u', source: 'reddit', author: 'alex', keyword: 'kw' }],
+    },
+    competitorMatches: [],
+    authorProfiles: [],
+  })
+  assert.equal(r, null)
+})
+
+// ── PR #30: renderDigestEmail with briefing ────────────────────────────────
+
+test('renderDigestEmail: omits briefing block when briefing is null', () => {
+  const html = renderDigestEmail({
+    monitor: { name: 'Acme' },
+    stats: { total: 3, byIntent: {}, byPlatform: {}, postedCount: 0, topMatches: [], bestLead: null },
+    summary: 'sum',
+    bestLeadDraft: null,
+    briefing: null,
+    now: new Date('2026-04-29T08:00:00Z'),
+  })
+  assert.equal(/This week's intelligence/i.test(html), false)
+})
+
+test('renderDigestEmail: renders briefing block when briefing has bullets', () => {
+  const briefing = `• Dominant pain point: Founders struggling with cold outreach.
+• Competitor opportunity: Brand24 users complaining about price; 2 threads still open.
+• Best unanswered thread: "Need a tool for X" — https://reddit.com/r/SaaS/abc.
+• Top lead this week: alex on reddit — has shipped 3 SaaS products.
+• Recommended focus next week: Reply to the 2 unanswered Brand24 complaints.`
+  const html = renderDigestEmail({
+    monitor: { name: 'Acme' },
+    stats: { total: 8, byIntent: {}, byPlatform: {}, postedCount: 1, topMatches: [], bestLead: null },
+    summary: 'sum',
+    bestLeadDraft: null,
+    briefing,
+    now: new Date('2026-04-29T08:00:00Z'),
+  })
+  assert.match(html, /This week's intelligence/i)
+  assert.match(html, /Dominant pain point/)
+  assert.match(html, /Competitor opportunity/)
+  assert.match(html, /Best unanswered thread/)
+  assert.match(html, /Top lead this week/)
+  assert.match(html, /Recommended focus next week/)
+})
+
+test('renderDigestEmail: HTML-escapes briefing content (no XSS)', () => {
+  const html = renderDigestEmail({
+    monitor: { name: 'Acme' },
+    stats: { total: 8, byIntent: {}, byPlatform: {}, postedCount: 0, topMatches: [], bestLead: null },
+    summary: 'sum',
+    bestLeadDraft: null,
+    briefing: `• <script>alert("xss")</script> first
+• Second bullet`,
+    now: new Date('2026-04-29T08:00:00Z'),
+  })
+  assert.equal(html.includes('<script>alert("xss")</script>'), false)
+  assert.match(html, /&lt;script&gt;/)
+})
+
+// ── gatherDigestData: allMatches exposure ──────────────────────────────────
+
+test('gatherDigestData: returns allMatches array for downstream briefing', async () => {
+  const recent = new Date(Date.now() - 1 * 24 * 3600e3).toISOString()
+  const redis = mockRedis({
+    matchLists: { m: ['a', 'b'] },
+    matches: {
+      'm:a': { id: 'a', source: 'reddit',     title: 'A', createdAt: recent, intent: 'researching' },
+      'm:b': { id: 'b', source: 'hackernews', title: 'B', createdAt: recent, intent: 'buying' },
+    },
+  })
+  const stats = await gatherDigestData({ id: 'm' }, redis)
+  assert.equal(stats.total, 2)
+  assert.equal(stats.allMatches.length, 2)
+  // Shape preserved — downstream can read intent, source, etc.
+  assert.equal(stats.allMatches[0].id, 'a')
+})
+
+// ── runAllDigests (loop + isolation) ───────────────────────────────────────
 
 test('runAllDigests: skips inactive monitors', async () => {
   const redis = mockRedis({
