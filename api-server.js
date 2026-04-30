@@ -57,7 +57,7 @@ import { makeRateLimiter } from './lib/rate-limit.js'
 import { makeCostCap } from './lib/cost-cap.js'
 import { verifyCaptcha } from './lib/captcha.js'
 import { applyInviteToUser } from './lib/invite.js'
-import { draftCall } from './lib/draft-call.js'
+import { draftCall, extractInjectedUtmUrl } from './lib/draft-call.js'
 import { validatePlatforms, migrateLegacyPlatforms, VALID_PLATFORMS } from './lib/platforms.js'
 import { classifyMatch, intentPriority } from './lib/classify.js'
 import { sendOutboundWebhook, buildPayload as buildWebhookPayload } from './lib/outbound-webhook.js'
@@ -1095,9 +1095,20 @@ app.post('/v1/matches/draft', async (req, res) => {
       }
     }
 
+    // Deferred-fixes PR: capture the UTM-injected product URL (if any) on
+    // the persisted match so a future click-tracking redirect layer can read
+    // it directly instead of re-parsing the draft. Null if no product URL
+    // was configured or no draft URL matched the product origin.
+    const injectedUtmUrl = monitor.productUrl
+      ? extractInjectedUtmUrl({ draft: finalDraft, productUrl: monitor.productUrl })
+      : null
+    const utmFields = injectedUtmUrl
+      ? { utmUrl: injectedUtmUrl, utmInjectedAt: new Date().toISOString() }
+      : {}
     await redis.set(key, JSON.stringify({
       ...match,
       ...backfill,
+      ...utmFields,
       draft: finalDraft,
       draftedBy,
       draftRegeneratedAt: new Date().toISOString(),
