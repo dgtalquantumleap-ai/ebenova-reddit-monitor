@@ -11,6 +11,14 @@ import { loadEnv } from './lib/env.js'
 // Load .env via shared loader (dotenv) — replaces hand-rolled parser.
 loadEnv()
 
+// Fail-fast required-env validator. Crashes the worker loudly on a
+// misconfigured deploy instead of entering a silent idle loop forever.
+import { requireEnv } from './lib/env-required.js'
+requireEnv([
+  'UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN',
+  'RESEND_API_KEY', 'GROQ_API_KEY', 'FROM_EMAIL', 'APP_URL',
+])
+
 import { Resend }  from 'resend'
 import { Redis }   from '@upstash/redis'
 import cron        from 'node-cron'
@@ -48,6 +56,7 @@ import { isoWeekLabel } from './lib/keyword-types.js'
 import { runEngagementSweep, processPendingChecks } from './lib/reply-tracker.js'
 import { isBuilderPost, extractTopics, recordBuilderProfile, getBuilderProfiles, sendBuilderDigest, PLATFORMS_WITH_REAL_USERNAMES } from './lib/builder-tracker.js'
 import { getCorridor } from './lib/diaspora-corridors.js'
+import { buildBulkEmailExtras } from './lib/email-headers.js'
 
 // F14: lazy daily cost caps. Soft-fail so the worker degrades gracefully
 // (skip-draft / skip-email / skip-embedding) rather than crashing.
@@ -559,12 +568,25 @@ async function sendMonitorAlert(monitor, matches) {
     }
   }
 
+  // FIX 5 — guard alertEmail. If a legacy monitor record is missing this
+  // field, Resend gets to: undefined and throws. Skip the send instead;
+  // matches still go to dashboard + Slack as configured.
+  if (!monitor.alertEmail) {
+    console.warn(`[v2][${monitor.id}] No alertEmail on monitor — skipping email`)
+    return
+  }
   try {
+    const html = buildAlertEmail(monitor, matches)
+    const appUrl = process.env.APP_URL
+    const unsubUrl = monitor.unsubscribeToken
+      ? `${appUrl}/unsubscribe?token=${encodeURIComponent(monitor.unsubscribeToken)}`
+      : `${appUrl}/`
     await resend.emails.send({
       from:    `Ebenova Insights <${FROM_EMAIL}>`,
       to:      monitor.alertEmail,
       subject,
-      html:    buildAlertEmail(monitor, matches),
+      html,
+      ...buildBulkEmailExtras({ html, unsubscribeUrl: unsubUrl }),
     })
     console.log(`[v2][${monitor.id}] Alert sent to ${monitor.alertEmail} — ${matches.length} matches`)
   } catch (err) {
@@ -687,6 +709,23 @@ async function runBuilderTrackerMonitor(monitor) {
   }
 }
 
+// FIX 3 — Per-monitor daily cycle cap. One runaway monitor with 100
+// keywords polled every 15 minutes can exhaust the global Groq budget for
+// every other tenant. This cap fires at the top of runMonitor() and aborts
+// the cycle if the monitor has already run 500 times today (≈ every poll
+// for 5+ days at 15-minute intervals — generous, but a cliff for runaways).
+let _perMonitorCap = null
+function getPerMonitorCap() {
+  if (!redis) return null
+  if (!_perMonitorCap) {
+    _perMonitorCap = (monitorId) => makeCostCap(redis, {
+      resource: `monitor:${monitorId}`,
+      dailyMax: parseInt(process.env.MONITOR_DAILY_CYCLE_MAX || '500'),
+    })()
+  }
+  return _perMonitorCap
+}
+
 async function runMonitor(monitor) {
   // PR #31: Builder Tracker mode — completely separate processing path.
   // Skips classification + drafts + alerts; instead extracts topics and
@@ -694,6 +733,22 @@ async function runMonitor(monitor) {
   // when new profiles are recorded.
   if (monitor.mode === 'builder_tracker') {
     return runBuilderTrackerMonitor(monitor)
+  }
+
+  // FIX 3 — per-monitor daily cycle cap. Cheap pre-check to abort early
+  // if this monitor has already exhausted its daily allowance. The cap
+  // INCRs on every check so the next call moves the counter forward.
+  const capCheck = getPerMonitorCap()
+  if (capCheck) {
+    try {
+      const r = await capCheck(monitor.id)
+      if (!r.allowed) {
+        console.warn(`[v2][${monitor.id}] daily cycle cap hit (${r.used}/${r.max}) — skipping cycle`)
+        return
+      }
+    } catch (err) {
+      console.warn(`[v2][${monitor.id}] per-monitor cap check failed: ${err.message}`)
+    }
   }
 
   // Reply outcome tracking: drain this monitor's pending engagement-check
@@ -831,7 +886,11 @@ async function runMonitor(monitor) {
   // ── Classify sentiment + intent (best-effort, before drafting) ───────────
   // Why before drafting: priority sort uses intent. Why best-effort: classify
   // failure must never block storage or email. Cap-aware via shared groq cap.
-  const CLASSIFY_CONCURRENCY = 5
+  // FIX 8 — concurrency dropped from 5 to 2. Five concurrent Groq calls per
+  // batch × 2 monitors-in-parallel = 10 concurrent Groq requests, which
+  // bursts past Groq's free-tier 30/min ceiling. 2 × 2 = 4 keeps us safely
+  // under and lets the cost-cap layer absorb the rest.
+  const CLASSIFY_CONCURRENCY = 2
   const groqCapForClassify = getGroqCap()
   for (let i = 0; i < allMatches.length; i += CLASSIFY_CONCURRENCY) {
     const batch = allMatches.slice(i, i + CLASSIFY_CONCURRENCY)
@@ -858,8 +917,9 @@ async function runMonitor(monitor) {
 
   console.log(`${label} ${allMatches.length} total matches — generating drafts…`)
 
-  // Generate drafts (max 3 concurrent to avoid rate limits)
-  const CONCURRENCY = 3
+  // FIX 8 — draft concurrency dropped from 3 to 2 to match the classify
+  // concurrency. Same Groq rate-limit math.
+  const CONCURRENCY = 2
   for (let i = 0; i < allMatches.length; i += CONCURRENCY) {
     const batch = allMatches.slice(i, i + CONCURRENCY)
     await Promise.all(batch.map(async m => {
@@ -1049,6 +1109,23 @@ async function pollInner() {
 
   console.log(`[v2] ${monitorIds.length} active monitor(s) to run`)
 
+  // FIX 11 — collect any poll-now flags so flagged monitors run FIRST in
+  // this cycle. The endpoint sets `poll-now:{id}` with a 5-min TTL; we
+  // delete the flag after queueing so the next cycle doesn't replay it.
+  const priorityIds = new Set()
+  for (const id of monitorIds) {
+    try {
+      const flag = await redis.get(`poll-now:${id}`)
+      if (flag) {
+        priorityIds.add(id)
+        await redis.del(`poll-now:${id}`)
+      }
+    } catch (_) { /* best-effort */ }
+  }
+  if (priorityIds.size > 0) {
+    console.log(`[v2] Priority queue: ${priorityIds.size} monitor(s) flagged via poll-now`)
+  }
+
   // Fetch all monitor configs
   const monitors = []
   for (const id of monitorIds) {
@@ -1062,6 +1139,9 @@ async function pollInner() {
       console.error(`[v2] Failed to load monitor ${id}:`, err.message)
     }
   }
+
+  // FIX 11 — sort priority-queue monitors first.
+  monitors.sort((a, b) => Number(priorityIds.has(b.id)) - Number(priorityIds.has(a.id)))
 
   // Run monitors — max 2 concurrently (each does multiple searches internally)
   const MONITOR_CONCURRENCY = 2

@@ -51,6 +51,23 @@ const __dirname  = dirname(__filename)
 // Load .env via shared dotenv loader (replaces hand-rolled parser).
 loadEnv()
 
+// Fail-fast required-env validator. Runs BEFORE Redis client init or any
+// middleware/route registration so a misconfigured deploy crashes loudly
+// instead of booting and 500-ing on every request.
+//
+// STRIPE_PRICE_STARTER (per audit spec) is intentionally omitted — starter
+// is the free tier, has no Stripe product, and the webhook code never
+// looks one up. We use the actual env var names that routes/stripe.js
+// consumes (STRIPE_GROWTH_PRICE_ID, STRIPE_SCALE_PRICE_ID).
+import { requireEnv } from './lib/env-required.js'
+requireEnv([
+  'UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN',
+  'RESEND_API_KEY', 'ANTHROPIC_API_KEY', 'GROQ_API_KEY',
+  'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET',
+  'STRIPE_GROWTH_PRICE_ID', 'STRIPE_SCALE_PRICE_ID',
+  'FROM_EMAIL', 'APP_URL',
+])
+
 import { Redis } from '@upstash/redis'
 import { randomBytes } from 'crypto'
 import { makeRateLimiter } from './lib/rate-limit.js'
@@ -71,7 +88,9 @@ import { scheduleEngagementCheck, getRecentOutcomes } from './lib/reply-tracker.
 import { listCorridors, getCorridor, isValidCorridorId } from './lib/diaspora-corridors.js'
 
 const PORT = parseInt(process.env.API_PORT || process.env.PORT || '3001')
-const ADMIN_KEY = process.env.MONITOR_ADMIN_KEY
+// FIX 13 — MONITOR_ADMIN_KEY removed. The variable was read here but never
+// referenced anywhere downstream; production audit flagged it as dead
+// config. Re-add (and actually wire it) when an admin endpoint is built.
 
 // F5: Signup rate limit + email validation. Lazy-init so .env loads first.
 let _signupLimiter
@@ -104,6 +123,38 @@ function getRedis() {
   return new Redis({ url, token })
 }
 
+// FIX 4 — Long-lived Redis TTLs on user/account records.
+// 365 days. Inactive users still hang on for a year before garbage-collection,
+// but no longer accumulate forever. Renewed on every successful auth.
+const ONE_YEAR_SECONDS = 365 * 24 * 60 * 60
+
+// FIX 6 — Internal-error responder. Generates a per-request id, logs the
+// underlying error server-side, returns a generic message to the client so
+// raw library error strings ("redis ECONNREFUSED", "JSON parse: unexpected
+// token") don't reach end users. The id lets ops correlate a 500 the user
+// reports with the matching log line.
+function makeRequestId() {
+  return Math.random().toString(36).slice(2, 10)
+}
+function serverError(res, err, context = '') {
+  const requestId = makeRequestId()
+  console.error(`[api] Internal error ${requestId}${context ? ' [' + context + ']' : ''}:`, err)
+  res.status(500).json({
+    success: false,
+    error: { code: 'SERVER_ERROR', message: 'Internal server error', requestId },
+  })
+}
+
+// FIX 6 — Safe parse of stored Redis values. Returns the parsed object on
+// success, or `null` if the value was missing OR malformed JSON. Caller
+// distinguishes by checking for null and returning the appropriate 404 /
+// 500 response. Keeps inner try/catch boilerplate out of every handler.
+function parseRedisJson(raw) {
+  if (raw == null) return null
+  if (typeof raw !== 'string') return raw   // Upstash returns objects directly sometimes
+  try { return JSON.parse(raw) } catch { return null }
+}
+
 // ── Auth helper — validates API key against Redis key store ─────────────────
 async function authenticate(req) {
   const auth = req.headers['authorization'] || ''
@@ -119,9 +170,14 @@ async function authenticate(req) {
       ok: false, status: 403,
       error: { code: 'INSIGHTS_ACCESS_REQUIRED', message: 'This key does not have Insights access. See ebenova.dev/insights' }
     }
+    // FIX 4 — sliding TTL renewal. Active users keep their records;
+    // inactive users (no auth in 365 days) get their records expired.
+    redis.expire(`apikey:${key}`, ONE_YEAR_SECONDS).catch(() => {})
     return { ok: true, owner: keyData.owner, keyData }
   } catch (err) {
-    return { ok: false, status: 500, error: { code: 'AUTH_ERROR', message: err.message } }
+    const requestId = makeRequestId()
+    console.error(`[api] Internal error ${requestId} [auth]:`, err)
+    return { ok: false, status: 500, error: { code: 'AUTH_ERROR', message: 'Internal server error', requestId } }
   }
 }
 
@@ -194,14 +250,36 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false,
 }))
 
-app.use(express.json())
+// FIX 9 — body-size limit + strict JSON. 64kb is well above any legitimate
+// monitor-creation payload (productContext capped at 2000 chars, keywords
+// capped per-plan). Anything bigger is either a malformed client or an
+// abuse attempt.
+app.use(express.json({ limit: '64kb', strict: true }))
+// FIX 9 — JSON parse error handler. Without this, a malformed body bubbles
+// up to the global handler and returns a 500 with the parser's raw error
+// message ("Unexpected token … in JSON at position …"). Catch the parser
+// error class specifically and return a clean 400.
+app.use((err, req, res, next) => {
+  if (err && (err.type === 'entity.parse.failed' || err.type === 'entity.too.large')) {
+    const code = err.type === 'entity.too.large' ? 'BODY_TOO_LARGE' : 'INVALID_JSON'
+    const message = err.type === 'entity.too.large'
+      ? 'Request body too large (max 64kb)'
+      : 'Invalid JSON body'
+    return res.status(err.status || 400).json({ success: false, error: { code, message } })
+  }
+  next(err)
+})
 app.use(express.static(join(__dirname, 'public')))
 app.get('/', (req, res) => res.sendFile(join(__dirname, 'public', 'index.html')))
 app.get('/dashboard', (req, res) => res.sendFile(join(__dirname, 'public', 'dashboard.html')))
 
-// CORS allowlist (replaces wildcard). Set ALLOWED_ORIGINS env to override.
-const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://ebenova.dev,https://www.ebenova.dev,https://ebenova-insights-production.up.railway.app')
-  .split(',').map(s => s.trim()).filter(Boolean)
+// CORS allowlist. Set ALLOWED_ORIGINS env to override the default list.
+// FIX 10 — default list (in lib/cors-config.js) now includes ebenova.org +
+// www.ebenova.org (production primary domain). Extracted to a separate
+// module so production-hardening tests can pin the default without
+// spinning up Express.
+import { resolveAllowedOrigins } from './lib/cors-config.js'
+const ALLOWED_ORIGINS = resolveAllowedOrigins(process.env.ALLOWED_ORIGINS)
 app.use(makeCorsMiddleware(ALLOWED_ORIGINS))
 
 // ── Stripe billing (checkout + portal) ─────────────────────────────────────
@@ -214,7 +292,7 @@ let _findRouter
 app.use('/v1/find', (req, res, next) => {
   if (!_findRouter) {
     try { _findRouter = createFindRouter({ redis: getRedis() }) }
-    catch (err) { return res.status(503).json({ success: false, error: { code: 'NOT_CONFIGURED', message: err.message } }) }
+    catch (err) { console.error('[api] route mount NOT_CONFIGURED:', err.message); return res.status(503).json({ success: false, error: { code: 'NOT_CONFIGURED', message: 'Service temporarily unavailable' } }) }
   }
   _findRouter(req, res, next)
 })
@@ -224,7 +302,7 @@ let _feedbackRouter
 app.use('/v1/feedback', (req, res, next) => {
   if (!_feedbackRouter) {
     try { _feedbackRouter = createFeedbackRouter({ redis: getRedis() }) }
-    catch (err) { return res.status(503).json({ success: false, error: { code: 'NOT_CONFIGURED', message: err.message } }) }
+    catch (err) { console.error('[api] route mount NOT_CONFIGURED:', err.message); return res.status(503).json({ success: false, error: { code: 'NOT_CONFIGURED', message: 'Service temporarily unavailable' } }) }
   }
   _feedbackRouter(req, res, next)
 })
@@ -349,7 +427,7 @@ app.get('/v1/monitors', async (req, res) => {
     }
     res.json({ success: true, monitors, count: monitors.length })
   } catch (err) {
-    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
+    serverError(res, err)
   }
 })
 
@@ -496,8 +574,11 @@ app.post('/v1/monitors', async (req, res) => {
       diasporaCorridor:   resolvedCorridor,
       active: true, plan, createdAt: now, lastPollAt: null, totalMatchesFound: 0 }
     await redis.set(`insights:monitor:${id}`, JSON.stringify(monitor))
+    await redis.expire(`insights:monitor:${id}`, ONE_YEAR_SECONDS).catch(() => {})
     await redis.set(`unsubscribe:${unsubscribeToken}`, id)
+    await redis.expire(`unsubscribe:${unsubscribeToken}`, ONE_YEAR_SECONDS).catch(() => {})
     await redis.set(`report:token:${shareToken}`, id)
+    await redis.expire(`report:token:${shareToken}`, ONE_YEAR_SECONDS).catch(() => {})
     await redis.sadd('insights:active_monitors', id)
     res.status(201).json({ success: true, monitor_id: id, name: monitor.name, keyword_count: cleanKws.length,
       keywords: cleanKws.map(k => k.keyword), plan, alert_email: monitor.alertEmail, active: true,
@@ -515,7 +596,7 @@ app.post('/v1/monitors', async (req, res) => {
       diaspora_corridor: monitor.diasporaCorridor,
       created_at: now, next_poll_eta: 'Within 15 minutes' })
   } catch (err) {
-    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
+    serverError(res, err)
   }
 })
 
@@ -643,6 +724,7 @@ app.patch('/v1/monitors/:id', async (req, res) => {
     }
     const next = { ...m, ...updates }
     await redis.set(`insights:monitor:${id}`, JSON.stringify(next))
+    await redis.expire(`insights:monitor:${id}`, ONE_YEAR_SECONDS).catch(() => {})
     // Echo back exactly what the caller patched, plus any always-included
     // mirrored fields (platforms[] is the canonical view).
     const echo = { success: true, monitor_id: id }
@@ -657,7 +739,7 @@ app.patch('/v1/monitors/:id', async (req, res) => {
     if (updates.diasporaCorridor !== undefined) echo.diaspora_corridor = next.diasporaCorridor
     res.json(echo)
   } catch (err) {
-    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
+    serverError(res, err)
   }
 })
 
@@ -690,7 +772,7 @@ app.get('/v1/monitors/:id/share-link', async (req, res) => {
     const reportUrl = `${baseUrl.replace(/\/+$/, '')}/report?token=${encodeURIComponent(token)}`
     res.json({ success: true, monitor_id: id, reportUrl })
   } catch (err) {
-    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
+    serverError(res, err)
   }
 })
 
@@ -781,7 +863,57 @@ app.post('/v1/monitors/:id/test-webhook', async (req, res) => {
       error: { code: 'WEBHOOK_FAILED', message: r.reason, status: r.status, networkError: r.error },
     })
   } catch (err) {
-    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
+    serverError(res, err)
+  }
+})
+
+// ── POST /v1/monitors/:id/poll-now ─────────────────────────────────────────
+// FIX 11 — allow a user to trigger an immediate scan of their monitor
+// instead of waiting up to POLL_INTERVAL_MINUTES (default 15) for the
+// next cron tick. Especially valuable for new monitors — the empty-state
+// "first matches usually arrive within 15 minutes" message is friendlier
+// when the user can opt to skip the wait.
+//
+// Implementation: set a Redis flag `poll-now:{monitorId}` with a 5-min TTL.
+// monitor-v2.js's poll loop reads these flags at the top of every cycle
+// and runs flagged monitors first. Rate-limited to 1/hour per monitor via
+// a separate `poll-now:lock:{monitorId}` key with 60-min TTL.
+app.post('/v1/monitors/:id/poll-now', async (req, res) => {
+  const auth = await authenticate(req)
+  if (!auth.ok) return res.status(auth.status).json({ success: false, error: auth.error })
+  const { id } = req.params
+  try {
+    const redis = getRedis()
+    // Ownership check first — same 404-not-403 leak-prevention pattern.
+    const raw = await redis.get(`insights:monitor:${id}`)
+    if (!raw) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Monitor not found' } })
+    const m = typeof raw === 'string' ? JSON.parse(raw) : raw
+    if (m.owner !== auth.owner) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Monitor not found' } })
+
+    // Rate-limit: 1 poll-now per monitor per hour. Use SET NX so the check
+    // and the set are atomic — no race between two simultaneous clicks.
+    const lockKey = `poll-now:lock:${id}`
+    const lockSet = await redis.set(lockKey, '1', { nx: true, ex: 60 * 60 })
+    if (!lockSet) {
+      return res.status(429).json({
+        success: false,
+        error: { code: 'RATE_LIMITED', message: 'Poll-now is limited to once per hour per monitor.' },
+      })
+    }
+
+    // Set the flag the worker checks at the top of every cycle. 5min TTL
+    // is long enough for the worker to pick it up on the next tick and
+    // short enough that a stale flag from a missed cycle doesn't replay
+    // forever.
+    await redis.set(`poll-now:${id}`, '1', { ex: 300 })
+
+    res.json({
+      success: true,
+      monitor_id: id,
+      message: 'Scan queued — your monitor will run within the next 60 seconds.',
+    })
+  } catch (err) {
+    serverError(res, err)
   }
 })
 
@@ -800,7 +932,7 @@ app.delete('/v1/monitors/:id', async (req, res) => {
     await redis.srem('insights:active_monitors', id)
     res.json({ success: true, monitor_id: id, active: false })
   } catch (err) {
-    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
+    serverError(res, err)
   }
 })
 
@@ -840,7 +972,7 @@ app.get('/v1/matches', async (req, res) => {
     })
     res.json({ success: true, monitor_id, matches, count: matches.length, offset: off, limit: lim })
   } catch (err) {
-    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
+    serverError(res, err)
   }
 })
 
@@ -887,7 +1019,7 @@ app.get('/v1/monitors/:id/export.csv', async (req, res) => {
     res.setHeader('Content-Disposition', `attachment; filename="monitor-${id}-${dateStr}.csv"`)
     res.send(csv)
   } catch (err) {
-    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
+    serverError(res, err)
   }
 })
 
@@ -910,7 +1042,7 @@ app.get('/v1/monitors/:id/builders', async (req, res) => {
     const builders = await getBuilderProfiles({ redis, monitorId: id, limit: 200 })
     res.json({ success: true, builders, total: builders.length })
   } catch (err) {
-    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
+    serverError(res, err)
   }
 })
 
@@ -938,7 +1070,7 @@ app.get('/v1/monitors/:id/builders.csv', async (req, res) => {
     res.setHeader('Content-Disposition', `attachment; filename="builders-${id}-${dateStr}.csv"`)
     res.send(csv)
   } catch (err) {
-    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
+    serverError(res, err)
   }
 })
 
@@ -976,7 +1108,7 @@ app.get('/v1/monitors/:id/outcomes', async (req, res) => {
       recentOutcomes: o.recent,
     })
   } catch (err) {
-    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
+    serverError(res, err)
   }
 })
 
@@ -1022,7 +1154,7 @@ app.get('/v1/monitors/:id/ai-visibility', async (req, res) => {
       topCompetitorsMentioned,
     })
   } catch (err) {
-    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
+    serverError(res, err)
   }
 })
 
@@ -1123,7 +1255,7 @@ app.get('/v1/matches/intent-summary', async (req, res) => {
       shareOfVoice: sovBlock,
     })
   } catch (err) {
-    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
+    serverError(res, err)
   }
 })
 
@@ -1186,7 +1318,7 @@ app.patch('/v1/matches/posted', async (req, res) => {
       monitor_posted_count: nextCount,
     })
   } catch (err) {
-    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
+    serverError(res, err)
   }
 })
 
@@ -1217,7 +1349,7 @@ app.post('/v1/matches/feedback', async (req, res) => {
     await redis.set(key, JSON.stringify({ ...match, feedback, feedbackAt: new Date().toISOString() }))
     res.json({ success: true, match_id, feedback })
   } catch (err) {
-    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
+    serverError(res, err)
   }
 })
 
@@ -1310,7 +1442,7 @@ app.post('/v1/matches/draft', async (req, res) => {
       ...(backfill.intent ? { sentiment: backfill.sentiment, intent: backfill.intent } : {}),
     })
   } catch (err) {
-    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
+    serverError(res, err)
   }
 })
 
@@ -1327,7 +1459,7 @@ app.post('/v1/subscribe', async (req, res) => {
     await redis.set(`insights:waitlist:${norm}`, JSON.stringify({ email: norm, plan, joinedAt: new Date().toISOString() }))
     res.json({ success: true, message: "You're on the waitlist." })
   } catch (err) {
-    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
+    serverError(res, err)
   }
 })
 
@@ -1441,7 +1573,9 @@ app.post('/v1/auth/signup', async (req, res) => {
       }
     }
     await redis.set(`apikey:${key}`, JSON.stringify(keyData))
+    await redis.expire(`apikey:${key}`, ONE_YEAR_SECONDS).catch(() => {})
     await redis.set(`insights:signup:${norm}`, JSON.stringify({ key, email: norm, createdAt: now }))
+    await redis.expire(`insights:signup:${norm}`, ONE_YEAR_SECONDS).catch(() => {})
 
     const resendKey = process.env.RESEND_API_KEY
     if (resendKey) {
@@ -1486,7 +1620,7 @@ app.post('/v1/auth/signup', async (req, res) => {
       plan: 'starter',
     })
   } catch (err) {
-    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
+    serverError(res, err)
   }
 })
 
@@ -1569,7 +1703,7 @@ app.post('/v1/search', async (req, res) => {
     all.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
     res.json({ success: true, results: all.slice(0, 100), count: all.length, searchedAt: new Date().toISOString() })
   } catch (err) {
-    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
+    serverError(res, err)
   }
 })
 
@@ -1605,7 +1739,7 @@ app.post('/v1/search/draft', async (req, res) => {
     const raw = gd.choices?.[0]?.message?.content?.trim() || null
     res.json({ success: true, draft: (!raw || raw === 'SKIP') ? null : raw })
   } catch (err) {
-    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
+    serverError(res, err)
   }
 })
 
@@ -1786,10 +1920,11 @@ app.post('/delete-account', express.urlencoded({ extended: false }), async (req,
       removed: summary.deleted.length,
     })
   } catch (err) {
-    console.error('[delete-account POST] error:', err.message)
+    const requestId = makeRequestId()
+    console.error(`[delete-account POST] error ${requestId}:`, err)
     res.status(500).send(isHtml
       ? htmlPage({ title: 'Error', accent: '#DC2626', body: `<h1>Something went wrong</h1>` })
-      : JSON.stringify({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }))
+      : JSON.stringify({ success: false, error: { code: 'SERVER_ERROR', message: 'Internal server error', requestId } }))
   }
 })
 
