@@ -1681,8 +1681,12 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
               </div>
             </div>
             {/* UTM + outbound webhook are draft-time concerns. Builder Tracker
-                doesn't generate drafts, so these advanced options are hidden. */}
-            {mode !== 'builder_tracker' && (
+                doesn't generate drafts, so these advanced options are hidden.
+                HOTFIX: this conditional wraps TWO sibling divs (UTM + webhook),
+                so the body must be a fragment — bare siblings inside a `&&`
+                expression is a JSX parse error and brings the whole inline
+                Babel script down. */}
+            {mode !== 'builder_tracker' && (<>
             <div className="field" style={{marginBottom:14}}>
               <button type="button" onClick={()=>setShowUtm(s=>!s)}
                 style={{background:'transparent',border:'none',padding:0,cursor:'pointer',fontSize:12,color:'#64748B',fontFamily:'inherit',display:'inline-flex',alignItems:'center',gap:6}}>
@@ -1780,7 +1784,7 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
                 </div>
               )}
             </div>
-            )}
+            </>)}
             {/* Keyword + volume summary rows are meaningful only in keyword mode.
                 Builder Tracker uses hardcoded server-side keywords. */}
             {mode !== 'builder_tracker' && (
