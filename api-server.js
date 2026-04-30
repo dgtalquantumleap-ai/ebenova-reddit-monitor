@@ -66,6 +66,7 @@ import { gatherReportData, buildExecutiveSummary, renderReportHtml, resolveRepor
 import { normalizeKeywordList, isoWeekLabel, previousIsoWeekLabel } from './lib/keyword-types.js'
 import { getBuilderProfiles, buildersToCSV } from './lib/builder-tracker.js'
 import { getRecentReports, topCompetitorsAcross, computeTrend } from './lib/ai-visibility.js'
+import { listPresets, getPreset } from './lib/keyword-presets.js'
 
 const PORT = parseInt(process.env.API_PORT || process.env.PORT || '3001')
 const ADMIN_KEY = process.env.MONITOR_ADMIN_KEY
@@ -224,6 +225,28 @@ app.use('/v1/feedback', (req, res, next) => {
     catch (err) { return res.status(503).json({ success: false, error: { code: 'NOT_CONFIGURED', message: err.message } }) }
   }
   _feedbackRouter(req, res, next)
+})
+
+// ── GET /v1/presets, GET /v1/presets/:id ───────────────────────────────────
+// Vertical-keyword preset library (PR #33). Public — no auth required —
+// because the dashboard hits these on the unauthenticated landing flow,
+// and the data is non-sensitive curated content (the same library would
+// be hardcoded into a docs page).
+//
+// /v1/presets       returns the list shape (no subreddits) for the picker.
+// /v1/presets/:id   returns the full preset including subreddits (the
+//                    worker hint that's redundant in the picker UI).
+app.get('/v1/presets', (req, res) => {
+  const presets = listPresets()
+  res.json({ success: true, presets, count: presets.length })
+})
+
+app.get('/v1/presets/:id', (req, res) => {
+  const preset = getPreset(req.params.id)
+  if (!preset) {
+    return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Preset not found' } })
+  }
+  res.json({ success: true, preset })
 })
 
 // ── GET /health ────────────────────────────────────────────────────────────
