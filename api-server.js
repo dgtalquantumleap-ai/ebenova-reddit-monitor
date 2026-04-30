@@ -456,6 +456,13 @@ app.get('/v1/monitors', async (req, res) => {
           // Null on legacy monitors; the worker treats null as "use the
           // monitor's own keywords + platforms" (the existing behavior).
           diaspora_corridor:    m.diasporaCorridor   || null,
+          // Batch B — fields surfaced for the EditMonitor screen.
+          slack_webhook_url:    m.slackWebhookUrl    || '',
+          reply_tone:           m.replyTone          || 'conversational',
+          // Public share token (PR #27). Powers the white-label client
+          // report at /report?token=… — exposed so the dashboard can
+          // copy the URL to the clipboard.
+          share_token:          m.shareToken         || null,
         })
       }
     }
@@ -753,8 +760,48 @@ app.patch('/v1/monitors/:id', async (req, res) => {
       }
     }
 
+    // Field 12: Batch B — slackWebhookUrl. Accepted on POST since the
+    // beginning but never patchable. Empty/null clears; valid value
+    // must be an https://hooks.slack.com URL (validated leniently — we
+    // accept any https URL but log a warn on non-Slack hosts).
+    if (Object.prototype.hasOwnProperty.call(body, 'slackWebhookUrl')) {
+      if (body.slackWebhookUrl === null || body.slackWebhookUrl === '') {
+        updates.slackWebhookUrl = ''
+      } else if (typeof body.slackWebhookUrl === 'string') {
+        const trimmed = body.slackWebhookUrl.trim()
+        let url
+        try { url = new URL(trimmed) } catch (_) {
+          return res.status(400).json({ success: false, error: { code: 'INVALID_SLACK_URL', message: '`slackWebhookUrl` is not a valid URL' } })
+        }
+        if (url.protocol !== 'https:') {
+          return res.status(400).json({ success: false, error: { code: 'INVALID_SLACK_URL', message: '`slackWebhookUrl` must be https://' } })
+        }
+        updates.slackWebhookUrl = trimmed.slice(0, 500)
+      } else {
+        return res.status(400).json({ success: false, error: { code: 'INVALID_SLACK_URL', message: '`slackWebhookUrl` must be a string or null' } })
+      }
+    }
+
+    // Field 13: Batch B — replyTone. Edit-monitor support. Validated against
+    // the same enum used at create time.
+    if (Object.prototype.hasOwnProperty.call(body, 'replyTone')) {
+      const VALID_TONES = new Set(['conversational','professional','empathetic','expert','playful'])
+      if (!VALID_TONES.has(body.replyTone)) {
+        return res.status(400).json({ success: false, error: { code: 'INVALID_TONE', message: '`replyTone` must be one of: ' + [...VALID_TONES].join(', ') } })
+      }
+      updates.replyTone = body.replyTone
+    }
+
+    // Field 14: Batch B — name. Allow renaming a monitor.
+    if (Object.prototype.hasOwnProperty.call(body, 'name')) {
+      if (typeof body.name !== 'string' || !body.name.trim()) {
+        return res.status(400).json({ success: false, error: { code: 'INVALID_NAME', message: '`name` must be a non-empty string' } })
+      }
+      updates.name = body.name.trim().slice(0, 100)
+    }
+
     if (Object.keys(updates).length === 0) {
-      return res.status(400).json({ success: false, error: { code: 'NO_UPDATES', message: 'No supported fields in body. Patchable: platforms, emailEnabled, productUrl, utmSource, utmMedium, utmCampaign, webhookUrl, mode, minConsistency, brandName, diasporaCorridor' } })
+      return res.status(400).json({ success: false, error: { code: 'NO_UPDATES', message: 'No supported fields in body. Patchable: name, platforms, emailEnabled, productUrl, utmSource, utmMedium, utmCampaign, webhookUrl, slackWebhookUrl, replyTone, mode, minConsistency, brandName, diasporaCorridor' } })
     }
     const next = { ...m, ...updates }
     await redis.set(`insights:monitor:${id}`, JSON.stringify(next))
@@ -771,6 +818,9 @@ app.patch('/v1/monitors/:id', async (req, res) => {
     if (updates.webhookUrl    !== undefined) echo.webhook_url   = next.webhookUrl
     if (updates.brandName        !== undefined) echo.brand_name        = next.brandName
     if (updates.diasporaCorridor !== undefined) echo.diaspora_corridor = next.diasporaCorridor
+    if (updates.slackWebhookUrl  !== undefined) echo.slack_webhook_url = next.slackWebhookUrl
+    if (updates.replyTone        !== undefined) echo.reply_tone        = next.replyTone
+    if (updates.name             !== undefined) echo.name              = next.name
     res.json(echo)
   } catch (err) {
     serverError(res, err)
@@ -805,6 +855,52 @@ app.get('/v1/monitors/:id/share-link', async (req, res) => {
     const baseUrl = process.env.APP_URL || 'https://ebenova.org'
     const reportUrl = `${baseUrl.replace(/\/+$/, '')}/report?token=${encodeURIComponent(token)}`
     res.json({ success: true, monitor_id: id, reportUrl })
+  } catch (err) {
+    serverError(res, err)
+  }
+})
+
+// ── GET /v1/monitors/:id/authors ───────────────────────────────────────────
+// Batch B — surface PR #24's author:profile:* data on the dashboard.
+// Auth-gated, ownership-checked. Returns the same shape the weekly digest
+// + client report consume internally — top N authors by postCount in the
+// last 30 days, sorted desc.
+//
+// Mirrors the structure of /v1/monitors/:id/builders so the dashboard's
+// table-rendering pattern works identically.
+app.get('/v1/monitors/:id/authors', async (req, res) => {
+  const auth = await authenticate(req)
+  if (!auth.ok) return res.status(auth.status).json({ success: false, error: auth.error })
+  const { id } = req.params
+  try {
+    const redis = getRedis()
+    const monRaw = await redis.get(`insights:monitor:${id}`)
+    if (!monRaw) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Monitor not found' } })
+    const monitor = typeof monRaw === 'string' ? JSON.parse(monRaw) : monRaw
+    if (monitor.owner !== auth.owner) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Monitor not found' } })
+
+    const indexKey = `author:list:${id}`
+    const members = (await redis.smembers(indexKey)) || []
+    const profiles = []
+    for (const member of members) {
+      const idx = member.indexOf(':')
+      if (idx === -1) continue
+      const platform = member.slice(0, idx)
+      const username = member.slice(idx + 1)
+      const hash = await redis.hgetall(`author:profile:${id}:${platform}:${username}`)
+      if (!hash || Object.keys(hash).length === 0) continue
+      profiles.push({
+        username,
+        platform,
+        postCount:       parseInt(hash.postCount, 10) || 0,
+        firstSeen:       hash.firstSeen || '',
+        lastSeen:        hash.lastSeen  || '',
+        latestPostTitle: hash.latestPostTitle || '',
+        latestPostUrl:   hash.latestPostUrl   || '',
+      })
+    }
+    profiles.sort((a, b) => b.postCount - a.postCount)
+    res.json({ success: true, authors: profiles.slice(0, 50), total: profiles.length })
   } catch (err) {
     serverError(res, err)
   }
