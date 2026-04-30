@@ -43,7 +43,7 @@ import { fireWebhook, buildPayload as buildWebhookPayload } from './lib/outbound
 import { runAllDigests } from './lib/weekly-digest.js'
 import { runVisibilitySweep } from './lib/ai-visibility.js'
 import { isoWeekLabel } from './lib/keyword-types.js'
-import { runEngagementSweep } from './lib/reply-tracker.js'
+import { runEngagementSweep, processPendingChecks } from './lib/reply-tracker.js'
 import { isBuilderPost, extractTopics, recordBuilderProfile, getBuilderProfiles, sendBuilderDigest, PLATFORMS_WITH_REAL_USERNAMES } from './lib/builder-tracker.js'
 
 // F14: lazy daily cost caps. Soft-fail so the worker degrades gracefully
@@ -691,6 +691,21 @@ async function runMonitor(monitor) {
   // when new profiles are recorded.
   if (monitor.mode === 'builder_tracker') {
     return runBuilderTrackerMonitor(monitor)
+  }
+
+  // Reply outcome tracking: drain this monitor's pending engagement-check
+  // queue at the top of every cycle. Items scheduled at posted-time +24h
+  // get fetched, written back, and removed; items not yet due get re-pushed.
+  // Best-effort — failures are logged but never block the scrape pipeline.
+  if (redis) {
+    try {
+      const r = await processPendingChecks({ redis, monitorId: monitor.id })
+      if (r.scanned > 0) {
+        console.log(`[v2][${monitor.id}][reply-tracker] scanned=${r.scanned} processed=${r.processed} ok=${r.ok} failed=${r.failed} deferred=${r.deferred}`)
+      }
+    } catch (err) {
+      console.warn(`[v2][${monitor.id}][reply-tracker] processPending failed: ${err.message}`)
+    }
   }
 
   const label = `[v2][${monitor.id}][${monitor.name}]`
