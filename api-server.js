@@ -64,6 +64,7 @@ import { sendOutboundWebhook, buildPayload as buildWebhookPayload } from './lib/
 import { toCsv, matchToExportRow, MATCH_EXPORT_COLUMNS } from './lib/csv-export.js'
 import { gatherReportData, buildExecutiveSummary, renderReportHtml, resolveReportToken } from './lib/client-report.js'
 import { normalizeKeywordList, isoWeekLabel, previousIsoWeekLabel } from './lib/keyword-types.js'
+import { getBuilderProfiles, buildersToCSV } from './lib/builder-tracker.js'
 
 const PORT = parseInt(process.env.API_PORT || process.env.PORT || '3001')
 const ADMIN_KEY = process.env.MONITOR_ADMIN_KEY
@@ -288,6 +289,10 @@ app.get('/v1/monitors', async (req, res) => {
           utm_campaign: m.utmCampaign || null,
           // Outbound webhook (PR #23). Null until owner configures one.
           webhook_url:  m.webhookUrl  || null,
+          // PR #31: Builder Tracker mode. Default 'keyword' for legacy monitors.
+          mode:                 m.mode               || 'keyword',
+          min_consistency:      m.minConsistency     || 'all',
+          total_builders_found: m.totalBuildersFound || 0,
         })
       }
     }
@@ -304,7 +309,16 @@ app.post('/v1/monitors', async (req, res) => {
   const { name, keywords = [], productContext, alertEmail, slackWebhookUrl, replyTone,
     platforms,
     productUrl, utmSource, utmMedium, utmCampaign, webhookUrl,
+    mode, minConsistency,
     includeMedium, includeSubstack, includeQuora, includeUpworkForum, includeFiverrForum } = req.body
+
+  // PR #31: monitor mode. 'keyword' (default) or 'builder_tracker'. Unknown
+  // values fall back to 'keyword' so a typo doesn't accidentally lock a
+  // monitor into a different processing path.
+  const VALID_MODES = new Set(['keyword', 'builder_tracker'])
+  const resolvedMode = VALID_MODES.has(mode) ? mode : 'keyword'
+  const VALID_MIN_CONSISTENCY = new Set(['all', 'weekly', 'daily'])
+  const resolvedMinConsistency = VALID_MIN_CONSISTENCY.has(minConsistency) ? minConsistency : 'all'
 
   // Platforms — new monitors must specify at least 1; if omitted entirely we
   // default to ['reddit'] (per spec). Unknown values reject with 400.
@@ -321,10 +335,14 @@ app.post('/v1/monitors', async (req, res) => {
   const plan = auth.keyData.insightsPlan || 'starter'
   const limits = PLAN_LIMITS[plan] || PLAN_LIMITS.starter
   if (!name?.trim()) return res.status(400).json({ success: false, error: { code: 'MISSING_FIELD', message: '"name" is required' } })
-  if (!Array.isArray(keywords) || keywords.length === 0)
-    return res.status(400).json({ success: false, error: { code: 'MISSING_FIELD', message: '"keywords" must be a non-empty array' } })
-  if (keywords.length > limits.keywords)
-    return res.status(400).json({ success: false, error: { code: 'KEYWORD_LIMIT_EXCEEDED', message: `Max ${limits.keywords} keywords on ${plan} plan` } })
+  // PR #31: Builder Tracker mode uses a hardcoded keyword set in monitor-v2,
+  // so user-supplied keywords are optional/ignored for that mode.
+  if (resolvedMode !== 'builder_tracker') {
+    if (!Array.isArray(keywords) || keywords.length === 0)
+      return res.status(400).json({ success: false, error: { code: 'MISSING_FIELD', message: '"keywords" must be a non-empty array' } })
+    if (keywords.length > limits.keywords)
+      return res.status(400).json({ success: false, error: { code: 'KEYWORD_LIMIT_EXCEEDED', message: `Max ${limits.keywords} keywords on ${plan} plan` } })
+  }
   try {
     const redis = getRedis()
     // Keyword normalization handles legacy string-format and the new
@@ -402,6 +420,10 @@ app.post('/v1/monitors', async (req, res) => {
       emailEnabled:       true,
       unsubscribeToken,
       shareToken,
+      // PR #31: Builder Tracker mode + minimum consistency display filter.
+      mode:               resolvedMode,
+      minConsistency:     resolvedMinConsistency,
+      totalBuildersFound: 0,
       active: true, plan, createdAt: now, lastPollAt: null, totalMatchesFound: 0 }
     await redis.set(`insights:monitor:${id}`, JSON.stringify(monitor))
     await redis.set(`unsubscribe:${unsubscribeToken}`, id)
@@ -417,6 +439,8 @@ app.post('/v1/monitors', async (req, res) => {
       utm_campaign:  monitor.utmCampaign,
       webhook_url:   monitor.webhookUrl,
       share_token:   shareToken,
+      mode:            monitor.mode,
+      min_consistency: monitor.minConsistency,
       created_at: now, next_poll_eta: 'Within 15 minutes' })
   } catch (err) {
     res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
@@ -503,8 +527,24 @@ app.patch('/v1/monitors/:id', async (req, res) => {
       updates.webhookUrl = v.value
     }
 
+    // Fields 8-9: PR #31 — mode + minConsistency.
+    if (Object.prototype.hasOwnProperty.call(body, 'mode')) {
+      const VALID_MODES = new Set(['keyword', 'builder_tracker'])
+      if (!VALID_MODES.has(body.mode)) {
+        return res.status(400).json({ success: false, error: { code: 'INVALID_MODE', message: '`mode` must be "keyword" or "builder_tracker"' } })
+      }
+      updates.mode = body.mode
+    }
+    if (Object.prototype.hasOwnProperty.call(body, 'minConsistency')) {
+      const VALID = new Set(['all', 'weekly', 'daily'])
+      if (!VALID.has(body.minConsistency)) {
+        return res.status(400).json({ success: false, error: { code: 'INVALID_MIN_CONSISTENCY', message: '`minConsistency` must be "all", "weekly", or "daily"' } })
+      }
+      updates.minConsistency = body.minConsistency
+    }
+
     if (Object.keys(updates).length === 0) {
-      return res.status(400).json({ success: false, error: { code: 'NO_UPDATES', message: 'No supported fields in body. Patchable: platforms, emailEnabled, productUrl, utmSource, utmMedium, utmCampaign, webhookUrl' } })
+      return res.status(400).json({ success: false, error: { code: 'NO_UPDATES', message: 'No supported fields in body. Patchable: platforms, emailEnabled, productUrl, utmSource, utmMedium, utmCampaign, webhookUrl, mode, minConsistency' } })
     }
     const next = { ...m, ...updates }
     await redis.set(`insights:monitor:${id}`, JSON.stringify(next))
@@ -748,6 +788,57 @@ app.get('/v1/monitors/:id/export.csv', async (req, res) => {
     const dateStr = new Date().toISOString().slice(0, 10)
     res.setHeader('Content-Type', 'text/csv; charset=utf-8')
     res.setHeader('Content-Disposition', `attachment; filename="monitor-${id}-${dateStr}.csv"`)
+    res.send(csv)
+  } catch (err) {
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
+  }
+})
+
+// ── GET /v1/monitors/:id/builders ──────────────────────────────────────────
+// Builder Tracker (PR #31) read endpoint. Returns all profiles tracked for
+// the monitor, sorted by postCount desc. Auth-gated, ownership-checked.
+// Returns an empty list (not 404) for monitors that haven't recorded any
+// builders yet — distinguishes "monitor exists, no data" from "no monitor".
+app.get('/v1/monitors/:id/builders', async (req, res) => {
+  const auth = await authenticate(req)
+  if (!auth.ok) return res.status(auth.status).json({ success: false, error: auth.error })
+  const { id } = req.params
+  try {
+    const redis = getRedis()
+    const monRaw = await redis.get(`insights:monitor:${id}`)
+    if (!monRaw) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Monitor not found' } })
+    const monitor = typeof monRaw === 'string' ? JSON.parse(monRaw) : monRaw
+    if (monitor.owner !== auth.owner) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Monitor not found' } })
+
+    const builders = await getBuilderProfiles({ redis, monitorId: id, limit: 200 })
+    res.json({ success: true, builders, total: builders.length })
+  } catch (err) {
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
+  }
+})
+
+// ── GET /v1/monitors/:id/builders.csv ──────────────────────────────────────
+// CSV export of tracked builder profiles. Same shape as the JSON endpoint
+// above, RFC 4180 escaped (manual — no library), CRLF line endings, header-
+// only on empty. The CSV's headline value to Steven Musielski's $50/mo
+// engagement: load it into a spreadsheet, sort by consistency, decide who
+// to reach out to.
+app.get('/v1/monitors/:id/builders.csv', async (req, res) => {
+  const auth = await authenticate(req)
+  if (!auth.ok) return res.status(auth.status).json({ success: false, error: auth.error })
+  const { id } = req.params
+  try {
+    const redis = getRedis()
+    const monRaw = await redis.get(`insights:monitor:${id}`)
+    if (!monRaw) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Monitor not found' } })
+    const monitor = typeof monRaw === 'string' ? JSON.parse(monRaw) : monRaw
+    if (monitor.owner !== auth.owner) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Monitor not found' } })
+
+    const builders = await getBuilderProfiles({ redis, monitorId: id, limit: 500 })
+    const csv = buildersToCSV(builders)
+    const dateStr = new Date().toISOString().slice(0, 10)
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+    res.setHeader('Content-Disposition', `attachment; filename="builders-${id}-${dateStr}.csv"`)
     res.send(csv)
   } catch (err) {
     res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })

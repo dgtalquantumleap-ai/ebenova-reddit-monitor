@@ -666,6 +666,118 @@ function PlatformToggles({ value, onChange }) {
 }
 
 // ΓöÇΓöÇ Monitor Feed ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+// Builders Feed (PR #31) — sub-view of Monitor Feed shown when the selected
+// monitor is in 'builder_tracker' mode. Pulls /v1/monitors/:id/builders,
+// renders a sortable table, exposes a CSV download via authenticated fetch.
+// Empty-state copy distinguishes "no builders yet" from "no monitor."
+function BuildersFeed({ apiKey, monitor }) {
+  const [builders, setBuilders] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  const load = useCallback(async () => {
+    if (!monitor?.id) return;
+    setLoading(true);
+    const r = await apiFetch(`/v1/monitors/${monitor.id}/builders`, {}, apiKey);
+    setLoading(false);
+    if (r.ok) setBuilders(r.data.builders || []);
+  }, [apiKey, monitor?.id]);
+
+  useEffect(() => { load(); }, [load]);
+
+  // Authenticated download — can't use a plain <a href> because the API
+  // requires X-API-Key. Stream the body via fetch, then click a hidden link.
+  const downloadCsv = async () => {
+    const res = await fetch(`/v1/monitors/${monitor.id}/builders.csv`, {
+      headers: { 'X-API-Key': apiKey },
+    });
+    if (!res.ok) { alert('Could not download CSV.'); return; }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `builders-${monitor.id}-${new Date().toISOString().slice(0,10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const consistencyStyle = c => ({
+    daily:      {background:'#DCFCE7',color:'#166534'},
+    weekly:     {background:'#FEF3C7',color:'#92400E'},
+    occasional: {background:'#F1F5F9',color:'#475569'},
+  })[c] || {background:'#F1F5F9',color:'#475569'};
+
+  return (
+    <>
+      {!loading && builders.length > 0 && (
+        <div className="metric-row">
+          <div className="metric-card"><div className="metric-label">Builders tracked</div><div className="metric-value">{builders.length}</div></div>
+          <div className="metric-card"><div className="metric-label">Daily</div><div className="metric-value">{builders.filter(b=>b.consistency==='daily').length}</div></div>
+          <div className="metric-card"><div className="metric-label">Weekly</div><div className="metric-value">{builders.filter(b=>b.consistency==='weekly').length}</div></div>
+          <div className="metric-card"><div className="metric-label">Occasional</div><div className="metric-value">{builders.filter(b=>b.consistency==='occasional').length}</div></div>
+        </div>
+      )}
+      <div style={{display:'flex',gap:8,marginBottom:14,flexWrap:'wrap'}}>
+        <button className="btn btn-white btn-sm" onClick={load} disabled={loading}>
+          <i className={`ph ph-arrow-clockwise${loading?' spin':''}`}></i> Refresh
+        </button>
+        <button className="btn btn-primary btn-sm" onClick={downloadCsv} disabled={loading || builders.length === 0}>
+          <i className="ph-bold ph-download-simple"></i> Export CSV
+        </button>
+      </div>
+      {loading && <div style={{display:'flex',flexDirection:'column',gap:8}}>{[1,2,3].map(i=><div key={i} className="shimmer" style={{height:60}} />)}</div>}
+      {!loading && builders.length === 0 && (
+        <div className="card">
+          <div className="empty">
+            <div className="empty-icon"><i className="ph ph-users-three"></i></div>
+            <div className="empty-title">No builders found yet</div>
+            <div className="empty-desc">We're scanning Reddit, HN, GitHub, Product Hunt, Twitter, and Substack for posts that look like someone publicly shipping something. First profiles usually appear within a poll cycle (~15 minutes).</div>
+          </div>
+        </div>
+      )}
+      {!loading && builders.length > 0 && (
+        <div className="card" style={{padding:0,overflow:'hidden'}}>
+          <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
+            <thead>
+              <tr style={{background:'#F8FAFC',borderBottom:'1px solid #E2E8F0'}}>
+                <th style={{padding:'10px 14px',textAlign:'left',fontSize:11,fontWeight:600,letterSpacing:1,color:'#64748B',textTransform:'uppercase'}}>Builder</th>
+                <th style={{padding:'10px 14px',textAlign:'left',fontSize:11,fontWeight:600,letterSpacing:1,color:'#64748B',textTransform:'uppercase'}}>Platform</th>
+                <th style={{padding:'10px 14px',textAlign:'left',fontSize:11,fontWeight:600,letterSpacing:1,color:'#64748B',textTransform:'uppercase'}}>Consistency</th>
+                <th style={{padding:'10px 14px',textAlign:'right',fontSize:11,fontWeight:600,letterSpacing:1,color:'#64748B',textTransform:'uppercase'}}>Posts</th>
+                <th style={{padding:'10px 14px',textAlign:'left',fontSize:11,fontWeight:600,letterSpacing:1,color:'#64748B',textTransform:'uppercase'}}>Topics</th>
+                <th style={{padding:'10px 14px',textAlign:'left',fontSize:11,fontWeight:600,letterSpacing:1,color:'#64748B',textTransform:'uppercase'}}>Latest post</th>
+              </tr>
+            </thead>
+            <tbody>
+              {builders.map(b => (
+                <tr key={`${b.platform}:${b.username}`} style={{borderBottom:'1px solid #F1F5F9'}}>
+                  <td style={{padding:'12px 14px',color:'#0F172A',fontWeight:600}}>
+                    {b.profileUrl ? (
+                      <a href={b.profileUrl} target="_blank" rel="noreferrer" style={{color:'#0F172A',textDecoration:'none'}}>{b.username} <i className="ph ph-arrow-square-out" style={{fontSize:11,color:'#94A3B8'}}></i></a>
+                    ) : b.username}
+                  </td>
+                  <td style={{padding:'12px 14px',color:'#475569',fontSize:12.5}}>{b.platform}</td>
+                  <td style={{padding:'12px 14px'}}>
+                    <span style={{...consistencyStyle(b.consistency),padding:'2px 8px',borderRadius:4,fontSize:11,fontWeight:600,letterSpacing:.5,textTransform:'uppercase'}}>{b.consistency || 'occasional'}</span>
+                  </td>
+                  <td style={{padding:'12px 14px',color:'#0F172A',textAlign:'right',fontVariantNumeric:'tabular-nums'}}>{b.postCount}</td>
+                  <td style={{padding:'12px 14px',color:'#475569',fontSize:12.5}}>{(b.topics || []).join(', ') || '—'}</td>
+                  <td style={{padding:'12px 14px',color:'#475569',fontSize:12.5,maxWidth:280}}>
+                    {b.latestPostUrl ? (
+                      <a href={b.latestPostUrl} target="_blank" rel="noreferrer" style={{color:'#475569',textDecoration:'none'}}>{(b.latestPostTitle || '').slice(0, 80)}{(b.latestPostTitle||'').length > 80 ? '…' : ''}</a>
+                    ) : (b.latestPostTitle || '—')}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
+  );
+}
+
 function MatchesFeed({ apiKey, monitors }) {
   const [selId, setSelId] = useState('');
   const [matches, setMatches] = useState([]);
@@ -675,11 +787,15 @@ function MatchesFeed({ apiKey, monitors }) {
 
   const load = useCallback(async id => {
     if (!id) return;
+    // Builder Tracker monitors never produce draftable matches; skip the
+    // matches fetch and let BuildersFeed handle its own loading.
+    const mon = monitors.find(m => m.id === id);
+    if (mon?.mode === 'builder_tracker') { setMatches([]); return; }
     setLoading(true);
     const r = await apiFetch(`/v1/matches?monitor_id=${id}&limit=50`,{},apiKey);
     setLoading(false);
     if (r.ok) setMatches(r.data.matches||[]);
-  },[apiKey]);
+  },[apiKey, monitors]);
 
   useEffect(()=>{ if (selId) load(selId); },[selId,load]);
 
@@ -688,6 +804,7 @@ function MatchesFeed({ apiKey, monitors }) {
   };
 
   const selMonitor = monitors.find(m=>m.id===selId);
+  const isBuilderMode = selMonitor?.mode === 'builder_tracker';
 
   if (!monitors.length) return (
     <>
@@ -720,27 +837,36 @@ function MatchesFeed({ apiKey, monitors }) {
         </div>
       </div>
       <div className="page-body">
-        {selMonitor && !loading && matches.length>0 && (
-          <div className="metric-row">
-            <div className="metric-card"><div className="metric-label">Matches loaded</div><div className="metric-value">{matches.length}</div></div>
-            <div className="metric-card"><div className="metric-label">All-time found</div><div className="metric-value">{selMonitor.total_matches_found||0}</div></div>
-            <div className="metric-card"><div className="metric-label">Keywords</div><div className="metric-value">{selMonitor.keyword_count||0}</div></div>
-            <div className="metric-card"><div className="metric-label">Monitor status</div><div className="metric-value" style={{fontSize:13,display:'flex',alignItems:'center',gap:7,marginTop:6}}><div className={selMonitor.active?'active-dot':'paused-dot'}></div>{selMonitor.active?'Active':'Paused'}</div></div>
-          </div>
+        {/* PR #31 — Builder Tracker monitors render a Builders table instead
+            of the matches feed. Builder profiles never have draft replies, so
+            the MatchCard view is irrelevant for them. */}
+        {isBuilderMode ? (
+          <BuildersFeed apiKey={apiKey} monitor={selMonitor} />
+        ) : (
+          <>
+            {selMonitor && !loading && matches.length>0 && (
+              <div className="metric-row">
+                <div className="metric-card"><div className="metric-label">Matches loaded</div><div className="metric-value">{matches.length}</div></div>
+                <div className="metric-card"><div className="metric-label">All-time found</div><div className="metric-value">{selMonitor.total_matches_found||0}</div></div>
+                <div className="metric-card"><div className="metric-label">Keywords</div><div className="metric-value">{selMonitor.keyword_count||0}</div></div>
+                <div className="metric-card"><div className="metric-label">Monitor status</div><div className="metric-value" style={{fontSize:13,display:'flex',alignItems:'center',gap:7,marginTop:6}}><div className={selMonitor.active?'active-dot':'paused-dot'}></div>{selMonitor.active?'Active':'Paused'}</div></div>
+              </div>
+            )}
+            {loading && <div style={{display:'flex',flexDirection:'column',gap:8}}>{[1,2,3].map(i=><div key={i} className="shimmer" style={{height:120}} />)}</div>}
+            {!loading && !matches.length && (
+              <div className="card">
+                <div className="empty">
+                  <div className="empty-icon"><i className="ph ph-clock"></i></div>
+                  <div className="empty-title">Scanning 9 platforms for buying signals</div>
+                  <div className="empty-desc">First matches usually land within 15 minutes. You'll get an email and Slack alert the moment one arrives.</div>
+                </div>
+              </div>
+            )}
+            {!loading && matches.map(m=>(
+              <MatchCard key={m.id} match={m} monitorId={selId} apiKey={apiKey} onAction={handleAction} />
+            ))}
+          </>
         )}
-        {loading && <div style={{display:'flex',flexDirection:'column',gap:8}}>{[1,2,3].map(i=><div key={i} className="shimmer" style={{height:120}} />)}</div>}
-        {!loading && !matches.length && (
-          <div className="card">
-            <div className="empty">
-              <div className="empty-icon"><i className="ph ph-clock"></i></div>
-              <div className="empty-title">Scanning 9 platforms for buying signals</div>
-              <div className="empty-desc">First matches usually land within 15 minutes. You'll get an email and Slack alert the moment one arrives.</div>
-            </div>
-          </div>
-        )}
-        {!loading && matches.map(m=>(
-          <MatchCard key={m.id} match={m} monitorId={selId} apiKey={apiKey} onAction={handleAction} />
-        ))}
       </div>
     </>
   );
@@ -748,8 +874,18 @@ function MatchesFeed({ apiKey, monitors }) {
 
 // ΓöÇΓöÇ Create Monitor ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 // ── Find Customers (unified flow) ────────────────────────────────────────────
+// Builder Tracker mode (PR #31) — platforms with real human handles only.
+// Keep in sync with PLATFORMS_WITH_REAL_USERNAMES in lib/builder-tracker.js.
+const BUILDER_DEFAULT_PLATFORMS = ['reddit', 'hackernews', 'github', 'producthunt', 'twitter', 'substack']
+
 function FindCustomers({ apiKey, onMonitorCreated }) {
   const [step, setStep] = useState(1) // 1=input, 2=generating, 3=review, 4=confirm, 5=confirmed
+  // PR #31 — monitor mode. 'keyword' (default) uses keyword discovery flow;
+  // 'builder_tracker' skips suggestion/review and goes input → confirm with
+  // hardcoded server-side keywords. UI deltas: simpler step 1, default
+  // platforms preset to those with real human handles, hide reply tone/UTM
+  // /webhook in step 4 (irrelevant — builder mode doesn't generate drafts).
+  const [mode, setMode] = useState('keyword')
   const [description, setDescription] = useState('')
   const [suggestion, setSuggestion] = useState(null)
   const [counts, setCounts] = useState({})
@@ -855,7 +991,10 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
     const allKws = [...picked];
     const body = {
       name: monitorName.trim() || 'My Monitor',
-      keywords: allKws.map(k => ({
+      // PR #31 — Builder Tracker mode uses hardcoded server-side keywords;
+      // the API skips its keywords-required check when mode === 'builder_tracker'.
+      mode,
+      keywords: mode === 'builder_tracker' ? [] : allKws.map(k => ({
         keyword: k,
         type: keywordTypes.get(k) || 'keyword',  // PR #28
         productContext: suggestion?.productContext || description,
@@ -889,6 +1028,16 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
     setTimeout(() => onMonitorCreated('feed'), 4000);
   };
 
+  // PR #31 — Builder Tracker shortcut. Skips suggestion + keyword review,
+  // applies the right platform defaults, drops you straight into confirm.
+  const startBuilderTracker = () => {
+    setMode('builder_tracker')
+    setMonitorName(monitorName.trim() || 'Builder Tracker')
+    setPlatforms(BUILDER_DEFAULT_PLATFORMS)
+    setErr('')
+    setStep(4)
+  }
+
   // ── State 1: Input ──────────────────────────────────────────────────────
   if (step === 1) {
     return (
@@ -903,6 +1052,63 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
           </span>
         </div>
         <div className="page-body" style={{maxWidth:780}}>
+          {/* PR #31 — mode selector. Two cards side-by-side. Builder Tracker
+              is the "no competitor has this" feature, so we surface it
+              prominently rather than burying it as a checkbox. */}
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:28}}>
+            <button type="button" onClick={()=>setMode('keyword')} aria-pressed={mode==='keyword'}
+              style={{
+                textAlign:'left',padding:'16px 18px',borderRadius:8,cursor:'pointer',fontFamily:'inherit',
+                border: mode==='keyword' ? '1.5px solid #FF6B35' : '1px solid #E2E8F0',
+                background: mode==='keyword' ? 'rgba(255,107,53,.06)' : '#fff',
+              }}>
+              <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:6}}>
+                <i className="ph-bold ph-magnifying-glass" style={{color:mode==='keyword'?'#FF6B35':'#64748B'}}></i>
+                <span style={{fontSize:14,fontWeight:600,color:'#0F172A'}}>Keyword Mode</span>
+                {mode==='keyword' && <span style={{marginLeft:'auto',fontSize:10,letterSpacing:1.5,color:'#FF6B35',fontWeight:700}}>SELECTED</span>}
+              </div>
+              <div style={{fontSize:12.5,color:'#475569',lineHeight:1.5}}>Track threads matching your keywords. AI drafts a reply for each match.</div>
+            </button>
+            <button type="button" onClick={()=>setMode('builder_tracker')} aria-pressed={mode==='builder_tracker'}
+              style={{
+                textAlign:'left',padding:'16px 18px',borderRadius:8,cursor:'pointer',fontFamily:'inherit',
+                border: mode==='builder_tracker' ? '1.5px solid #FF6B35' : '1px solid #E2E8F0',
+                background: mode==='builder_tracker' ? 'rgba(255,107,53,.06)' : '#fff',
+              }}>
+              <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:6}}>
+                <i className="ph-bold ph-users-three" style={{color:mode==='builder_tracker'?'#FF6B35':'#64748B'}}></i>
+                <span style={{fontSize:14,fontWeight:600,color:'#0F172A'}}>Builder Tracker</span>
+                <span style={{marginLeft:6,fontSize:9,padding:'2px 6px',borderRadius:4,background:'#FFF7F2',color:'#9A3412',fontWeight:700,letterSpacing:1}}>NEW</span>
+                {mode==='builder_tracker' && <span style={{marginLeft:'auto',fontSize:10,letterSpacing:1.5,color:'#FF6B35',fontWeight:700}}>SELECTED</span>}
+              </div>
+              <div style={{fontSize:12.5,color:'#475569',lineHeight:1.5}}>Track founders + indie builders publicly sharing what they're shipping. Profile + topics + consistency. CSV export.</div>
+            </button>
+          </div>
+          {mode === 'builder_tracker' ? (
+            <>
+              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:'#FF6B35',letterSpacing:3,marginBottom:18}}>// BUILDER TRACKER · ONE-CLICK SETUP</div>
+              <h2 style={{fontFamily:"'Crimson Pro',Georgia,serif",fontSize:36,fontWeight:700,letterSpacing:-1,lineHeight:1.05,marginBottom:14}}>
+                Find people <em style={{fontStyle:'italic',color:'#FF6B35',fontWeight:400}}>building</em> in public.
+              </h2>
+              <p style={{color:'#475569',fontSize:15,lineHeight:1.65,maxWidth:620,marginBottom:24}}>
+                We track Reddit, HN, GitHub, Product Hunt, Twitter, and Substack for posts that look like someone shipping something. Profiles include topics, post count, and consistency — exportable as CSV.
+              </p>
+              <div className="field" style={{maxWidth:480,marginBottom:18}}>
+                <label className="label">Monitor name</label>
+                <input className="inp" placeholder="Builder Tracker — SaaS Founders" value={monitorName} onChange={e=>setMonitorName(e.target.value)} />
+              </div>
+              {err && <div className="alert alert-error" style={{marginTop:12}}><i className="ph ph-warning-circle"></i>{err}</div>}
+              <div style={{display:'flex',gap:12,alignItems:'center',marginTop:8,flexWrap:'wrap'}}>
+                <button className="btn btn-primary" onClick={startBuilderTracker} style={{padding:'14px 24px',fontSize:14}}>
+                  <i className="ph-bold ph-users-three"></i> Set up builder tracking <span style={{fontSize:16}}>→</span>
+                </button>
+              </div>
+              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:'#94A3B8',letterSpacing:1,marginTop:24,display:'flex',gap:18,flexWrap:'wrap'}}>
+                <span><b style={{color:'#16A34A'}}>●</b> NO KEYWORDS NEEDED</span><span>6 PLATFORMS</span><span>CSV EXPORT</span>
+              </div>
+            </>
+          ) : (
+          <>
           <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:'#FF6B35',letterSpacing:3,marginBottom:18}}>// PROMPT · WHAT YOU SELL</div>
           <h2 style={{fontFamily:"'Crimson Pro',Georgia,serif",fontSize:36,fontWeight:700,letterSpacing:-1,lineHeight:1.05,marginBottom:14}}>
             Tell me what you sell.<br/>I'll find your <em style={{fontStyle:'italic',color:'#FF6B35',fontWeight:400}}>next customer</em> in 4 seconds.
@@ -923,6 +1129,8 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
           <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:'#94A3B8',letterSpacing:1,marginTop:24,display:'flex',gap:18,flexWrap:'wrap'}}>
             <span><b style={{color:'#16A34A'}}>●</b> 4-SECOND ANALYSIS</span><span>9 PLATFORMS</span><span>NO COMMITMENT — REVIEW BEFORE SAVING</span>
           </div>
+          </>
+          )}
         </div>
       </>
     );
@@ -1090,6 +1298,8 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
               <label className="label">Monitor name</label>
               <input className="inp" value={monitorName} onChange={e=>setMonitorName(e.target.value)} />
             </div>
+            {/* Reply tone is irrelevant for Builder Tracker (no drafts generated). */}
+            {mode !== 'builder_tracker' && (
             <div className="field" style={{marginBottom:14}}>
               <label className="label">Reply tone <span style={{fontSize:11,fontWeight:400,color:'#94A3B8'}}>· how drafts should sound</span></label>
               <div style={{display:'flex',flexWrap:'wrap',gap:6,marginTop:6}}>
@@ -1111,6 +1321,7 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
                 ))}
               </div>
             </div>
+            )}
             <div className="field" style={{marginBottom:14}}>
               <label className="label">Where to scan <span style={{fontSize:11,fontWeight:400,color:'#94A3B8'}}>· {platforms.length} of 9 platforms · click chips to toggle</span></label>
               <div style={{display:'flex',flexWrap:'wrap',gap:6,marginTop:6}}>
@@ -1146,7 +1357,9 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
                 })}
               </div>
             </div>
-            {/* PR #22 — UTM injection (Advanced) */}
+            {/* UTM + outbound webhook are draft-time concerns. Builder Tracker
+                doesn't generate drafts, so these advanced options are hidden. */}
+            {mode !== 'builder_tracker' && (
             <div className="field" style={{marginBottom:14}}>
               <button type="button" onClick={()=>setShowUtm(s=>!s)}
                 style={{background:'transparent',border:'none',padding:0,cursor:'pointer',fontSize:12,color:'#64748B',fontFamily:'inherit',display:'inline-flex',alignItems:'center',gap:6}}>
@@ -1244,17 +1457,30 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
                 </div>
               )}
             </div>
-            <div style={{padding:'12px 0',borderBottom:'1px solid #F1F5F9',display:'flex',justifyContent:'space-between'}}>
-              <span style={{fontSize:12,color:'#94A3B8',fontFamily:"'JetBrains Mono',monospace",letterSpacing:1}}>KEYWORDS</span>
-              <span style={{fontSize:13.5,fontWeight:500,color:'#0F172A'}}>{picked.size} selected</span>
-            </div>
-            <div style={{padding:'12px 0',borderBottom:'1px solid #F1F5F9',display:'flex',justifyContent:'space-between'}}>
-              <span style={{fontSize:12,color:'#94A3B8',fontFamily:"'JetBrains Mono',monospace",letterSpacing:1}}>EXPECTED VOLUME</span>
-              <span style={{fontSize:13.5,fontWeight:500,color:'#16A34A'}}>~{totalMatches()} matches/week</span>
-            </div>
+            )}
+            {/* Keyword + volume summary rows are meaningful only in keyword mode.
+                Builder Tracker uses hardcoded server-side keywords. */}
+            {mode !== 'builder_tracker' && (
+              <>
+                <div style={{padding:'12px 0',borderBottom:'1px solid #F1F5F9',display:'flex',justifyContent:'space-between'}}>
+                  <span style={{fontSize:12,color:'#94A3B8',fontFamily:"'JetBrains Mono',monospace",letterSpacing:1}}>KEYWORDS</span>
+                  <span style={{fontSize:13.5,fontWeight:500,color:'#0F172A'}}>{picked.size} selected</span>
+                </div>
+                <div style={{padding:'12px 0',borderBottom:'1px solid #F1F5F9',display:'flex',justifyContent:'space-between'}}>
+                  <span style={{fontSize:12,color:'#94A3B8',fontFamily:"'JetBrains Mono',monospace",letterSpacing:1}}>EXPECTED VOLUME</span>
+                  <span style={{fontSize:13.5,fontWeight:500,color:'#16A34A'}}>~{totalMatches()} matches/week</span>
+                </div>
+              </>
+            )}
+            {mode === 'builder_tracker' && (
+              <div style={{padding:'12px 0',borderBottom:'1px solid #F1F5F9',display:'flex',justifyContent:'space-between'}}>
+                <span style={{fontSize:12,color:'#94A3B8',fontFamily:"'JetBrains Mono',monospace",letterSpacing:1}}>MODE</span>
+                <span style={{fontSize:13.5,fontWeight:500,color:'#9A3412'}}>Builder Tracker · server-side keywords</span>
+              </div>
+            )}
             {err && <div className="alert alert-error" style={{marginTop:14}}><i className="ph ph-warning-circle"></i>{err}</div>}
             <div style={{display:'flex',gap:12,marginTop:18}}>
-              <button className="btn btn-ghost" onClick={()=>setStep(3)}>← Back</button>
+              <button className="btn btn-ghost" onClick={()=>setStep(mode === 'builder_tracker' ? 1 : 3)}>← Back</button>
               <button className="btn btn-primary" onClick={confirmMonitor} disabled={loading} style={{flex:1}}>
                 {loading?'Creating…':<><i className="ph-bold ph-broadcast"></i> Confirm and start monitoring</>}
               </button>

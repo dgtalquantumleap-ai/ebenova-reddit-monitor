@@ -22,6 +22,7 @@ test('TASK_ROUTING has the 8 spec\'d tasks mapped to a known provider key', () =
 test('per-spec routing assignments', () => {
   // Spec-locked: changing these is a behavior change, not a refactor.
   assert.equal(TASK_ROUTING.classify_match,               'GROQ_FAST')
+  assert.equal(TASK_ROUTING.extract_builder_topics,       'GROQ_FAST')
   assert.equal(TASK_ROUTING.generate_reply_draft,         'GROQ_QUALITY')
   assert.equal(TASK_ROUTING.generate_premium_reply,       'CLAUDE')
   assert.equal(TASK_ROUTING.weekly_pattern_summary,       'DEEPSEEK')
