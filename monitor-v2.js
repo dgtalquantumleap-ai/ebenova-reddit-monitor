@@ -33,7 +33,7 @@ import { escapeHtml }      from './lib/html-escape.js'
 import { sanitizeForPrompt } from './lib/llm-safe-prompt.js'
 import { embeddingCacheKey } from './lib/embedding-cache.js'
 import { makeCostCap } from './lib/cost-cap.js'
-import { draftCall }   from './lib/draft-call.js'
+import { draftCall, extractInjectedUtmUrl } from './lib/draft-call.js'
 import { parseRedditRSS, buildRedditSearchUrl, parseRetryAfter } from './lib/reddit-rss.js'
 import { generateUnsubscribeToken, buildEmailFooter } from './lib/account-deletion.js'
 import { classifyMatch, intentPriority, isHighPriority } from './lib/classify.js'
@@ -820,6 +820,17 @@ async function runMonitor(monitor) {
       })
       m.draft = r.draft
       m.draftedBy = r.model
+      // PR (deferred-fixes): persist the UTM-injected product URL alongside
+      // the draft. This is the data foundation for click-tracking — a
+      // redirect layer can read match.utmUrl directly instead of re-parsing
+      // the draft on every page view. Null if no UTM URL was injected.
+      if (m.draft && monitor.productUrl) {
+        const utmUrl = extractInjectedUtmUrl({ draft: m.draft, productUrl: monitor.productUrl })
+        if (utmUrl) {
+          m.utmUrl = utmUrl
+          m.utmInjectedAt = new Date().toISOString()
+        }
+      }
       if (m.draft) console.log(`${label} Draft by ${r.model}: "${m.title.slice(0, 50)}…"`)
     }))
     if (i + CONCURRENCY < allMatches.length) await delay(1000)
@@ -1039,16 +1050,25 @@ if (!redis) {
 
   // Run once on startup, then on cron
   poll()
-  const cron_expr = `*/${POLL_MINUTES} * * * *`
-  cron.schedule(cron_expr, poll)
-  console.log(`[v2] Cron scheduled: ${cron_expr}`)
+  // Per-monitor poll. With POLL_MINUTES=15 (default) this resolves to
+  // '*/15 * * * *' (fires at :00, :15, :30, :45 each hour).
+  const POLL_EXPR = `*/${POLL_MINUTES} * * * *`
+  if (!cron.validate(POLL_EXPR)) {
+    throw new Error(`[v2] invalid POLL_MINUTES=${POLL_MINUTES} produced bad cron: ${POLL_EXPR}`)
+  }
+  cron.schedule(POLL_EXPR, poll)
+  console.log(`[v2] Cron scheduled: ${POLL_EXPR}`)
 
   // PR #26: weekly digest cron — Mondays at 08:00 UTC. Best-effort: per-
   // monitor errors are isolated inside runAllDigests, so one bad record
   // never kills the cron. Toggleable via WEEKLY_DIGEST_ENABLED env (default on).
+  const WEEKLY_DIGEST_EXPR = '0 8 * * 1'
   const weeklyEnabled = (process.env.WEEKLY_DIGEST_ENABLED || 'true').toLowerCase() !== 'false'
   if (weeklyEnabled) {
-    cron.schedule('0 8 * * 1', async () => {
+    if (!cron.validate(WEEKLY_DIGEST_EXPR)) {
+      throw new Error(`[v2] invalid weekly digest cron: ${WEEKLY_DIGEST_EXPR}`)
+    }
+    cron.schedule(WEEKLY_DIGEST_EXPR, async () => {
       try {
         const r = await runAllDigests({ redis, resend, fromEmail: FROM_EMAIL })
         console.log(`[v2][digest] ran=${r.ran} sent=${r.sent} skipped=${r.skipped}`)
@@ -1056,20 +1076,25 @@ if (!redis) {
         console.error(`[v2][digest] cron failed: ${err.message}`)
       }
     }, { timezone: 'UTC' })
-    console.log('[v2] Weekly digest cron scheduled: Monday 08:00 UTC')
+    console.log(`[v2] Weekly digest cron scheduled: Monday 08:00 UTC (${WEEKLY_DIGEST_EXPR})`)
   } else {
     console.log('[v2] Weekly digest disabled (WEEKLY_DIGEST_ENABLED=false)')
   }
 
-  // PR #29: reply outcome tracking sweep — hourly at :15 past so it doesn't
-  // collide with the regular poll cycle. Walks active monitors' last 500
-  // matches each, processes any with postedAt > 24h ago + no engagement
-  // record yet. Per-match failures land in the engagement.error field;
-  // sweep-level failures log but never crash the worker.
+  // PR #29: reply outcome tracking sweep — hourly at :07 past the hour.
+  //
+  // Why :07 and not :15? With POLL_MINUTES=15 (default) the per-monitor poll
+  // also fires at :15 every hour, so the previous '15 * * * *' schedule was
+  // racing the poll for Reddit / HN bandwidth. :07 is safely off any of
+  // node-cron's `*/N` boundaries for N in {1, 5, 10, 15, 20, 30, 60}.
   // Toggleable via REPLY_TRACKING_ENABLED env (default on).
+  const REPLY_TRACKING_EXPR = '7 * * * *'
   const trackingEnabled = (process.env.REPLY_TRACKING_ENABLED || 'true').toLowerCase() !== 'false'
   if (trackingEnabled) {
-    cron.schedule('15 * * * *', async () => {
+    if (!cron.validate(REPLY_TRACKING_EXPR)) {
+      throw new Error(`[v2] invalid reply-tracking cron: ${REPLY_TRACKING_EXPR}`)
+    }
+    cron.schedule(REPLY_TRACKING_EXPR, async () => {
       try {
         const r = await runEngagementSweep({ redis })
         if (r.scanned > 0) {
@@ -1079,7 +1104,7 @@ if (!redis) {
         console.error(`[v2][reply-tracker] cron failed: ${err.message}`)
       }
     }, { timezone: 'UTC' })
-    console.log('[v2] Reply outcome tracking cron scheduled: hourly at :15 UTC')
+    console.log(`[v2] Reply outcome tracking cron scheduled: hourly at :07 UTC (${REPLY_TRACKING_EXPR})`)
   } else {
     console.log('[v2] Reply outcome tracking disabled (REPLY_TRACKING_ENABLED=false)')
   }
