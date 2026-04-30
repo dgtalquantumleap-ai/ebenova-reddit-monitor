@@ -24,6 +24,7 @@ import searchHackerNews    from './lib/scrapers/hackernews.js'
 import searchGitHub        from './lib/scrapers/github.js'
 import searchProductHunt   from './lib/scrapers/producthunt.js'
 import searchTwitter       from './lib/scrapers/twitter.js'
+import searchJijiNg        from './lib/scrapers/jijing.js'
 // LinkedIn scraper exists at lib/scrapers/linkedin.js but is parked: no
 // reliable open search backend indexes linkedin.com/posts/ from a server.
 // Re-import + re-add to platformRunners and SOURCE_RANK once we wire up
@@ -757,6 +758,10 @@ async function runMonitor(monitor) {
     { key: 'github',      scraper: searchGitHub,      delayMs: 2000 },
     { key: 'producthunt', scraper: searchProductHunt, delayMs: 2000 },
     { key: 'twitter',     scraper: searchTwitter,     delayMs: 2500 },
+    // Jiji.ng — Nigerian classifieds. High signal for real-estate, fashion,
+    // electronics, food, beauty verticals. Scraper does its own polite delay
+    // when it returns results, so the runner-level delay is the lower bound.
+    { key: 'jijing',      scraper: searchJijiNg,      delayMs: 2000 },
   ]
 
   for (const { key, scraper, delayMs } of platformRunners) {
@@ -848,7 +853,7 @@ async function runMonitor(monitor) {
     recommending:    4,
     venting:         5,
   }
-  const SOURCE_RANK = { reddit: 0, hackernews: 1, quora: 2, medium: 3, substack: 4, upwork: 5, fiverr: 6, twitter: 7 }
+  const SOURCE_RANK = { reddit: 0, hackernews: 1, quora: 2, medium: 3, substack: 4, upwork: 5, fiverr: 6, twitter: 7, jijing: 8 }
   allMatches.sort((a, b) => {
     const ia = INTENT_BOOST[a.intent] ?? 6
     const ib = INTENT_BOOST[b.intent] ?? 6
