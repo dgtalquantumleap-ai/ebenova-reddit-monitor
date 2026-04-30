@@ -690,7 +690,10 @@ function BuildersFeed({ apiKey, monitor }) {
   // requires X-API-Key. Stream the body via fetch, then click a hidden link.
   const downloadCsv = async () => {
     const res = await fetch(`/v1/monitors/${monitor.id}/builders.csv`, {
-      headers: { 'X-API-Key': apiKey },
+      // Server reads `Authorization: Bearer <key>` (see api-server.js
+       // authenticate()). The previous `X-API-Key` header was a bug —
+       // the endpoint would return 401.
+      headers: { 'Authorization': `Bearer ${apiKey}` },
     });
     if (!res.ok) { alert('Could not download CSV.'); return; }
     const blob = await res.blob();
@@ -955,6 +958,28 @@ function MatchesFeed({ apiKey, monitors }) {
           }}>
             <i className="ph-bold ph-lightning"></i> Scan now
           </button>
+          {/* Batch A — match CSV export. Hits the existing
+              GET /v1/monitors/:id/export.csv endpoint, last 30 days.
+              Hidden in builder mode (BuildersFeed has its own export button). */}
+          {!isBuilderMode && (
+            <button className="btn btn-white btn-sm" disabled={!selId} onClick={async () => {
+              const res = await fetch(`/v1/monitors/${selId}/export.csv`, {
+                headers: { 'Authorization': `Bearer ${apiKey}` },
+              })
+              if (!res.ok) { alert('Could not download CSV.'); return; }
+              const blob = await res.blob()
+              const url = URL.createObjectURL(blob)
+              const a = document.createElement('a')
+              a.href = url
+              a.download = `monitor-${selId}-${new Date().toISOString().slice(0,10)}.csv`
+              document.body.appendChild(a)
+              a.click()
+              a.remove()
+              URL.revokeObjectURL(url)
+            }}>
+              <i className="ph-bold ph-download-simple"></i> Export CSV
+            </button>
+          )}
         </div>
       </div>
       <div className="page-body">
@@ -1170,6 +1195,13 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
   const [webhookUrl, setWebhookUrl] = useState('')
   const [testingWebhook, setTestingWebhook] = useState(false)
   const [webhookTestResult, setWebhookTestResult] = useState(null)
+  // Batch A — brand name (powers the AI Visibility query "what does Claude
+  // say about <brand>?"). Optional; falls back to first keyword at run time.
+  const [brandName, setBrandName] = useState('')
+  // Batch A — Slack webhook URL. Sends per-match alert to a Slack channel
+  // alongside the email alert. Optional. Server validates https://.
+  const [slackWebhookUrl, setSlackWebhookUrl] = useState('')
+  const [showSlack, setShowSlack] = useState(false)
   // Honor a selection the visitor made on the landing page. Falls back to the
   // existing default (Reddit only) if nothing valid is stored.
   const [platforms, setPlatforms] = useState(() => readLandingPlatformPrefs(KNOWN_PLATFORMS) || ['reddit'])
@@ -1274,6 +1306,13 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
       // the id and the worker overrides keywords/platforms/subreddits at
       // every poll. Null when the user picks "None".
       diasporaCorridor: corridorId || null,
+      // Batch A — brand name powers AI Visibility tracking (what Claude
+      // says about your brand). Empty string is fine; the worker falls
+      // back to the first keyword.
+      brandName:       brandName.trim()       || null,
+      // Batch A — Slack webhook URL. Optional second alert channel
+      // alongside email. Server validates https:// on its end.
+      slackWebhookUrl: slackWebhookUrl.trim() || null,
     };
     const m = await apiFetch('/v1/monitors', { method:'POST', body: JSON.stringify(body) }, apiKey);
     if (!m.ok) { setErr(m.data?.error?.message || 'Could not create monitor.'); setLoading(false); setStep(3); return; }
@@ -1648,6 +1687,19 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
               <label className="label">Monitor name</label>
               <input className="inp" value={monitorName} onChange={e=>setMonitorName(e.target.value)} />
             </div>
+            {/* Batch A — brand name input. Powers AI Visibility tracking
+                (the weekly "what does Claude say about your brand" probe).
+                Optional — worker falls back to first keyword. Hidden in
+                builder_tracker mode (visibility tracking is keyword-mode only). */}
+            {mode !== 'builder_tracker' && (
+              <div className="field" style={{marginBottom:14}}>
+                <label className="label">Brand name <span style={{fontSize:11,fontWeight:400,color:'#94A3B8'}}>· optional · used for AI Visibility tracking</span></label>
+                <input className="inp" placeholder="e.g. Acme Inc." value={brandName} onChange={e=>setBrandName(e.target.value)} />
+                <div style={{fontSize:11,color:'#94A3B8',marginTop:4,lineHeight:1.5}}>
+                  Each week we ask Claude what it knows about this brand and surface the result on the Monitor Feed. Leave blank to use your first keyword.
+                </div>
+              </div>
+            )}
             {/* Reply tone is irrelevant for Builder Tracker (no drafts generated). */}
             {mode !== 'builder_tracker' && (
             <div className="field" style={{marginBottom:14}}>
@@ -1798,6 +1850,25 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
                       The "Test webhook" button shows up after the monitor is created.
                     </div>
                   )}
+                </div>
+              )}
+            </div>
+            {/* Batch A — Slack webhook (Advanced). Sends per-match alerts
+                to a Slack channel alongside the email. Server validates
+                https:// on submit. Same collapsible-pattern as UTM and
+                Outbound webhook. */}
+            <div className="field" style={{marginBottom:14}}>
+              <button type="button" onClick={()=>setShowSlack(s=>!s)}
+                style={{background:'transparent',border:'none',padding:0,cursor:'pointer',fontSize:12,color:'#64748B',fontFamily:'inherit',display:'inline-flex',alignItems:'center',gap:6}}>
+                <i className={`ph ph-caret-${showSlack?'down':'right'}`}></i>
+                Advanced · Slack alerts <span style={{color:'#94A3B8'}}>(optional)</span>
+              </button>
+              {showSlack && (
+                <div style={{marginTop:10,padding:14,background:'#F8FAFC',border:'1px solid #E2E8F0',borderRadius:6}}>
+                  <div style={{fontSize:12,color:'#64748B',marginBottom:10,lineHeight:1.5}}>
+                    Paste a Slack incoming-webhook URL to receive every approved match in a channel. Drops in alongside the email alert — useful for shared inboxes. Must be <code>https://hooks.slack.com/...</code>.
+                  </div>
+                  <input className="inp" placeholder="https://hooks.slack.com/services/T.../B.../..." value={slackWebhookUrl} onChange={e=>setSlackWebhookUrl(e.target.value)} />
                 </div>
               )}
             </div>
