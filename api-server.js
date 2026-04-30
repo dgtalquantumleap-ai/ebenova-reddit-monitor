@@ -83,7 +83,7 @@ import { makeCostCap } from './lib/cost-cap.js'
 import { verifyCaptcha } from './lib/captcha.js'
 import { applyInviteToUser } from './lib/invite.js'
 import { draftCall, extractInjectedUtmUrl } from './lib/draft-call.js'
-import { validatePlatforms, migrateLegacyPlatforms, VALID_PLATFORMS } from './lib/platforms.js'
+import { validatePlatforms, migrateLegacyPlatforms, VALID_PLATFORMS, PLATFORM_LABELS, PLATFORM_EMOJIS } from './lib/platforms.js'
 import { classifyMatch, intentPriority } from './lib/classify.js'
 import { sendOutboundWebhook, buildPayload as buildWebhookPayload } from './lib/outbound-webhook.js'
 import { toCsv, matchToExportRow, MATCH_EXPORT_COLUMNS } from './lib/csv-export.js'
@@ -362,6 +362,23 @@ app.get('/v1/corridors/:id', (req, res) => {
     return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Corridor not found' } })
   }
   res.json({ success: true, corridor })
+})
+
+// ── GET /v1/platforms ──────────────────────────────────────────────────────
+// Source of truth for the platform chip grid on the dashboard. Public —
+// the dashboard fetches this on mount and renders the result.
+//
+// Drift-proof: any new platform added to lib/platforms.js (VALID_PLATFORMS
+// + PLATFORM_LABELS + PLATFORM_EMOJIS) automatically appears in the UI.
+// Replaces the hardcoded 9-platform chip list that was 4 platforms behind
+// the actual VALID_PLATFORMS set.
+app.get('/v1/platforms', (req, res) => {
+  const platforms = VALID_PLATFORMS.map(id => ({
+    id,
+    label: PLATFORM_LABELS[id] || id,
+    emoji: PLATFORM_EMOJIS[id] || '•',
+  }))
+  res.json({ success: true, platforms, count: platforms.length })
 })
 
 // ── GET /health ────────────────────────────────────────────────────────────
