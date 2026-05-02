@@ -405,7 +405,15 @@ app.get('/v1/me', async (req, res) => {
     const redis = getRedis()
     const rawKey = req.headers['authorization']?.slice(7).trim() || ''
     const flag = await redis.get(`onboarded:${rawKey}`)
-    isOnboarded = flag === '1'
+    if (flag === '1') {
+      isOnboarded = true
+    } else {
+      // If the user already has monitors the wizard flag was never written
+      // (e.g. creation hit the plan limit mid-wizard). Treat any existing
+      // monitor as implicit proof of onboarding.
+      const existing = await redis.smembers(`insights:monitors:${auth.owner}`) || []
+      isOnboarded = existing.length > 0
+    }
   } catch (_) { isOnboarded = true }
   res.json({
     success: true,
