@@ -496,6 +496,29 @@ function buildAlertEmail(monitor, matches) {
       <div style="font-size:13px;color:#9a9690;margin-top:6px;">${matches.length} new mention${matches.length !== 1 ? 's' : ''} · ${new Date().toUTCString()}</div>
       <div style="margin-top:10px;">${platformBadges}</div>
     </div>
+    ${monitor._opportunitySummary ? `
+    <div style="
+      margin: 0 0 24px 0;
+      padding: 16px 20px;
+      background: #111827;
+      border-left: 4px solid #f59e0b;
+      border-radius: 6px;
+    ">
+      <div style="
+        font-size: 11px;
+        font-weight: 700;
+        color: #f59e0b;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        margin-bottom: 8px;
+      ">🎯 Opportunity Detected</div>
+      <div style="
+        font-size: 14px;
+        color: #e5e7eb;
+        line-height: 1.65;
+      ">${escapeHtml(monitor._opportunitySummary)}</div>
+    </div>
+    ` : ''}
     ${keywordSections}
     ${buildEmailFooter(monitor.unsubscribeToken)}
   </body></html>`

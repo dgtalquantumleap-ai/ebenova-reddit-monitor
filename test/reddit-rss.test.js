@@ -1,13 +1,13 @@
 import { test } from 'node:test'
 import { strict as assert } from 'node:assert'
-import { parseRedditRSS, buildRedditSearchUrl, parseRetryAfter } from '../lib/reddit-rss.js'
+import { parseRedditRSS, buildRedditSearchUrl, parseRetryAfter, quoteIfMultiWord } from '../lib/reddit-rss.js'
 
 // ── buildRedditSearchUrl ──────────────────────────────────────────────────────
 
 test('buildRedditSearchUrl: global search uses /search.rss', () => {
   const url = buildRedditSearchUrl('freelance contract', null)
   assert.ok(url.startsWith('https://www.reddit.com/search.rss?'))
-  assert.ok(url.includes('q=freelance%20contract'))
+  assert.ok(url.includes('q=%22freelance%20contract%22'))
   assert.ok(url.includes('sort=new'))
   assert.ok(url.includes('t=week'))
   assert.ok(!url.includes('restrict_sr=1'))
@@ -22,7 +22,7 @@ test('buildRedditSearchUrl: subreddit search uses /r/{sub}/search.rss with restr
 
 test('buildRedditSearchUrl: encodes special chars in keyword and subreddit', () => {
   const url = buildRedditSearchUrl('a/b c?d', 'r/with spaces')
-  assert.ok(url.includes('q=a%2Fb%20c%3Fd'))
+  assert.ok(url.includes('q=%22a%2Fb%20c%3Fd%22'))
   assert.ok(url.includes('/r/r%2Fwith%20spaces/search.rss'))
 })
 
@@ -30,6 +30,41 @@ test('buildRedditSearchUrl: respects custom sort and time-window', () => {
   const url = buildRedditSearchUrl('crm', 'SaaS', { sort: 'top', t: 'day' })
   assert.ok(url.includes('sort=top'))
   assert.ok(url.includes('t=day'))
+})
+
+// ── quoteIfMultiWord ──────────────────────────────────────────────────────────
+
+test('quoteIfMultiWord: single word is not wrapped', () => {
+  assert.equal(quoteIfMultiWord('freelance'), 'freelance')
+})
+
+test('quoteIfMultiWord: multi-word keyword is wrapped in double quotes', () => {
+  assert.equal(quoteIfMultiWord('client added more work'), '"client added more work"')
+})
+
+test('quoteIfMultiWord: already-quoted keyword is not double-wrapped', () => {
+  assert.equal(quoteIfMultiWord('"client added more work"'), '"client added more work"')
+})
+
+test('quoteIfMultiWord: empty string returns empty string', () => {
+  assert.equal(quoteIfMultiWord(''), '')
+})
+
+test('quoteIfMultiWord: whitespace-only returns trimmed empty string', () => {
+  assert.equal(quoteIfMultiWord('   '), '')
+})
+
+test('buildRedditSearchUrl: multi-word keyword is phrase-wrapped in URL', () => {
+  const url = buildRedditSearchUrl('client added more work', {})
+  assert.ok(
+    url.includes(encodeURIComponent('"client added more work"')),
+    'Expected URL to contain URL-encoded quoted phrase'
+  )
+})
+
+test('buildRedditSearchUrl: single word keyword is not quoted in URL', () => {
+  const url = buildRedditSearchUrl('freelance', {})
+  assert.ok(!url.includes('%22freelance%22'), 'Single word should not be wrapped in quotes')
 })
 
 // ── parseRedditRSS ────────────────────────────────────────────────────────────
