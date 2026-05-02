@@ -15,12 +15,14 @@
     "test:integration": "node test-reddit-monitor.js",
     "test:mcp": "node test-apify-actor.js",
     "provision": "node scripts/provision-client.js",
-    "provision:dry": "node scripts/provision-client.js --dry-run"
+    "provision:dry": "node scripts/provision-client.js --dry-run",
+    "test:scrapers": "node scripts/test-new-scrapers.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.91.1",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@upstash/redis": "^1.34.0",
+    "agent-twitter-client": "^0.0.18",
     "apify": "^3.7.0",
     "dotenv": "^16.6.1",
     "express": "^4.18.2",

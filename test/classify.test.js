@@ -49,7 +49,7 @@ test('1. classifyMatch returns valid sentiment + intent for a clear buying-inten
       body: 'Need something with API access. Currently looking at HubSpot vs Pipedrive.',
       source: 'reddit',
     })
-    assert.deepEqual(r, { sentiment: 'questioning', intent: 'asking_for_tool', confidence: 'high' })
+    assert.deepEqual(r, { sentiment: 'questioning', intent: 'asking_for_tool', confidence: 'high', relevanceScore: 0.5, demandScore: 3 })
   } finally { restore(); clearGroqEnv() }
 })
 
@@ -141,7 +141,7 @@ test('5e. classifyMatch handles confidence omission with medium fallback', async
   })
   try {
     const r = await classifyMatch({ title: 't', body: 'b', source: 'reddit' })
-    assert.deepEqual(r, { sentiment: 'positive', intent: 'recommending', confidence: 'medium' })
+    assert.deepEqual(r, { sentiment: 'positive', intent: 'recommending', confidence: 'medium', relevanceScore: 0.5, demandScore: 3 })
   } finally { restore(); clearGroqEnv() }
 })
 

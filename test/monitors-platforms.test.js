@@ -39,8 +39,8 @@ test('POST /v1/monitors body with platforms=[] → returns 400', () => {
   assert.match(r.error, /at least 1/)
 })
 
-test('POST /v1/monitors body with platforms=["twitter"] → returns 400 (invalid platform)', () => {
-  const r = resolvePlatformsForCreate(['twitter'])
+test('POST /v1/monitors body with platforms=["myspace"] → returns 400 (invalid platform)', () => {
+  const r = resolvePlatformsForCreate(['myspace'])
   assert.equal(r.ok, false)
   assert.match(r.error, /unknown platform/)
 })
@@ -219,7 +219,7 @@ test('Combined PATCH: undefined body — returns 400 NO_UPDATES', () => {
 })
 
 test('Combined PATCH: invalid platforms rejects with INVALID_PLATFORMS', () => {
-  const r = simulateCombinedPatch({ platforms: ['twitter'], emailEnabled: false })
+  const r = simulateCombinedPatch({ platforms: ['myspace'], emailEnabled: false })
   assert.equal(r.status, 400)
   assert.equal(r.error.code, 'INVALID_PLATFORMS')
 })

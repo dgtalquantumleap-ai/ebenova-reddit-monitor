@@ -23,6 +23,8 @@ import searchFiverr        from './lib/scrapers/fiverr.js'
 import searchHackerNews    from './lib/scrapers/hackernews.js'
 import searchGitHub        from './lib/scrapers/github.js'
 import searchProductHunt   from './lib/scrapers/producthunt.js'
+import searchTwitter       from './lib/scrapers/twitter.js'
+import searchLinkedIn      from './lib/scrapers/linkedin.js'
 import { migrateLegacyPlatforms, PLATFORM_LABELS, PLATFORM_EMOJIS } from './lib/platforms.js'
 import { escapeHtml }      from './lib/html-escape.js'
 import { sanitizeForPrompt } from './lib/llm-safe-prompt.js'
@@ -415,10 +417,17 @@ function buildAlertEmail(monitor, matches) {
       const highPriBadge   = isHighPriority(p)
         ? `<span style="display:inline-block;padding:2px 8px;margin-left:6px;background:#fee2e2;color:#991b1b;border-radius:10px;font-size:10px;font-weight:800;letter-spacing:.3px;">🔥 HIGH PRIORITY</span>`
         : ''
+      const _demandBadge = (() => {
+        const ds = p.demandScore
+        if (!ds) return ''
+        if (ds >= 8) return `<span style="display:inline-block;padding:2px 8px;margin-left:6px;background:#fff3cd;color:#856404;border-radius:10px;font-size:10px;font-weight:700;">🔥 Demand ${ds}/10</span>`
+        if (ds >= 5) return `<span style="display:inline-block;padding:2px 8px;margin-left:6px;background:#e2f0fb;color:#0c5460;border-radius:10px;font-size:10px;font-weight:700;">📈 Demand ${ds}/10</span>`
+        return ''
+      })()
       return `
       <div style="margin-bottom:18px;padding:14px;background:#f9f9f9;border-left:4px solid #FF6B35;border-radius:4px;">
         <div style="font-size:12px;color:#888;margin-bottom:5px;">
-          ${sourceLabel} · u/${escapeHtml(p.author)} · ${escapeHtml(p.score)} upvotes${sentimentBadge}${intentBadge}${highPriBadge}
+          ${sourceLabel} · u/${escapeHtml(p.author)} · ${escapeHtml(p.score)} upvotes${sentimentBadge}${intentBadge}${highPriBadge}${_demandBadge}
         </div>
         <a href="${escapeHtml(p.url)}" style="font-size:15px;font-weight:600;color:#1a1a1a;text-decoration:none;">${escapeHtml(p.title)}</a>
         ${p.body ? `<p style="font-size:13px;color:#555;margin:7px 0 0;line-height:1.5;">${escapeHtml(p.body)}${p.body.length >= 300 ? '…' : ''}</p>` : ''}
@@ -458,6 +467,16 @@ function buildAlertEmail(monitor, matches) {
       <div style="font-size:13px;color:#9a9690;margin-top:6px;">${matches.length} new mention${matches.length !== 1 ? 's' : ''} · ${new Date().toUTCString()}</div>
       <div style="margin-top:10px;">${platformBadges}</div>
     </div>
+    ${monitor._opportunitySummary ? `
+    <div style="margin:0 0 20px;padding:14px 18px;background:#1a1a1a;border-left:4px solid #f59e0b;border-radius:6px;">
+      <div style="font-size:12px;font-weight:700;color:#f59e0b;margin-bottom:6px;letter-spacing:.5px;">
+        🎯 OPPORTUNITY DETECTED
+      </div>
+      <div style="font-size:14px;color:#e5e7eb;line-height:1.6;">
+        ${escapeHtml(monitor._opportunitySummary)}
+      </div>
+    </div>
+    ` : ''}
     ${keywordSections}
     ${buildEmailFooter(monitor.unsubscribeToken)}
   </body></html>`
@@ -570,6 +589,26 @@ async function runMonitor(monitor) {
       const redditMatches = await searchReddit(monitor.id, kw)
       for (const m of redditMatches) {
         m.productContext = ctx
+        // Drop zero-engagement posts from unapproved sources (noise gate)
+        const _isZeroEngagement = (m.score === 0 && m.comments === 0)
+        const _isApprovedSub    = APPROVED_SUBREDDITS.has(m.subreddit)
+        const _isHighTrust      = ['hackernews','medium','substack','upwork',
+                                    'fiverr','github','producthunt'].includes(m.source)
+        if (_isZeroEngagement && !_isApprovedSub && !_isHighTrust) continue
+        // Negative keyword filter — user-defined noise exclusion list
+        if (monitor.excludeTerms?.length > 0) {
+          const _postText = `${m.title} ${m.body}`.toLowerCase()
+          if (monitor.excludeTerms.some(t => _postText.includes(t.toLowerCase().trim()))) {
+            continue
+          }
+        }
+        // Subreddit blocklist filter
+        if (monitor.blockedSubreddits?.length > 0) {
+          const _sub = (m.subreddit || '').toLowerCase().replace(/^r\//, '')
+          if (monitor.blockedSubreddits.some(b =>
+            _sub === b.toLowerCase().trim().replace(/^r\//, '')
+          )) continue
+        }
         allMatches.push(m)
       }
       if (redditMatches.length > 0) {
@@ -614,6 +653,8 @@ async function runMonitor(monitor) {
     { key: 'fiverr',      scraper: searchFiverr,      delayMs: 3000 },
     { key: 'github',      scraper: searchGitHub,      delayMs: 2000 },
     { key: 'producthunt', scraper: searchProductHunt, delayMs: 2000 },
+    { key: 'twitter',     scraper: searchTwitter,     delayMs: 2500 },
+    { key: 'linkedin',    scraper: searchLinkedIn,    delayMs: 3000 },
   ]
 
   for (const { key, scraper, delayMs } of platformRunners) {
@@ -621,7 +662,30 @@ async function runMonitor(monitor) {
     for (const kw of monitor.keywords) {
       const ctx = kw.productContext || monitor.productContext || ''
       const matches = await scraper(kw, { seenIds, delay, MAX_AGE_MS: maxAgeMs })
-      matches.forEach(m => { m.productContext = ctx; allMatches.push(m) })
+      for (const m of matches) {
+        m.productContext = ctx
+        // Drop zero-engagement posts from unapproved sources (noise gate)
+        const _isZeroEngagement = (m.score === 0 && m.comments === 0)
+        const _isApprovedSub    = APPROVED_SUBREDDITS.has(m.subreddit)
+        const _isHighTrust      = ['hackernews','medium','substack','upwork',
+                                    'fiverr','github','producthunt'].includes(m.source)
+        if (_isZeroEngagement && !_isApprovedSub && !_isHighTrust) continue
+        // Negative keyword filter — user-defined noise exclusion list
+        if (monitor.excludeTerms?.length > 0) {
+          const _postText = `${m.title} ${m.body}`.toLowerCase()
+          if (monitor.excludeTerms.some(t => _postText.includes(t.toLowerCase().trim()))) {
+            continue
+          }
+        }
+        // Subreddit blocklist filter
+        if (monitor.blockedSubreddits?.length > 0) {
+          const _sub = (m.subreddit || '').toLowerCase().replace(/^r\//, '')
+          if (monitor.blockedSubreddits.some(b =>
+            _sub === b.toLowerCase().trim().replace(/^r\//, '')
+          )) continue
+        }
+        allMatches.push(m)
+      }
       if (matches.length) console.log(`${label} ${PLATFORM_LABELS[key] || key} "${kw.keyword}": ${matches.length} new`)
       await delay(delayMs)
     }
@@ -644,12 +708,16 @@ async function runMonitor(monitor) {
         title: m.title,
         body: m.body,
         source: m.source,
+        keyword: m.keyword,
+        productContext: m.productContext || monitor.productContext || '',
         costCapCheck: groqCapForClassify || undefined,
       })
       if (result) {
         m.sentiment = result.sentiment
         m.intent = result.intent
         m.intentConfidence = result.confidence
+        m.relevanceScore = result.relevanceScore
+        m.demandScore = result.demandScore
       }
     }))
     if (i + CLASSIFY_CONCURRENCY < allMatches.length) await delay(300)
@@ -659,6 +727,47 @@ async function runMonitor(monitor) {
   const complaining = allMatches.filter(m => m.intent === 'complaining').length
   const otherClassified = allMatches.filter(m => m.intent && m.intent !== 'asking_for_tool' && m.intent !== 'buying' && m.intent !== 'complaining').length
   console.log(`${label} Classified ${allMatches.length} matches: ${highValue} buying/asking_for_tool, ${complaining} complaining, ${otherClassified} other`)
+
+  // ── Relevance gate: drop contextually irrelevant matches ────────────────────
+  const _beforeRelevance = allMatches.length
+  const _relevant = allMatches.filter(m =>
+    m.relevanceScore === undefined || m.relevanceScore >= 0.40
+  )
+  const _droppedRelevance = _beforeRelevance - _relevant.length
+  if (_droppedRelevance > 0) {
+    console.log(`${label} Relevance gate: dropped ${_droppedRelevance} low-relevance matches (< 0.40)`)
+  }
+  allMatches.length = 0
+  _relevant.forEach(m => allMatches.push(m))
+
+  // ── Opportunity detection: summarise high-demand matches ────────────────────
+  monitor._opportunitySummary = null
+  const _highDemand = allMatches.filter(m => (m.demandScore || 0) >= 7)
+  if (_highDemand.length >= 2 && GROQ_API_KEY) {
+    try {
+      const _oppTitles = _highDemand.slice(0, 5).map(m => `- ${m.title}`).join('\n')
+      const _oppKeyword = monitor.keywords?.[0]?.keyword || 'this topic'
+      const _oppPrompt  = `These ${_highDemand.length} posts show strong buying intent for "${_oppKeyword}":\n${_oppTitles}\n\nIn 1-2 sentences, describe the specific opportunity or pain point these people share. Be concrete and actionable. Do not use marketing language.`
+      const _oppResp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${GROQ_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'llama3-8b-8192',
+          messages: [{ role: 'user', content: _oppPrompt }],
+          max_tokens: 120,
+          temperature: 0.3,
+        }),
+      })
+      const _oppData = await _oppResp.json()
+      monitor._opportunitySummary = _oppData.choices?.[0]?.message?.content?.trim() || null
+    } catch (_oppErr) {
+      console.warn(`${label} Opportunity detection failed: ${_oppErr.message}`)
+      monitor._opportunitySummary = null
+    }
+  }
 
   console.log(`${label} ${allMatches.length} total matches — generating drafts…`)
 
@@ -686,7 +795,7 @@ async function runMonitor(monitor) {
     recommending:    4,
     venting:         5,
   }
-  const SOURCE_RANK = { reddit: 0, hackernews: 1, quora: 2, medium: 3, substack: 4, upwork: 5, fiverr: 6 }
+  const SOURCE_RANK = { reddit: 0, hackernews: 1, quora: 2, medium: 3, substack: 4, upwork: 5, fiverr: 6, twitter: 7, linkedin: 8 }
   allMatches.sort((a, b) => {
     const ia = INTENT_BOOST[a.intent] ?? 6
     const ib = INTENT_BOOST[b.intent] ?? 6

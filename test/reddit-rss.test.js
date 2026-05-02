@@ -7,7 +7,8 @@ import { parseRedditRSS, buildRedditSearchUrl, parseRetryAfter } from '../lib/re
 test('buildRedditSearchUrl: global search uses /search.rss', () => {
   const url = buildRedditSearchUrl('freelance contract', null)
   assert.ok(url.startsWith('https://www.reddit.com/search.rss?'))
-  assert.ok(url.includes('q=freelance%20contract'))
+  // multi-word keywords are phrase-wrapped in double quotes before encoding
+  assert.ok(url.includes('q=%22freelance%20contract%22'))
   assert.ok(url.includes('sort=new'))
   assert.ok(url.includes('t=week'))
   assert.ok(!url.includes('restrict_sr=1'))
@@ -22,7 +23,8 @@ test('buildRedditSearchUrl: subreddit search uses /r/{sub}/search.rss with restr
 
 test('buildRedditSearchUrl: encodes special chars in keyword and subreddit', () => {
   const url = buildRedditSearchUrl('a/b c?d', 'r/with spaces')
-  assert.ok(url.includes('q=a%2Fb%20c%3Fd'))
+  // multi-word keyword gets phrase-wrapped, then special chars encoded
+  assert.ok(url.includes('q=%22a%2Fb%20c%3Fd%22'))
   assert.ok(url.includes('/r/r%2Fwith%20spaces/search.rss'))
 })
 

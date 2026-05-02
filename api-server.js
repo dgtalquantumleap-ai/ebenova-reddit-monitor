@@ -39,6 +39,8 @@ import searchUpwork      from './lib/scrapers/upwork.js'
 import searchFiverr      from './lib/scrapers/fiverr.js'
 import searchGitHub      from './lib/scrapers/github.js'
 import searchProductHunt from './lib/scrapers/producthunt.js'
+import searchTwitter     from './lib/scrapers/twitter.js'
+import searchLinkedIn   from './lib/scrapers/linkedin.js'
 import { loadEnv } from './lib/env.js'
 import { makeCorsMiddleware } from './lib/cors.js'
 import helmet from 'helmet'
@@ -256,7 +258,7 @@ app.post('/v1/monitors', async (req, res) => {
   const auth = await authenticate(req)
   if (!auth.ok) return res.status(auth.status).json({ success: false, error: auth.error })
   const { name, keywords = [], productContext, alertEmail, slackWebhookUrl, replyTone,
-    platforms,
+    platforms, excludeTerms, blockedSubreddits,
     includeMedium, includeSubstack, includeQuora, includeUpworkForum, includeFiverrForum } = req.body
 
   // Platforms — new monitors must specify at least 1; if omitted entirely we
@@ -270,6 +272,14 @@ app.post('/v1/monitors', async (req, res) => {
       return res.status(400).json({ success: false, error: { code: 'INVALID_PLATFORMS', message: v.error } })
     }
     resolvedPlatforms = v.platforms
+  }
+  if (excludeTerms !== undefined) {
+    if (!Array.isArray(excludeTerms)) return res.status(400).json({ success: false, error: { code: 'INVALID_INPUT', message: '`excludeTerms` must be an array' } })
+    if (excludeTerms.some(t => typeof t !== 'string')) return res.status(400).json({ success: false, error: { code: 'INVALID_INPUT', message: '`excludeTerms` must contain only strings' } })
+  }
+  if (blockedSubreddits !== undefined) {
+    if (!Array.isArray(blockedSubreddits)) return res.status(400).json({ success: false, error: { code: 'INVALID_INPUT', message: '`blockedSubreddits` must be an array' } })
+    if (blockedSubreddits.some(s => typeof s !== 'string')) return res.status(400).json({ success: false, error: { code: 'INVALID_INPUT', message: '`blockedSubreddits` must contain only strings' } })
   }
   const plan = auth.keyData.insightsPlan || 'starter'
   const limits = PLAN_LIMITS[plan] || PLAN_LIMITS.starter
@@ -322,6 +332,9 @@ app.post('/v1/monitors', async (req, res) => {
       includeQuora:       resolvedPlatforms.includes('quora'),
       includeUpworkForum: resolvedPlatforms.includes('upwork'),
       includeFiverrForum: resolvedPlatforms.includes('fiverr'),
+      // Noise suppression — user-defined exclusion lists
+      excludeTerms:       Array.isArray(excludeTerms) ? excludeTerms : [],
+      blockedSubreddits:  Array.isArray(blockedSubreddits) ? blockedSubreddits : [],
       // Email opt-out + delete-account flow (per PR #13)
       emailEnabled:       true,
       unsubscribeToken,
@@ -387,8 +400,30 @@ app.patch('/v1/monitors/:id', async (req, res) => {
       updates.emailEnabled = body.emailEnabled
     }
 
+    // Field 3: excludeTerms — array of strings, optional
+    if (Object.prototype.hasOwnProperty.call(body, 'excludeTerms')) {
+      if (!Array.isArray(body.excludeTerms)) {
+        return res.status(400).json({ success: false, error: { code: 'INVALID_INPUT', message: '`excludeTerms` must be an array' } })
+      }
+      if (body.excludeTerms.some(t => typeof t !== 'string')) {
+        return res.status(400).json({ success: false, error: { code: 'INVALID_INPUT', message: '`excludeTerms` must contain only strings' } })
+      }
+      updates.excludeTerms = body.excludeTerms
+    }
+
+    // Field 4: blockedSubreddits — array of strings, optional
+    if (Object.prototype.hasOwnProperty.call(body, 'blockedSubreddits')) {
+      if (!Array.isArray(body.blockedSubreddits)) {
+        return res.status(400).json({ success: false, error: { code: 'INVALID_INPUT', message: '`blockedSubreddits` must be an array' } })
+      }
+      if (body.blockedSubreddits.some(s => typeof s !== 'string')) {
+        return res.status(400).json({ success: false, error: { code: 'INVALID_INPUT', message: '`blockedSubreddits` must contain only strings' } })
+      }
+      updates.blockedSubreddits = body.blockedSubreddits
+    }
+
     if (Object.keys(updates).length === 0) {
-      return res.status(400).json({ success: false, error: { code: 'NO_UPDATES', message: 'No supported fields in body. Patchable: platforms, emailEnabled' } })
+      return res.status(400).json({ success: false, error: { code: 'NO_UPDATES', message: 'No supported fields in body. Patchable: platforms, emailEnabled, excludeTerms, blockedSubreddits' } })
     }
     const next = { ...m, ...updates }
     await redis.set(`insights:monitor:${id}`, JSON.stringify(next))
@@ -868,6 +903,8 @@ app.post('/v1/search', async (req, res) => {
       if (platformSet.has('fiverr'))      tasks.push(searchFiverr(kwEntry, opts).catch(() => []))
       if (platformSet.has('github'))      tasks.push(searchGitHub(kwEntry, opts).catch(() => []))
       if (platformSet.has('producthunt')) tasks.push(searchProductHunt(kwEntry, opts).catch(() => []))
+      if (platformSet.has('twitter'))     tasks.push(searchTwitter(kwEntry, opts).catch(() => []))
+      if (platformSet.has('linkedin'))    tasks.push(searchLinkedIn(kwEntry, opts).catch(() => []))
       const batches = await Promise.all(tasks)
       for (const batch of batches) {
         for (const item of (batch || [])) {
