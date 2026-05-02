@@ -946,6 +946,27 @@ async function runMonitor(monitor) {
     }
   }
 
+  // ── Feed filters: excludeTerms + blockedSubreddits ───────────────────────
+  // Applied before classify to avoid spending Groq tokens on posts that will
+  // never reach the user's feed.
+  const _excludeTerms = (monitor.excludeTerms || []).map(t => t.toLowerCase())
+  const _blockedSubs  = new Set((monitor.blockedSubreddits || []).map(s => s.toLowerCase().replace(/^r\//, '')))
+  if (_excludeTerms.length || _blockedSubs.size) {
+    const _before = allMatches.length
+    const _kept = allMatches.filter(m => {
+      if (_blockedSubs.size && _blockedSubs.has((m.subreddit || '').toLowerCase())) return false
+      if (_excludeTerms.length) {
+        const _hay = `${m.title} ${m.body}`.toLowerCase()
+        if (_excludeTerms.some(t => _hay.includes(t))) return false
+      }
+      return true
+    })
+    allMatches.splice(0, allMatches.length, ..._kept)
+    const _dropped = _before - allMatches.length
+    if (_dropped) console.log(`${label} Feed filter dropped ${_dropped}/${_before} matches`)
+  }
+  // ── End feed filters ───────────────────────────────────────────────────────
+
   if (allMatches.length === 0) {
     console.log(`${label} No new matches`)
     return

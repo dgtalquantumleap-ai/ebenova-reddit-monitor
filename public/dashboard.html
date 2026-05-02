@@ -2573,6 +2573,10 @@ function Settings({ apiKey, userEmail, plan, onSignOut, monitors, onRefresh }) {
   );
 }
 
+function parseCommaSeparated(str) {
+  return (str || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
+}
+
 // ── Edit Monitor Modal (Batch B) ────────────────────────────────────────────
 // Centered overlay with all 14 patchable fields. Pre-populated from the
 // monitor's GET response (the same shape the parent already passed in).
@@ -2591,6 +2595,8 @@ function EditMonitorModal({ apiKey, monitor, corridors, onClose, onSaved }) {
   const [slackUrl,    setSlackUrl]    = useState(monitor.slack_webhook_url || '')
   const [platforms,   setPlatforms]   = useState(monitor.platforms || ['reddit'])
   const [corridorId,  setCorridorId]  = useState(monitor.diaspora_corridor || '')
+  const [excludeTermsInput,      setExcludeTermsInput]      = useState((monitor.exclude_terms      || monitor.excludeTerms      || []).join(', '))
+  const [blockedSubredditsInput, setBlockedSubredditsInput] = useState((monitor.blocked_subreddits || monitor.blockedSubreddits || []).join(', '))
   const [saving, setSaving] = useState(false)
   const [err, setErr]       = useState('')
   const [availablePlatforms, setAvailablePlatforms] = useState([])
@@ -2628,6 +2634,14 @@ function EditMonitorModal({ apiKey, monitor, corridors, onClose, onSaved }) {
     if (corridorId !== (monitor.diaspora_corridor || '')) body.diasporaCorridor = corridorId || null
     const platformsChanged = JSON.stringify([...platforms].sort()) !== JSON.stringify([...(monitor.platforms || [])].sort())
     if (platformsChanged) body.platforms = platforms
+
+    const _curExclude  = parseCommaSeparated(excludeTermsInput).join(',')
+    const _savedExclude = (monitor.exclude_terms || monitor.excludeTerms || []).join(',')
+    if (_curExclude !== _savedExclude) body.excludeTerms = parseCommaSeparated(excludeTermsInput)
+
+    const _curBlocked  = parseCommaSeparated(blockedSubredditsInput).map(s => s.replace(/^r\//, '')).join(',')
+    const _savedBlocked = (monitor.blocked_subreddits || monitor.blockedSubreddits || []).join(',')
+    if (_curBlocked !== _savedBlocked) body.blockedSubreddits = parseCommaSeparated(blockedSubredditsInput).map(s => s.replace(/^r\//, ''))
 
     if (Object.keys(body).length === 0) {
       setErr('Nothing changed.')
@@ -2762,6 +2776,24 @@ function EditMonitorModal({ apiKey, monitor, corridors, onClose, onSaved }) {
               </div>
             </div>
           </details>
+        )}
+
+        {!isBuilder && (
+          <>
+            <div style={{fontSize:11,fontWeight:600,color:'#94A3B8',letterSpacing:'0.06em',textTransform:'uppercase',margin:'4px 0 10px'}}>Feed Filters</div>
+            <div className="field" style={{marginBottom:14}}>
+              <label className="label">Exclude terms</label>
+              <input className="inp" placeholder="minecraft, gaming, pregnancy (comma-separated)"
+                value={excludeTermsInput} onChange={e=>setExcludeTermsInput(e.target.value)} />
+              <div style={{fontSize:12,color:'#6b7280',marginTop:4}}>Posts containing any of these words are dropped before they reach your feed.</div>
+            </div>
+            <div className="field" style={{marginBottom:14}}>
+              <label className="label">Block subreddits</label>
+              <input className="inp" placeholder="r/gaming, r/teenagers (comma-separated)"
+                value={blockedSubredditsInput} onChange={e=>setBlockedSubredditsInput(e.target.value)} />
+              <div style={{fontSize:12,color:'#6b7280',marginTop:4}}>Posts from these subreddits never appear in your feed or alerts.</div>
+            </div>
+          </>
         )}
 
         {err && <div className="alert alert-error" style={{marginBottom:14}}><i className="ph ph-warning-circle"></i>{err}</div>}

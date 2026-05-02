@@ -824,8 +824,32 @@ app.patch('/v1/monitors/:id', async (req, res) => {
       updates.name = body.name.trim().slice(0, 100)
     }
 
+    // Field 16: excludeTerms — array of strings; posts whose title/body
+    // contain any term are silently dropped before storage and alerts.
+    if (Object.prototype.hasOwnProperty.call(body, 'excludeTerms')) {
+      if (!Array.isArray(body.excludeTerms)) {
+        return res.status(400).json({ success: false, error: { code: 'INVALID_EXCLUDE_TERMS', message: '`excludeTerms` must be an array' } })
+      }
+      updates.excludeTerms = body.excludeTerms
+        .filter(t => typeof t === 'string' && t.trim())
+        .map(t => t.trim().toLowerCase().slice(0, 100))
+        .slice(0, 50)
+    }
+
+    // Field 17: blockedSubreddits — array of strings; posts from these
+    // subreddits are silently dropped before storage and alerts.
+    if (Object.prototype.hasOwnProperty.call(body, 'blockedSubreddits')) {
+      if (!Array.isArray(body.blockedSubreddits)) {
+        return res.status(400).json({ success: false, error: { code: 'INVALID_BLOCKED_SUBREDDITS', message: '`blockedSubreddits` must be an array' } })
+      }
+      updates.blockedSubreddits = body.blockedSubreddits
+        .filter(s => typeof s === 'string' && s.trim())
+        .map(s => s.trim().toLowerCase().replace(/^r\//, '').slice(0, 100))
+        .slice(0, 50)
+    }
+
     if (Object.keys(updates).length === 0) {
-      return res.status(400).json({ success: false, error: { code: 'NO_UPDATES', message: 'No supported fields in body. Patchable: name, platforms, emailEnabled, productUrl, utmSource, utmMedium, utmCampaign, webhookUrl, slackWebhookUrl, replyTone, mode, minConsistency, brandName, diasporaCorridor' } })
+      return res.status(400).json({ success: false, error: { code: 'NO_UPDATES', message: 'No supported fields in body. Patchable: name, platforms, emailEnabled, productUrl, utmSource, utmMedium, utmCampaign, webhookUrl, slackWebhookUrl, replyTone, mode, minConsistency, brandName, diasporaCorridor, excludeTerms, blockedSubreddits' } })
     }
     const next = { ...m, ...updates }
     await redis.set(`insights:monitor:${id}`, JSON.stringify(next))
