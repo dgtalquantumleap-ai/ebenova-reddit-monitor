@@ -24,6 +24,7 @@ import searchGitHub        from './lib/scrapers/github.js'
 import searchProductHunt   from './lib/scrapers/producthunt.js'
 import searchTwitter       from './lib/scrapers/twitter.js'
 import searchLinkedIn      from './lib/scrapers/linkedin.js'
+import searchYouTube      from './lib/scrapers/youtube.js'
 import { migrateLegacyPlatforms, PLATFORM_LABELS, PLATFORM_EMOJIS } from './lib/platforms.js'
 import { escapeHtml }      from './lib/html-escape.js'
 import { sanitizeForPrompt } from './lib/llm-safe-prompt.js'
@@ -599,7 +600,7 @@ async function runMonitor(monitor) {
         const _isZeroEngagement = (m.score === 0 && m.comments === 0)
         const _isApprovedSub    = APPROVED_SUBREDDITS.has(m.subreddit)
         const _isHighTrust      = ['hackernews','medium','substack','upwork',
-                                    'fiverr','github','producthunt'].includes(m.source)
+                                    'fiverr','github','producthunt','youtube'].includes(m.source)
         if (_isZeroEngagement && !_isApprovedSub && !_isHighTrust) continue
         // Negative keyword filter — user-defined noise exclusion list
         if (monitor.excludeTerms?.length > 0) {
@@ -661,6 +662,7 @@ async function runMonitor(monitor) {
     { key: 'producthunt', scraper: searchProductHunt, delayMs: 2000 },
     { key: 'twitter',     scraper: searchTwitter,     delayMs: 2500 },
     { key: 'linkedin',    scraper: searchLinkedIn,    delayMs: 3000 },
+    { key: 'youtube',     scraper: searchYouTube,     delayMs: 2000 },
   ]
 
   for (const { key, scraper, delayMs } of platformRunners) {
@@ -674,7 +676,7 @@ async function runMonitor(monitor) {
         const _isZeroEngagement = (m.score === 0 && m.comments === 0)
         const _isApprovedSub    = APPROVED_SUBREDDITS.has(m.subreddit)
         const _isHighTrust      = ['hackernews','medium','substack','upwork',
-                                    'fiverr','github','producthunt'].includes(m.source)
+                                    'fiverr','github','producthunt','youtube'].includes(m.source)
         if (_isZeroEngagement && !_isApprovedSub && !_isHighTrust) continue
         // Negative keyword filter — user-defined noise exclusion list
         if (monitor.excludeTerms?.length > 0) {
