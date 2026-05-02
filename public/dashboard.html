@@ -1099,7 +1099,16 @@ function SprintView({ matches, monitorId, apiKey, onClose, onAction }) {
     return () => window.removeEventListener('keydown', handler);
   }, [matches.length, onClose]);
 
-  if (!match) return null;
+  if (!match) return (
+    <div style={{textAlign:'center',padding:'40px 20px',color:'#6b7280'}}>
+      <div style={{fontSize:32,marginBottom:12}}>✅</div>
+      <div style={{fontSize:15,fontWeight:600,color:'#374151',marginBottom:8}}>No high-priority matches right now</div>
+      <div style={{fontSize:13,lineHeight:1.6}}>
+        The sprint shows demand score 6+ matches only.<br/>
+        Check the full feed below for lower-signal results.
+      </div>
+    </div>
+  );
   const TABS = [['valueHook','Value Hook'],['directBridge','Direct Bridge'],['empathy','Empathy']];
   const text = variants?.[tab] || '';
 
@@ -1154,7 +1163,11 @@ function SprintView({ matches, monitorId, apiKey, onClose, onAction }) {
               </button>
             </>
           )}
-          {!loading && !variants && <div style={{fontSize:12,color:'#94A3B8',padding:'12px 0'}}>Could not generate variants — check GROQ_API_KEY</div>}
+          {!loading && !variants && <div style={{fontSize:12,color:'#94A3B8',padding:'12px 0'}}>
+            {(!match.demandScore || match.demandScore < 4)
+              ? 'Low demand signal — variant generation skipped for this post.'
+              : 'Variants temporarily unavailable — will retry on next scan.'}
+          </div>}
         </div>
       </div>
     </div>
@@ -1309,7 +1322,12 @@ function MatchesFeed({ apiKey, monitors }) {
             )}
             {sprintMode && !loading && matches.length > 0 && (
               <SprintView
-                matches={matches.filter(m => (m.demandScore||0) >= 5 || m.isUnanswered)}
+                matches={matches.filter(m =>
+                  (m.demandScore || 0) >= 6 ||
+                  (m.isUnanswered && (m.demandScore || 0) >= 4) ||
+                  m.intent === 'asking_for_tool' ||
+                  m.intent === 'buying'
+                )}
                 monitorId={selId}
                 apiKey={apiKey}
                 onClose={() => setSprintMode(false)}

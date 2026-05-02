@@ -1056,6 +1056,53 @@ async function runMonitor(monitor) {
     return new Date(b.createdAt) - new Date(a.createdAt)
   })
 
+  // ── Opportunity detection ──────────────────────────────────────────────────
+  monitor._opportunitySummary = null
+  {
+    const _highDemand = allMatches.filter(m => (m.demandScore || 0) >= 7)
+    if (_highDemand.length >= 2 && GROQ_API_KEY) {
+      try {
+        const _oppKeyword = monitor.keywords?.[0]?.keyword || 'this topic'
+        const _oppTitles  = _highDemand.slice(0, 5).map(m => `- ${m.title}`).join('\n')
+        const _oppPrompt  = [
+          `These ${_highDemand.length} posts show strong buying intent`,
+          `for "${_oppKeyword}":\n${_oppTitles}\n`,
+          `In 1–2 sentences, describe the specific pain point or`,
+          `opportunity these people share. Be concrete. No marketing`,
+          `language. No "consider" or "leverage". Plain English.`,
+        ].join(' ')
+
+        const _oppRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${GROQ_API_KEY}`,
+            'Content-Type':  'application/json',
+          },
+          body: JSON.stringify({
+            model:       'llama3-8b-8192',
+            messages:    [{ role: 'user', content: _oppPrompt }],
+            max_tokens:  120,
+            temperature: 0.3,
+          }),
+        })
+
+        if (_oppRes.ok) {
+          const _oppData = await _oppRes.json()
+          const _oppText = _oppData.choices?.[0]?.message?.content?.trim()
+          if (_oppText && _oppText.length > 10) {
+            monitor._opportunitySummary = _oppText
+            console.log(`${label} 🎯 Opportunity: ${_oppText.slice(0, 80)}…`)
+          }
+        } else {
+          console.warn(`${label} Opportunity detection: Groq ${_oppRes.status}`)
+        }
+      } catch (_oppErr) {
+        console.warn(`${label} Opportunity detection failed: ${_oppErr.message}`)
+      }
+    }
+  }
+  // ── End opportunity detection ──────────────────────────────────────────────
+
   // Store in Redis + send alert
   try {
     const redis = getRedis()
