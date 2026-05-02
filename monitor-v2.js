@@ -420,14 +420,17 @@ function buildAlertEmail(monitor, matches) {
       const _demandBadge = (() => {
         const ds = p.demandScore
         if (!ds) return ''
-        if (ds >= 8) return `<span style="display:inline-block;padding:2px 8px;margin-left:6px;background:#fff3cd;color:#856404;border-radius:10px;font-size:10px;font-weight:700;">🔥 Demand ${ds}/10</span>`
-        if (ds >= 5) return `<span style="display:inline-block;padding:2px 8px;margin-left:6px;background:#e2f0fb;color:#0c5460;border-radius:10px;font-size:10px;font-weight:700;">📈 Demand ${ds}/10</span>`
+        if (ds >= 8) return `<span style="display:inline-block;padding:2px 8px;margin-left:6px;background:#fff3cd;color:#856404;border-radius:10px;font-size:10px;font-weight:700;">🔥 Score: ${ds}/10</span>`
+        if (ds >= 5) return `<span style="display:inline-block;padding:2px 8px;margin-left:6px;background:#e2f0fb;color:#0c5460;border-radius:10px;font-size:10px;font-weight:700;">📈 Score: ${ds}/10</span>`
         return ''
       })()
+      const _unansweredBadge = p.isUnanswered
+        ? `<span style="display:inline-block;padding:2px 8px;margin-left:6px;background:#dcfce7;color:#166534;border-radius:10px;font-size:10px;font-weight:700;">🟢 Unanswered · posted ${Math.round((Date.now() - new Date(p.createdAt).getTime()) / 60000)} min ago</span>`
+        : ''
       return `
       <div style="margin-bottom:18px;padding:14px;background:#f9f9f9;border-left:4px solid #FF6B35;border-radius:4px;">
         <div style="font-size:12px;color:#888;margin-bottom:5px;">
-          ${sourceLabel} · u/${escapeHtml(p.author)} · ${escapeHtml(p.score)} upvotes${sentimentBadge}${intentBadge}${highPriBadge}${_demandBadge}
+          ${sourceLabel} · u/${escapeHtml(p.author)} · ${escapeHtml(p.score)} upvotes${sentimentBadge}${intentBadge}${highPriBadge}${_demandBadge}${_unansweredBadge}
         </div>
         <a href="${escapeHtml(p.url)}" style="font-size:15px;font-weight:600;color:#1a1a1a;text-decoration:none;">${escapeHtml(p.title)}</a>
         ${p.body ? `<p style="font-size:13px;color:#555;margin:7px 0 0;line-height:1.5;">${escapeHtml(p.body)}${p.body.length >= 300 ? '…' : ''}</p>` : ''}
@@ -696,6 +699,20 @@ async function runMonitor(monitor) {
     return
   }
 
+  // ── Compute replyCount + isUnanswered for each match ───────────────────────
+  // isUnanswered = true when replyCount === 0 AND the post is < 2h old.
+  // Used for priority sorting and dashboard/email badges.
+  // Note: Reddit RSS always sets comments=0 (RSS doesn't include it), so
+  // isUnanswered is most accurate for semantic search results and other
+  // platforms that return real comment counts.
+  const _nowMs = Date.now()
+  for (const m of allMatches) {
+    m.replyCount = m.comments || 0
+    const _ageMs = _nowMs - new Date(m.createdAt || 0).getTime()
+    const _postAgeHours = _ageMs / (1000 * 60 * 60)
+    m.isUnanswered = m.replyCount === 0 && _postAgeHours < 2
+  }
+
   // ── Classify sentiment + intent (best-effort, before drafting) ───────────
   // Why before drafting: priority sort uses intent. Why best-effort: classify
   // failure must never block storage or email. Cap-aware via shared groq cap.
@@ -784,9 +801,12 @@ async function runMonitor(monitor) {
     if (i + CONCURRENCY < allMatches.length) await delay(1000)
   }
 
-  // Priority sort — intent first, then source rank, then recency.
-  // INTENT_BOOST puts 'asking_for_tool' at the top because it's the most
-  // explicit "I need a solution" signal. Unclassified matches go last.
+  // Priority sort — isUnanswered tiers first, then intent, then source rank, then recency.
+  //
+  // Tier 0: unanswered + demandScore >= 8 (pure gold: no competition, hot intent)
+  // Tier 1: unanswered + demandScore >= 5 (fresh thread, moderate-high demand)
+  // Tier 2: answered but demandScore >= 8 (high intent regardless of thread age)
+  // Tier 3+: everything else (existing intent → source → recency sort)
   const INTENT_BOOST = {
     asking_for_tool: 0,
     buying:          1,
@@ -796,14 +816,28 @@ async function runMonitor(monitor) {
     venting:         5,
   }
   const SOURCE_RANK = { reddit: 0, hackernews: 1, quora: 2, medium: 3, substack: 4, upwork: 5, fiverr: 6, twitter: 7, linkedin: 8 }
+
+  function _unansweredTier(m) {
+    const ds = m.demandScore || 0
+    if (m.isUnanswered && ds >= 8) return 0
+    if (m.isUnanswered && ds >= 5) return 1
+    if (ds >= 8)                   return 2
+    return 3
+  }
+
   allMatches.sort((a, b) => {
+    const ta = _unansweredTier(a)
+    const tb = _unansweredTier(b)
+    if (ta !== tb) return ta - tb
+    // Within same tier: intent priority
     const ia = INTENT_BOOST[a.intent] ?? 6
     const ib = INTENT_BOOST[b.intent] ?? 6
     if (ia !== ib) return ia - ib
+    // Then source rank
     const ra = SOURCE_RANK[a.source] ?? 99
     const rb = SOURCE_RANK[b.source] ?? 99
     if (ra !== rb) return ra - rb
-    // Within the same intent + source, newer first
+    // Within same intent + source, newer first
     return new Date(b.createdAt) - new Date(a.createdAt)
   })
 

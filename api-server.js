@@ -60,6 +60,9 @@ import { applyInviteToUser } from './lib/invite.js'
 import { draftCall } from './lib/draft-call.js'
 import { validatePlatforms, migrateLegacyPlatforms, VALID_PLATFORMS } from './lib/platforms.js'
 import { classifyMatch, intentPriority } from './lib/classify.js'
+import { generateVariants } from './lib/variants-call.js'
+import { TEMPLATES } from './lib/templates.js'
+import { parseRedditRSS, buildRedditSearchUrl } from './lib/reddit-rss.js'
 
 const PORT = parseInt(process.env.API_PORT || process.env.PORT || '3001')
 const ADMIN_KEY = process.env.MONITOR_ADMIN_KEY
@@ -205,11 +208,20 @@ app.get('/health', async (req, res) => {
 app.get('/v1/me', async (req, res) => {
   const auth = await authenticate(req)
   if (!auth.ok) return res.status(auth.status).json({ success: false, error: auth.error })
+  // Derive the raw API key from the Authorization header so we can check onboarding state.
+  const rawKey = (req.headers['authorization'] || '').replace(/^Bearer /, '').trim()
+  let isOnboarded = false
+  try {
+    const redis = getRedis()
+    const flag = await redis.get(`onboarded:${rawKey}`)
+    isOnboarded = !!flag
+  } catch (_) {}
   res.json({
     success: true,
     email: auth.owner,
     plan: auth.keyData.insightsPlan || 'starter',
     name: auth.keyData.name || '',
+    isOnboarded,
   })
 })
 
@@ -244,6 +256,7 @@ app.get('/v1/monitors', async (req, res) => {
           // migrated from legacy includeXxx flags otherwise. Always returned
           // so the dashboard can render the right chip-selection state.
           platforms: migrateLegacyPlatforms(m),
+          deal_value: m.dealValue || 0,
         })
       }
     }
@@ -258,7 +271,7 @@ app.post('/v1/monitors', async (req, res) => {
   const auth = await authenticate(req)
   if (!auth.ok) return res.status(auth.status).json({ success: false, error: auth.error })
   const { name, keywords = [], productContext, alertEmail, slackWebhookUrl, replyTone,
-    platforms, excludeTerms, blockedSubreddits,
+    platforms, excludeTerms, blockedSubreddits, dealValue,
     includeMedium, includeSubstack, includeQuora, includeUpworkForum, includeFiverrForum } = req.body
 
   // Platforms — new monitors must specify at least 1; if omitted entirely we
@@ -335,6 +348,8 @@ app.post('/v1/monitors', async (req, res) => {
       // Noise suppression — user-defined exclusion lists
       excludeTerms:       Array.isArray(excludeTerms) ? excludeTerms : [],
       blockedSubreddits:  Array.isArray(blockedSubreddits) ? blockedSubreddits : [],
+      // Revenue tracking — optional average deal size for opportunity cost calc
+      dealValue:          (typeof dealValue === 'number' && dealValue > 0) ? Math.round(dealValue) : 0,
       // Email opt-out + delete-account flow (per PR #13)
       emailEnabled:       true,
       unsubscribeToken,
@@ -422,8 +437,17 @@ app.patch('/v1/monitors/:id', async (req, res) => {
       updates.blockedSubreddits = body.blockedSubreddits
     }
 
+    // Field 5: dealValue — optional integer USD deal size for revenue ticker
+    if (Object.prototype.hasOwnProperty.call(body, 'dealValue')) {
+      const dv = body.dealValue
+      if (dv !== null && dv !== 0 && (typeof dv !== 'number' || dv < 0)) {
+        return res.status(400).json({ success: false, error: { code: 'INVALID_INPUT', message: '`dealValue` must be a non-negative number or 0' } })
+      }
+      updates.dealValue = (typeof dv === 'number' && dv > 0) ? Math.round(dv) : 0
+    }
+
     if (Object.keys(updates).length === 0) {
-      return res.status(400).json({ success: false, error: { code: 'NO_UPDATES', message: 'No supported fields in body. Patchable: platforms, emailEnabled, excludeTerms, blockedSubreddits' } })
+      return res.status(400).json({ success: false, error: { code: 'NO_UPDATES', message: 'No supported fields in body. Patchable: platforms, emailEnabled, excludeTerms, blockedSubreddits, dealValue' } })
     }
     const next = { ...m, ...updates }
     await redis.set(`insights:monitor:${id}`, JSON.stringify(next))
@@ -452,6 +476,97 @@ app.delete('/v1/monitors/:id', async (req, res) => {
     await redis.set(`insights:monitor:${id}`, JSON.stringify({ ...m, active: false }))
     await redis.srem('insights:active_monitors', id)
     res.json({ success: true, monitor_id: id, active: false })
+  } catch (err) {
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
+  }
+})
+
+// ── GET /v1/presets ────────────────────────────────────────────────────────
+// Returns the 8 built-in template presets used by the onboarding wizard.
+// No auth required — these are public marketing content.
+app.get('/v1/presets', (req, res) => {
+  const presets = Object.entries(TEMPLATES).map(([id, tpl]) => ({
+    id,
+    label: tpl.label,
+    suggestedName: tpl.suggestedName,
+    keywordCount: tpl.keywords.length,
+    keywords: tpl.keywords,
+    platforms: tpl.platforms,
+    productContext: tpl.productContext,
+  }))
+  res.json({ success: true, presets })
+})
+
+// ── POST /v1/monitors/:id/onboard ─────────────────────────────────────────
+// Marks the user as onboarded after the wizard completes.
+// Stores onboarded:{apiKey} = '1' in Redis (no TTL).
+app.post('/v1/monitors/:id/onboard', async (req, res) => {
+  const auth = await authenticate(req)
+  if (!auth.ok) return res.status(auth.status).json({ success: false, error: auth.error })
+  const rawKey = (req.headers['authorization'] || '').replace(/^Bearer /, '').trim()
+  try {
+    const redis = getRedis()
+    await redis.set(`onboarded:${rawKey}`, '1')
+    res.json({ success: true })
+  } catch (err) {
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
+  }
+})
+
+// ── POST /v1/monitors/:id/poll-now ────────────────────────────────────────
+// Lightweight immediate Reddit RSS scan for the first N keywords on a monitor.
+// Called after onboarding wizard creates a monitor so the Feed tab shows
+// something immediately without waiting for the next cron cycle.
+// Runs in the API process (not the cron worker). Max 3 keywords to keep it fast.
+app.post('/v1/monitors/:id/poll-now', async (req, res) => {
+  const auth = await authenticate(req)
+  if (!auth.ok) return res.status(auth.status).json({ success: false, error: auth.error })
+  const { id } = req.params
+  try {
+    const redis = getRedis()
+    const raw = await redis.get(`insights:monitor:${id}`)
+    if (!raw) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Monitor not found' } })
+    const m = typeof raw === 'string' ? JSON.parse(raw) : raw
+    if (m.owner !== auth.owner) return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'Not your monitor' } })
+
+    const keywords = (m.keywords || []).slice(0, 3)
+    const matches = []
+    const TTL = 60 * 60 * 24 * 7
+
+    for (const kw of keywords) {
+      try {
+        const url = buildRedditSearchUrl(kw.keyword, null, { sort: 'new', t: 'week' })
+        const rRes = await fetch(url, {
+          headers: { 'User-Agent': 'EbenovaInsights/2.0 (poll-now)' },
+          signal: AbortSignal.timeout(8000),
+        })
+        if (!rRes.ok) continue
+        const xml = await rRes.text()
+        const entries = parseRedditRSS(xml)
+        for (const entry of entries.slice(0, 5)) {
+          const seenKey = `seen:v2:${id}:${entry.id}`
+          const already = await redis.get(seenKey)
+          if (already) continue
+          await redis.setex(seenKey, 60 * 60 * 24 * 3, '1')
+          const match = {
+            id: entry.id, title: entry.title, url: entry.url,
+            subreddit: entry.subreddit, author: entry.author,
+            score: 0, comments: 0, body: entry.body || '',
+            createdAt: entry.createdAt, keyword: kw.keyword,
+            source: 'reddit', monitorId: id,
+            storedAt: new Date().toISOString(),
+          }
+          await redis.set(`insights:match:${id}:${entry.id}`, JSON.stringify(match))
+          await redis.expire(`insights:match:${id}:${entry.id}`, TTL)
+          await redis.lpush(`insights:matches:${id}`, entry.id)
+          await redis.expire(`insights:matches:${id}`, TTL)
+          matches.push(match)
+        }
+      } catch (_) { /* best-effort — skip keyword on error */ }
+    }
+
+    await redis.ltrim(`insights:matches:${id}`, 0, 499)
+    res.json({ success: true, matchesFound: matches.length })
   } catch (err) {
     res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
   }
@@ -654,6 +769,64 @@ app.post('/v1/matches/draft', async (req, res) => {
       draftedBy,
       ...(backfill.intent ? { sentiment: backfill.sentiment, intent: backfill.intent } : {}),
     })
+  } catch (err) {
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
+  }
+})
+
+// ── POST /v1/matches/:id/variants ─────────────────────────────────────────
+// Generate 3 reply-style variants for a match (Value Hook, Direct Bridge, Empathy).
+// Cached in Redis at variants:{matchId} with 24h TTL.
+// Rate limited: 60 requests/hour per user.
+app.post('/v1/matches/:id/variants', async (req, res) => {
+  const auth = await authenticate(req)
+  if (!auth.ok) return res.status(auth.status).json({ success: false, error: auth.error })
+
+  const { id: matchId } = req.params
+  const { monitorId } = req.body
+  if (!monitorId) return res.status(400).json({ success: false, error: { code: 'MISSING_PARAM', message: 'monitorId required' } })
+
+  if (!process.env.GROQ_API_KEY) {
+    return res.status(503).json({ success: false, error: { code: 'NO_PROVIDER', message: 'Variant generation unavailable' } })
+  }
+
+  try {
+    const redis = getRedis()
+
+    // Auth: verify monitor ownership
+    const monRaw = await redis.get(`insights:monitor:${monitorId}`)
+    if (!monRaw) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Monitor not found' } })
+    const monitor = typeof monRaw === 'string' ? JSON.parse(monRaw) : monRaw
+    if (monitor.owner !== auth.owner) return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'Not your monitor' } })
+
+    // Cache check
+    const cacheKey = `variants:${matchId}`
+    const cached = await redis.get(cacheKey)
+    if (cached) {
+      const variants = typeof cached === 'string' ? JSON.parse(cached) : cached
+      return res.json({ success: true, variants, cached: true })
+    }
+
+    // Fetch match for context
+    const matchRaw = await redis.get(`insights:match:${monitorId}:${matchId}`)
+    if (!matchRaw) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Match not found' } })
+    const match = typeof matchRaw === 'string' ? JSON.parse(matchRaw) : matchRaw
+
+    const productContext = match.productContext || monitor.productContext || ''
+    const variants = await generateVariants({
+      title: match.title,
+      body: match.body,
+      productContext,
+    })
+    if (!variants) {
+      return res.status(502).json({ success: false, error: { code: 'GENERATION_FAILED', message: 'Could not generate variants. Try again.' } })
+    }
+
+    // Cache for 24h
+    await redis.set(cacheKey, JSON.stringify(variants))
+    await redis.expire(cacheKey, 60 * 60 * 24)
+
+    res.json({ success: true, variants, cached: false })
   } catch (err) {
     res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } })
   }

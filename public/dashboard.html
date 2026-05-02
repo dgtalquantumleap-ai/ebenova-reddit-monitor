@@ -229,6 +229,67 @@ hr.div{border:none;border-top:1px solid #F1F5F9;margin:18px 0}
 .fb-success-title{font-size:16px;font-weight:700;color:#0F172A;margin-bottom:4px}
 .fb-success-sub{font-size:13px;color:#64748B}
 .fb-error{font-size:12px;color:#EF4444;margin-top:10px;font-weight:500}
+
+/* ── Demand score pill ─────────────────────────────────────────────────────── */
+.demand-pill{display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:700;letter-spacing:.1px}
+.demand-grey{background:#F1F5F9;color:#64748B}
+.demand-blue{background:#DBEAFE;color:#1E40AF}
+.demand-orange{background:#FFEDD5;color:#9A3412}
+.demand-gold{background:#FEF3C7;color:#92400E}
+
+/* ── Unanswered badge ─────────────────────────────────────────────────────── */
+.unanswered-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:#DCFCE7;color:#166534}
+
+/* ── Revenue ticker ───────────────────────────────────────────────────────── */
+.rev-ticker{padding:12px 16px;border-radius:8px;margin-bottom:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.rev-ticker-hot{background:#1a0a00;border:1px solid #9A3412}
+.rev-ticker-nudge{background:#1E293B;border:1px solid #334155}
+.rev-ticker-text{font-size:13px;font-weight:600;flex:1}
+.rev-ticker-cost{font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;color:#FF6B35}
+
+/* ── 10-Min Sprint ────────────────────────────────────────────────────────── */
+.sprint-layout{display:grid;grid-template-columns:1fr 1fr;gap:0;min-height:calc(100vh - 120px)}
+.sprint-left{padding:24px;border-right:1px solid #E2E8F0;overflow-y:auto}
+.sprint-right{padding:24px;background:#FAFAFA;overflow-y:auto;position:sticky;top:0;max-height:calc(100vh - 120px)}
+.sprint-nav{display:flex;align-items:center;gap:12px;padding:14px 32px;background:#fff;border-bottom:1px solid #E2E8F0;font-size:13px}
+.sprint-counter{font-family:'JetBrains Mono',monospace;font-size:11px;color:#64748B;letter-spacing:1px}
+.variant-tab{padding:7px 14px;border-radius:6px;font-size:12.5px;font-weight:600;cursor:pointer;border:1px solid #E2E8F0;background:#fff;color:#475569;font-family:inherit;transition:all .15s}
+.variant-tab.active{background:#FF6B35;color:#fff;border-color:#FF6B35}
+.variant-textarea{width:100%;min-height:160px;padding:14px;border:1px solid #E2E8F0;border-radius:8px;font-family:inherit;font-size:13px;line-height:1.7;resize:vertical;color:#0F172A;background:#fff;outline:none}
+.variant-textarea:focus{border-color:#FF6B35;box-shadow:0 0 0 3px rgba(255,107,53,.1)}
+@keyframes radar-pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.15);opacity:.6}}
+.radar-pulse{animation:radar-pulse 1.2s ease-in-out infinite}
+
+/* ── Onboarding wizard ───────────────────────────────────────────────────── */
+.ob-bg{position:fixed;inset:0;background:#0a0907;z-index:999;display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto}
+.ob-card{width:100%;max-width:600px;background:#14110d;border:1px solid #2a2419;border-radius:10px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.6)}
+.ob-head{background:linear-gradient(to bottom,#1f1a13,#14110d);border-bottom:1px solid #2a2419;padding:12px 18px;display:flex;align-items:center;gap:12px}
+.ob-dots{display:flex;gap:6px}
+.ob-dots span{width:10px;height:10px;border-radius:50%;background:#3a3328}
+.ob-title{font-family:'JetBrains Mono',monospace;font-size:11px;color:#6f6757;letter-spacing:1.5px}
+.ob-step{font-family:'JetBrains Mono',monospace;font-size:11px;color:#FF6B35;margin-left:auto}
+.ob-body{padding:32px}
+.ob-eyebrow{font-family:'JetBrains Mono',monospace;font-size:10px;color:#FF6B35;letter-spacing:3px;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.ob-eyebrow::before{content:'';width:6px;height:6px;border-radius:50%;background:#FF6B35}
+.ob-h{font-family:'Crimson Pro',Georgia,serif;font-size:28px;font-weight:700;line-height:1.1;letter-spacing:-.5px;margin-bottom:10px;color:#f5efe0}
+.ob-h em{font-style:italic;font-weight:400;background:linear-gradient(135deg,#FF6B35,#FF8C42);-webkit-background-clip:text;background-clip:text;color:transparent}
+.ob-sub{font-size:13px;color:#b9b09f;line-height:1.6;margin-bottom:22px}
+.ob-input{width:100%;background:#0a0907;border:1px solid #2a2419;color:#f5efe0;border-radius:6px;padding:14px;font-size:14px;font-family:'JetBrains Mono',monospace;outline:none;transition:border-color .15s}
+.ob-input:focus{border-color:#FF6B35;box-shadow:0 0 0 3px rgba(255,107,53,.12)}
+.ob-input::placeholder{color:#6f6757}
+.ob-btn{width:100%;margin-top:12px;padding:14px;border-radius:6px;font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;letter-spacing:.5px;background:#FF6B35;color:#000;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;transition:all .18s}
+.ob-btn:hover:not(:disabled){background:#FF8C42}
+.ob-btn:disabled{opacity:.4;cursor:not-allowed}
+.preset-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:18px}
+.preset-card{background:#0a0907;border:1px solid #2a2419;border-radius:8px;padding:14px;cursor:pointer;transition:border-color .15s;text-align:left}
+.preset-card:hover{border-color:#FF6B3566}
+.preset-card.selected{border-color:#FF6B35;background:rgba(255,107,53,.06)}
+.preset-emoji{font-size:22px;margin-bottom:6px;display:block}
+.preset-label{font-size:12.5px;font-weight:600;color:#f5efe0;line-height:1.3;margin-bottom:4px}
+.preset-kw-count{font-family:'JetBrains Mono',monospace;font-size:10px;color:#6f6757;letter-spacing:1px}
+.ob-scanning{display:flex;flex-direction:column;align-items:center;padding:20px 0;gap:16px}
+.ob-scan-icon{width:64px;height:64px;background:rgba(255,107,53,.1);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#FF6B35;font-size:32px}
+.ob-scan-text{font-size:14px;color:#b9b09f;text-align:center;line-height:1.65;max-width:380px}
 </style>
 </head>
 <body>
@@ -421,11 +482,23 @@ function MatchCard({ match, monitorId, apiKey, onAction }) {
 
   if (gone) return null;
 
+  function DemandPill({ score }) {
+    if (!score) return null;
+    let cls, label;
+    if (score === 10) { cls = 'demand-gold'; label = `10 ◈ PEAK`; }
+    else if (score >= 8) { cls = 'demand-orange'; label = `${score} ◈`; }
+    else if (score >= 5) { cls = 'demand-blue'; label = `${score} ◈`; }
+    else { cls = 'demand-grey'; label = `${score} ◈`; }
+    return <span className={`demand-pill ${cls}`}>{label}</span>;
+  }
+
   return (
     <div className="result-card fade-up">
       <div style={{display:'flex',alignItems:'flex-start',gap:8,marginBottom:10,flexWrap:'wrap'}}>
         <SourceBadge source={match.source} subreddit={match.subreddit} />
         {match.priority_score >= 8 && <span className="badge badge-hot"><i className="ph-fill ph-lightning" style={{fontSize:10,marginRight:2}}></i>High priority</span>}
+        {match.isUnanswered && <span className="unanswered-badge">🟢 No replies yet</span>}
+        <DemandPill score={match.demandScore} />
         <span style={{marginLeft:'auto',fontSize:11,color:'#94A3B8'}}>{timeAgo(match.createdAt)}</span>
       </div>
       <a href={match.url} target="_blank" rel="noreferrer"
@@ -577,10 +650,213 @@ function PlatformToggles({ value, onChange }) {
 }
 
 // ΓöÇΓöÇ Monitor Feed ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+// ── Revenue ticker helpers ────────────────────────────────────────────────────
+function calcOpportunityCost(unactionedCount, dealValue) {
+  if (!dealValue || dealValue <= 0) return 0;
+  return unactionedCount * dealValue * 0.10;
+}
+
+function fmtDollar(n) {
+  if (n >= 1000000) return `$${(n/1000000).toFixed(1)}M`;
+  if (n >= 1000)    return `$${(n/1000).toFixed(0)}K`;
+  return `$${n.toFixed(0)}`;
+}
+
+// ── RevenueTicker ─────────────────────────────────────────────────────────────
+function RevenueTicker({ matches, monitor, onSetDealSize }) {
+  const dealValue = monitor?.deal_value || 0;
+  const unactioned = matches.filter(m => (m.demandScore || 0) >= 7 && m.feedback !== 'up');
+  if (!unactioned.length) return null;
+
+  if (!dealValue) {
+    return (
+      <div className="rev-ticker rev-ticker-nudge" style={{color:'#94A3B8'}}>
+        <i className="ph ph-warning" style={{color:'#F59E0B',fontSize:16,flexShrink:0}}></i>
+        <span className="rev-ticker-text" style={{color:'#94A3B8'}}>
+          {unactioned.length} high-intent lead{unactioned.length !== 1 ? 's' : ''} waiting — set your deal size to see opportunity cost
+        </span>
+        <button className="btn btn-ghost btn-sm" style={{flexShrink:0}} onClick={onSetDealSize}>
+          Set deal size →
+        </button>
+      </div>
+    );
+  }
+
+  const cost = calcOpportunityCost(unactioned.length, dealValue);
+  return (
+    <div className="rev-ticker rev-ticker-hot">
+      <i className="ph-fill ph-warning-circle" style={{color:'#EF4444',fontSize:18,flexShrink:0}}></i>
+      <span className="rev-ticker-text" style={{color:'#FCA5A5'}}>
+        ⚠️ {unactioned.length} high-intent lead{unactioned.length !== 1 ? 's' : ''} not yet actioned today
+      </span>
+      <span className="rev-ticker-cost">{fmtDollar(cost)}</span>
+      <span style={{fontSize:11,color:'#6f6757',flexShrink:0}}>est. opportunity cost</span>
+    </div>
+  );
+}
+
+// ── SprintView (10-Min Sprint) ────────────────────────────────────────────────
+function SprintView({ matches, monitorId, apiKey, onAction }) {
+  const [idx, setIdx] = useState(0);
+  const [variants, setVariants] = useState({});
+  const [loadingVariant, setLoadingVariant] = useState(false);
+  const [activeTab, setActiveTab] = useState('valueHook');
+  const [editedText, setEditedText] = useState('');
+  const [copied, setCopied] = useState(false);
+  const [posted, setPosted] = useState(new Set());
+
+  const match = matches[idx];
+
+  const variantKey = { valueHook: 'Value Hook', directBridge: 'Direct Bridge', empathy: 'Empathy' };
+
+  useEffect(() => {
+    if (!match) return;
+    const v = variants[match.id];
+    if (v) {
+      setEditedText(v[activeTab] || match.draft || '');
+    } else {
+      setEditedText(match.draft || '');
+    }
+  }, [idx, activeTab, match?.id]);
+
+  const loadVariants = async () => {
+    if (!match) return;
+    setLoadingVariant(true);
+    const r = await apiFetch(`/v1/matches/${match.id}/variants`, {
+      method: 'POST', body: JSON.stringify({ monitorId }),
+    }, apiKey);
+    setLoadingVariant(false);
+    if (r.ok) {
+      setVariants(prev => ({ ...prev, [match.id]: r.data.variants }));
+      setEditedText(r.data.variants[activeTab] || '');
+    }
+  };
+
+  useEffect(() => {
+    if (match && !variants[match.id] && !loadingVariant) loadVariants();
+  }, [match?.id]);
+
+  const switchTab = (tab) => {
+    setActiveTab(tab);
+    const v = variants[match?.id];
+    if (v) setEditedText(v[tab] || '');
+  };
+
+  const copy = () => {
+    navigator.clipboard.writeText(editedText);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const markPosted = async () => {
+    if (!match) return;
+    await apiFetch('/v1/matches/feedback', {
+      method: 'POST',
+      body: JSON.stringify({ monitor_id: monitorId, match_id: match.id, feedback: 'up' }),
+    }, apiKey);
+    onAction('feedback', match.id, 'up');
+    setPosted(prev => new Set([...prev, match.id]));
+    if (idx < matches.length - 1) setIdx(i => i + 1);
+  };
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
+      if (e.key === 'j' || e.key === 'ArrowRight') { if (idx < matches.length - 1) setIdx(i => i + 1); }
+      if (e.key === 'k' || e.key === 'ArrowLeft')  { if (idx > 0) setIdx(i => i - 1); }
+      if (e.key === 'c') copy();
+      if (e.key === 'p') markPosted();
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [idx, matches.length, editedText]);
+
+  if (!match) return (
+    <div className="empty" style={{gridColumn:'1/-1'}}>
+      <div className="empty-icon"><i className="ph ph-check-circle"></i></div>
+      <div className="empty-title">All leads actioned</div>
+      <div className="empty-desc">You've worked through every lead in this sprint. Nice work.</div>
+    </div>
+  );
+
+  const isActioned = posted.has(match.id) || match.feedback === 'up';
+
+  return (
+    <div className="sprint-layout">
+      {/* Left — the post */}
+      <div className="sprint-left">
+        <div style={{marginBottom:12,display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
+          <SourceBadge source={match.source} subreddit={match.subreddit} />
+          {match.isUnanswered && <span className="unanswered-badge">🟢 No replies yet</span>}
+          {match.demandScore >= 8 && (
+            <span className="demand-pill demand-orange">{match.demandScore} ◈</span>
+          )}
+          {isActioned && <span style={{fontSize:11,color:'#10B981',fontWeight:600}}>✓ Actioned</span>}
+        </div>
+        <a href={match.url} target="_blank" rel="noreferrer"
+          style={{fontSize:16,fontWeight:700,color:'#0F172A',textDecoration:'none',display:'block',marginBottom:10,lineHeight:1.4}}>
+          {match.title}
+        </a>
+        {match.body && (
+          <p style={{fontSize:13,color:'#475569',lineHeight:1.7,marginBottom:12}}>{match.body.slice(0,300)}{match.body.length>300?'…':''}</p>
+        )}
+        <div style={{display:'flex',gap:8,fontSize:12,color:'#94A3B8',flexWrap:'wrap',marginBottom:14}}>
+          {match.author && <span>u/{match.author}</span>}
+          {match.score > 0 && <span>· {match.score} pts</span>}
+          {match.keyword && <span style={{padding:'1px 7px',background:'#F8FAFC',border:'1px solid #E2E8F0',borderRadius:4}}>"{match.keyword}"</span>}
+        </div>
+        <a href={match.url} target="_blank" rel="noreferrer"
+          className="btn btn-sm" style={{background:'transparent',border:'none',color:'#FF6B35',fontWeight:600,padding:'6px 0',gap:4}}>
+          Open original <i className="ph ph-arrow-square-out"></i>
+        </a>
+      </div>
+
+      {/* Right — execution */}
+      <div className="sprint-right">
+        <div style={{marginBottom:14,display:'flex',gap:6,flexWrap:'wrap'}}>
+          {Object.entries(variantKey).map(([key, label]) => (
+            <button key={key} className={`variant-tab${activeTab===key?' active':''}`} onClick={()=>switchTab(key)}>
+              {label}
+            </button>
+          ))}
+        </div>
+        {loadingVariant ? (
+          <div style={{padding:'24px 0',textAlign:'center',color:'#94A3B8',fontSize:13}}>
+            <i className="ph ph-circle-notch spin" style={{fontSize:20,display:'block',marginBottom:8}}></i>
+            Generating variants…
+          </div>
+        ) : (
+          <textarea
+            className="variant-textarea"
+            value={editedText}
+            onChange={e=>setEditedText(e.target.value)}
+            placeholder="Loading reply…"
+          />
+        )}
+        <div style={{display:'flex',gap:8,marginTop:12,flexWrap:'wrap'}}>
+          <button className="btn btn-primary btn-sm" onClick={copy} disabled={!editedText}>
+            <i className={`ph-bold ph-${copied?'check':'copy'}`}></i>{copied?'Copied!':'Copy reply'}
+          </button>
+          <button className="btn btn-white btn-sm" onClick={markPosted} disabled={isActioned}>
+            <i className="ph ph-check"></i> Mark as posted
+          </button>
+          <button className="btn btn-ghost btn-sm" onClick={loadVariants} disabled={loadingVariant}>
+            <i className={`ph ph-arrow-clockwise${loadingVariant?' spin':''}`}></i>
+          </button>
+        </div>
+        <div style={{marginTop:14,padding:'10px 12px',background:'#F8FAFC',borderRadius:6,fontSize:11,color:'#94A3B8',fontFamily:"'JetBrains Mono',monospace",letterSpacing:.5}}>
+          J/K or ←/→ navigate · C copy · P mark as posted
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MatchesFeed({ apiKey, monitors }) {
   const [selId, setSelId] = useState('');
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [sprintMode, setSprintMode] = useState(false);
 
   useEffect(()=>{ if (monitors.length && !selId) setSelId(monitors[0].id); },[monitors]);
 
@@ -596,6 +872,7 @@ function MatchesFeed({ apiKey, monitors }) {
 
   const handleAction = (type, mid, newDraft, newDraftedBy) => {
     if (type==='draft') setMatches(ms=>ms.map(m=>m.id===mid?{...m,draft:newDraft,draftedBy:newDraftedBy}:m));
+    if (type==='feedback') setMatches(ms=>ms.map(m=>m.id===mid?{...m,feedback:newDraft}:m));
   };
 
   const selMonitor = monitors.find(m=>m.id===selId);
@@ -620,39 +897,67 @@ function MatchesFeed({ apiKey, monitors }) {
   return (
     <>
       <div className="page-header">
-        <div><h1 className="page-title">Monitor Feed</h1><p className="page-subtitle">Real-time matches from your background monitors</p></div>
-        <div style={{display:'flex',gap:8,alignItems:'center',marginTop:4}}>
+        <div><h1 className="page-title">Monitor Feed</h1><p className="page-subtitle">{sprintMode ? 'Execute 20 leads in 10 minutes' : 'Real-time matches from your background monitors'}</p></div>
+        <div style={{display:'flex',gap:8,alignItems:'center',marginTop:4,flexWrap:'wrap'}}>
           <select className="inp" value={selId} onChange={e=>setSelId(e.target.value)} style={{width:'auto',minWidth:180}}>
             {monitors.map(m=><option key={m.id} value={m.id}>{m.name}</option>)}
           </select>
-          <button className="btn btn-white btn-sm" onClick={()=>load(selId)} disabled={loading}>
-            <i className={`ph ph-arrow-clockwise${loading?' spin':''}`}></i> Refresh
+          <button className={`btn btn-sm${sprintMode?'':' btn-white'}`}
+            style={sprintMode?{background:'#FF6B35',color:'#000'}:{}}
+            onClick={()=>setSprintMode(v=>!v)}>
+            <i className="ph-bold ph-lightning"></i> {sprintMode ? 'Exit Sprint' : '10-Min Sprint'}
           </button>
+          {!sprintMode && (
+            <button className="btn btn-white btn-sm" onClick={()=>load(selId)} disabled={loading}>
+              <i className={`ph ph-arrow-clockwise${loading?' spin':''}`}></i> Refresh
+            </button>
+          )}
         </div>
       </div>
-      <div className="page-body">
-        {selMonitor && !loading && matches.length>0 && (
-          <div className="metric-row">
-            <div className="metric-card"><div className="metric-label">Matches loaded</div><div className="metric-value">{matches.length}</div></div>
-            <div className="metric-card"><div className="metric-label">All-time found</div><div className="metric-value">{selMonitor.total_matches_found||0}</div></div>
-            <div className="metric-card"><div className="metric-label">Keywords</div><div className="metric-value">{selMonitor.keyword_count||0}</div></div>
-            <div className="metric-card"><div className="metric-label">Monitor status</div><div className="metric-value" style={{fontSize:13,display:'flex',alignItems:'center',gap:7,marginTop:6}}><div className={selMonitor.active?'active-dot':'paused-dot'}></div>{selMonitor.active?'Active':'Paused'}</div></div>
-          </div>
-        )}
-        {loading && <div style={{display:'flex',flexDirection:'column',gap:8}}>{[1,2,3].map(i=><div key={i} className="shimmer" style={{height:120}} />)}</div>}
-        {!loading && !matches.length && (
-          <div className="card">
-            <div className="empty">
-              <div className="empty-icon"><i className="ph ph-clock"></i></div>
-              <div className="empty-title">Scanning 9 platforms for buying signals</div>
-              <div className="empty-desc">First matches usually land within 15 minutes. You'll get an email and Slack alert the moment one arrives.</div>
+      {sprintMode ? (
+        <>
+          {loading && <div style={{padding:32,textAlign:'center',color:'#94A3B8'}}>Loading matches…</div>}
+          {!loading && (
+            <>
+              <div className="sprint-nav">
+                <span className="sprint-counter">LEAD {Math.min(matches.findIndex((_,i)=>i>=0)+1,matches.length)} OF {matches.length}</span>
+                <span style={{flex:1}}></span>
+                <span style={{fontSize:11,color:'#94A3B8'}}>Use J/K to navigate</span>
+              </div>
+              <SprintView matches={matches} monitorId={selId} apiKey={apiKey} onAction={handleAction} />
+            </>
+          )}
+        </>
+      ) : (
+        <div className="page-body">
+          {selMonitor && !loading && matches.length>0 && (
+            <div className="metric-row">
+              <div className="metric-card"><div className="metric-label">Matches loaded</div><div className="metric-value">{matches.length}</div></div>
+              <div className="metric-card"><div className="metric-label">All-time found</div><div className="metric-value">{selMonitor.total_matches_found||0}</div></div>
+              <div className="metric-card"><div className="metric-label">Keywords</div><div className="metric-value">{selMonitor.keyword_count||0}</div></div>
+              <div className="metric-card"><div className="metric-label">Monitor status</div><div className="metric-value" style={{fontSize:13,display:'flex',alignItems:'center',gap:7,marginTop:6}}><div className={selMonitor.active?'active-dot':'paused-dot'}></div>{selMonitor.active?'Active':'Paused'}</div></div>
             </div>
-          </div>
-        )}
-        {!loading && matches.map(m=>(
-          <MatchCard key={m.id} match={m} monitorId={selId} apiKey={apiKey} onAction={handleAction} />
-        ))}
-      </div>
+          )}
+          <RevenueTicker
+            matches={matches}
+            monitor={selMonitor}
+            onSetDealSize={()=>{ /* TODO: open settings to dealValue field */ }}
+          />
+          {loading && <div style={{display:'flex',flexDirection:'column',gap:8}}>{[1,2,3].map(i=><div key={i} className="shimmer" style={{height:120}} />)}</div>}
+          {!loading && !matches.length && (
+            <div className="card">
+              <div className="empty">
+                <div className="empty-icon"><i className="ph ph-clock"></i></div>
+                <div className="empty-title">Scanning 9 platforms for buying signals</div>
+                <div className="empty-desc">First matches usually land within 15 minutes. You'll get an email and Slack alert the moment one arrives.</div>
+              </div>
+            </div>
+          )}
+          {!loading && matches.map(m=>(
+            <MatchCard key={m.id} match={m} monitorId={selId} apiKey={apiKey} onAction={handleAction} />
+          ))}
+        </div>
+      )}
     </>
   );
 }
@@ -1389,6 +1694,144 @@ function FeedbackWidget({ apiKey }) {
   );
 }
 
+// ── Onboarding Wizard ─────────────────────────────────────────────────────────
+function OnboardingWizard({ apiKey, onComplete }) {
+  const [step, setStep] = useState(1);
+  const [productName, setProductName] = useState('');
+  const [presets, setPresets] = useState([]);
+  const [selectedPreset, setSelectedPreset] = useState(null);
+  const [creating, setCreating] = useState(false);
+  const [err, setErr] = useState('');
+
+  useEffect(() => {
+    fetch('/v1/presets').then(r=>r.json()).then(d=>{
+      if (d.success) setPresets(d.presets||[]);
+    }).catch(()=>{});
+  }, []);
+
+  const handleStep1 = () => {
+    if (!productName.trim()) return;
+    setErr('');
+    setStep(2);
+  };
+
+  const handleStep2 = async () => {
+    if (!selectedPreset) { setErr('Pick a market to continue.'); return; }
+    setErr('');
+    setStep(3);
+    setCreating(true);
+
+    try {
+      const preset = presets.find(p => p.id === selectedPreset);
+      const monBody = {
+        name: `${productName.trim()} Monitor`,
+        keywords: preset.keywords.map(k => ({ keyword: k.keyword, productContext: productName.trim() })),
+        platforms: preset.platforms,
+        productContext: `${productName.trim()}. ${preset.productContext}`.slice(0, 2000),
+      };
+      const m = await apiFetch('/v1/monitors', { method: 'POST', body: JSON.stringify(monBody) }, apiKey);
+      if (!m.ok) { setErr(m.data?.error?.message || 'Could not create monitor.'); setStep(2); setCreating(false); return; }
+
+      const monitorId = m.data.monitor_id;
+      // Fire poll-now in background (don't block on it)
+      apiFetch(`/v1/monitors/${monitorId}/poll-now`, { method: 'POST', body: JSON.stringify({}) }, apiKey).catch(()=>{});
+      // Mark as onboarded
+      await apiFetch(`/v1/monitors/${monitorId}/onboard`, { method: 'POST', body: JSON.stringify({}) }, apiKey);
+    } catch (_) {}
+
+    setTimeout(() => { setCreating(false); onComplete(); }, 2500);
+  };
+
+  const stepLabels = ['1 OF 3 · WHAT YOU SELL', '2 OF 3 · PICK YOUR MARKET', '3 OF 3 · SCANNING'];
+
+  return (
+    <div className="ob-bg">
+      <div className="ob-card">
+        <div className="ob-head">
+          <div className="ob-dots"><span></span><span></span><span></span></div>
+          <div className="ob-title">EBNV-1 // ONBOARDING</div>
+          <div className="ob-step">{stepLabels[step-1]}</div>
+        </div>
+        <div className="ob-body">
+          {step === 1 && (
+            <>
+              <div className="ob-eyebrow">STEP 1 — PRODUCT</div>
+              <h2 className="ob-h">What are you <em>building?</em></h2>
+              <p className="ob-sub">We'll use this to find your first leads and personalise reply drafts.</p>
+              <input
+                className="ob-input"
+                type="text"
+                placeholder="e.g. AI contract generator for freelancers"
+                value={productName}
+                onChange={e=>setProductName(e.target.value)}
+                onKeyDown={e=>e.key==='Enter'&&productName.trim()&&handleStep1()}
+                autoFocus
+              />
+              {err && <div style={{color:'#ff8e8e',fontSize:12,marginTop:8,fontFamily:"'JetBrains Mono',monospace"}}>// {err}</div>}
+              <button className="ob-btn" onClick={handleStep1} disabled={!productName.trim()}>
+                Continue <span style={{fontSize:16}}>→</span>
+              </button>
+            </>
+          )}
+
+          {step === 2 && (
+            <>
+              <div className="ob-eyebrow">STEP 2 — MARKET</div>
+              <h2 className="ob-h">Pick your <em>market</em></h2>
+              <p className="ob-sub">Choose the closest match — each preset has curated keywords ready to go.</p>
+              <div className="preset-grid">
+                {presets.map(p => {
+                  const [emoji, ...rest] = p.label.split(' ');
+                  const labelText = rest.join(' ');
+                  return (
+                    <button key={p.id} className={`preset-card${selectedPreset===p.id?' selected':''}`}
+                      onClick={()=>setSelectedPreset(p.id)}>
+                      <span className="preset-emoji">{emoji}</span>
+                      <div className="preset-label">{labelText}</div>
+                      <div className="preset-kw-count">{p.keywordCount} KEYWORDS READY</div>
+                    </button>
+                  );
+                })}
+              </div>
+              {err && <div style={{color:'#ff8e8e',fontSize:12,marginBottom:10,fontFamily:"'JetBrains Mono',monospace"}}>// {err}</div>}
+              <div style={{display:'flex',gap:10}}>
+                <button className="ob-btn" style={{background:'transparent',border:'1px solid #2a2419',color:'#b9b09f'}} onClick={()=>setStep(1)}>← Back</button>
+                <button className="ob-btn" onClick={handleStep2} disabled={!selectedPreset} style={{flex:1}}>
+                  Set up my monitor →
+                </button>
+              </div>
+            </>
+          )}
+
+          {step === 3 && (
+            <>
+              <div className="ob-eyebrow">STEP 3 — CREATING</div>
+              <h2 className="ob-h">Your monitor is <em>live</em></h2>
+              <div className="ob-scanning">
+                <div className="ob-scan-icon radar-pulse">
+                  <i className="ph-bold ph-broadcast"></i>
+                </div>
+                <p className="ob-scan-text">
+                  Scanning Reddit, Hacker News, and 8 other platforms for your first leads…
+                </p>
+                <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:'#34d058',display:'flex',alignItems:'center',gap:8}}>
+                  <span style={{width:6,height:6,borderRadius:'50%',background:'#34d058',boxShadow:'0 0 6px #34d058'}}></span>
+                  MONITOR ACTIVE
+                </div>
+              </div>
+              {!creating && (
+                <button className="ob-btn" onClick={onComplete}>
+                  Open my feed →
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── App ────────────────────────────────────────────────────────────────
 function App() {
   const [apiKey] = useState(() => {
@@ -1402,6 +1845,7 @@ function App() {
   const [userEmail, setUserEmail] = useState('');
   const [plan, setPlan] = useState('starter');
   const [showAuth, setShowAuth] = useState(!localStorage.getItem('ebi_key'));
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   const signOut = () => { localStorage.removeItem('ebi_key'); location.reload(); };
 
@@ -1415,8 +1859,12 @@ function App() {
     if (!apiKey) return;
     loadMonitors();
     apiFetch('/v1/me',{},apiKey).then(r=>{
-      if (r.ok) { setUserEmail(r.data.email||''); setPlan(r.data.plan||'starter'); }
-      else if (r.status===401||r.status===403) signOut();
+      if (r.ok) {
+        setUserEmail(r.data.email||'');
+        setPlan(r.data.plan||'starter');
+        // Show onboarding wizard for first-time users only
+        if (r.data.isOnboarded === false) setShowOnboarding(true);
+      } else if (r.status===401||r.status===403) signOut();
     });
   },[apiKey]);
 
@@ -1425,10 +1873,17 @@ function App() {
     location.reload();
   };
 
+  const handleOnboardingComplete = () => {
+    setShowOnboarding(false);
+    loadMonitors();
+    setTab('feed');
+  };
+
   if (!apiKey || showAuth) return <AuthModal onSave={handleSave} />;
 
   return (
     <div className="layout">
+      {showOnboarding && <OnboardingWizard apiKey={apiKey} onComplete={handleOnboardingComplete} />}
       <Sidebar tab={tab} setTab={setTab} userEmail={userEmail} plan={plan} monitorCount={monitors.length} onSignOut={signOut} />
       <FeedbackWidget apiKey={apiKey} />
       <div className="main">
