@@ -548,7 +548,7 @@ function MatchCard({ match, monitorId, apiKey, onAction }) {
         {match.demandScore > 0 && (() => {
           const s = match.demandScore;
           const [cls, label] = s >= 10 ? ['demand-gold','⚡ PEAK'] : s >= 8 ? ['demand-orange',`🔥 ${s}/10`] : s >= 5 ? ['demand-blue',`${s}/10`] : ['demand-grey',`${s}/10`];
-          return <span className={`demand-pill ${cls}`}>{label}</span>;
+          return <span className={`demand-pill ${cls}`} title="Demand score: how urgently this person wants a solution. 8–10 = act now. 5–7 = warm lead. Below 5 = low priority.">{label}</span>;
         })()}
         {match.isUnanswered && <span className="unanswered-badge">🟢 No replies yet</span>}
         <span style={{marginLeft:'auto',fontSize:11,color:'#94A3B8'}}>{timeAgo(match.createdAt)}</span>
@@ -972,7 +972,7 @@ function OutcomesPanel({ apiKey, monitorId }) {
         <span style={{fontSize:11,fontWeight:700,letterSpacing:1.5,color:'#9A3412',textTransform:'uppercase'}}>Reply Performance · {data.period || '30d'}</span>
       </div>
       {empty ? (
-        <div style={{fontSize:12.5,color:'#94A3B8',fontStyle:'italic'}}>No replies posted yet — mark a match as posted from the feed below to start tracking.</div>
+        <div style={{fontSize:12.5,color:'#94A3B8',fontStyle:'italic'}}>No replies tracked yet. When you respond to a match and click <strong>Mark posted</strong>, Ebenova tracks your response rate and timing. Teams that respond within 5 minutes convert 100× more leads than those who wait 30 minutes.</div>
       ) : (
         <>
           <div style={{display:'flex',gap:18,flexWrap:'wrap',fontSize:13.5,color:'#334155'}}>
@@ -1022,7 +1022,7 @@ function AIVisibilityPanel({ apiKey, monitorId }) {
         <span style={{marginLeft:'auto',fontSize:10,color:'#94A3B8'}}>Runs weekly</span>
       </div>
       {empty ? (
-        <div style={{fontSize:12.5,color:'#94A3B8',fontStyle:'italic'}}>Not yet run — first weekly check fires Monday 08:00 UTC. Set a brand name in monitor settings to track Claude mentions.</div>
+        <div style={{fontSize:12.5,color:'#94A3B8',fontStyle:'italic'}}>AI Visibility runs weekly. It checks whether Claude, ChatGPT, and other AI assistants recommend your brand when users ask for solutions in your category. Set your brand name in Monitor Settings → Brand Name to activate it.</div>
       ) : (
         <>
           <div style={{display:'flex',alignItems:'baseline',gap:14,flexWrap:'wrap'}}>
@@ -1055,18 +1055,25 @@ function RevenueTicker({ matches, monitor }) {
   if (!unactioned) return null;
   const cost = dealValue > 0 ? unactioned * dealValue * 0.10 : 0;
   const fmt = n => '$' + n.toLocaleString('en-US', { maximumFractionDigits: 0 });
+  const helpText = <div style={{fontSize:11,color:'#9ca3af',marginTop:4,paddingLeft:22}}>Estimated from unactioned demand 6+ matches × your deal value × 10% conversion. Set deal value in monitor settings.</div>;
   if (dealValue > 0) {
     return (
-      <div className="rev-ticker rev-ticker-hot">
-        <i className="ph-fill ph-warning-circle"></i>
-        <span><strong>{unactioned} high-demand {unactioned === 1 ? 'lead' : 'leads'} unactioned</strong> — est. {fmt(cost)} opportunity cost at {fmt(dealValue)}/deal</span>
+      <div className="rev-ticker rev-ticker-hot" style={{flexDirection:'column',alignItems:'flex-start'}}>
+        <div style={{display:'flex',alignItems:'center',gap:8}}>
+          <i className="ph-fill ph-warning-circle"></i>
+          <span><strong>{unactioned} high-demand {unactioned === 1 ? 'lead' : 'leads'} unactioned</strong> — est. {fmt(cost)} opportunity cost at {fmt(dealValue)}/deal</span>
+        </div>
+        {helpText}
       </div>
     );
   }
   return (
-    <div className="rev-ticker rev-ticker-nudge">
-      <i className="ph ph-coin"></i>
-      <span><strong>{unactioned} high-demand {unactioned === 1 ? 'lead' : 'leads'}</strong> waiting — set a deal value in Settings to see revenue at risk</span>
+    <div className="rev-ticker rev-ticker-nudge" style={{flexDirection:'column',alignItems:'flex-start'}}>
+      <div style={{display:'flex',alignItems:'center',gap:8}}>
+        <i className="ph ph-coin"></i>
+        <span><strong>{unactioned} high-demand {unactioned === 1 ? 'lead' : 'leads'}</strong> waiting — set a deal value in Settings to see revenue at risk</span>
+      </div>
+      {helpText}
     </div>
   );
 }
@@ -1109,7 +1116,11 @@ function SprintView({ matches, monitorId, apiKey, onClose, onAction }) {
       </div>
     </div>
   );
-  const TABS = [['valueHook','Value Hook'],['directBridge','Direct Bridge'],['empathy','Empathy']];
+  const TABS = [
+    ['valueHook',    'Value Hook',     'Leads with what you offer and why it helps'],
+    ['directBridge', 'Direct Bridge',  'Direct, confident offer without preamble'],
+    ['empathy',      'Empathy',        'Acknowledges their pain before offering help'],
+  ];
   const text = variants?.[tab] || '';
 
   const copy = () => {
@@ -1144,8 +1155,8 @@ function SprintView({ matches, monitorId, apiKey, onClose, onAction }) {
         </div>
         <div>
           <div className="sprint-nav">
-            {TABS.map(([key,label])=>(
-              <button key={key} className={`variant-tab${tab===key?' active':''}`} onClick={()=>setTab(key)}>{label}</button>
+            {TABS.map(([key,label,tip])=>(
+              <button key={key} className={`variant-tab${tab===key?' active':''}`} onClick={()=>setTab(key)} title={tip}>{label}</button>
             ))}
             <button className="variant-tab" onClick={()=>loadVariants(match)} title="Regenerate" style={{marginLeft:'auto'}}>↻</button>
           </div>
@@ -1223,7 +1234,22 @@ function MatchesFeed({ apiKey, monitors }) {
   return (
     <>
       <div className="page-header">
-        <div><h1 className="page-title">Monitor Feed</h1><p className="page-subtitle">Real-time matches from your background monitors</p></div>
+        <div>
+          <h1 className="page-title">Monitor Feed</h1>
+          <p className="page-subtitle">Real-time matches from your background monitors</p>
+          {selMonitor?.platforms?.length > 0 && (
+            <div style={{marginTop:8,display:'flex',flexWrap:'wrap'}}>
+              {selMonitor.platforms.map(pid => {
+                const p = availablePlatforms.find(x => x.id === pid) || { emoji: '•', label: pid };
+                return (
+                  <span key={pid} style={{display:'inline-flex',alignItems:'center',gap:4,padding:'2px 8px',background:'#f3f4f6',borderRadius:12,fontSize:11,color:'#374151',margin:'0 4px 4px 0'}}>
+                    {p.emoji} {p.label}
+                  </span>
+                );
+              })}
+            </div>
+          )}
+        </div>
         <div style={{display:'flex',gap:8,alignItems:'center',marginTop:4}}>
           {/* PR #32 — mode emoji prefix in the dropdown so the user sees at
               a glance which monitor is which kind. <option> can't render
@@ -1312,8 +1338,8 @@ function MatchesFeed({ apiKey, monitors }) {
               <div className="card">
                 <div className="empty">
                   <div className="empty-icon"><i className="ph ph-clock"></i></div>
-                  <div className="empty-title">Scanning 9 platforms for buying signals</div>
-                  <div className="empty-desc">First matches usually land within 15 minutes. You'll get an email and Slack alert the moment one arrives.</div>
+                  <div className="empty-title">Your first matches will appear here</div>
+                  <div className="empty-desc">Ebenova scans 13 platforms every 10 minutes. After the first scan, posts from people actively asking for what you sell will appear here — scored by demand strength and sorted so the most urgent appear first.</div>
                 </div>
               </div>
             )}
@@ -2939,7 +2965,7 @@ function OnboardingWizard({ apiKey, onComplete }) {
     apiFetch(`/v1/monitors/${mid}/poll-now`, { method: 'POST' }, apiKey).catch(() => {});
     setTimeout(async () => {
       await apiFetch(`/v1/monitors/${mid}/onboard`, { method: 'POST' }, apiKey);
-      onComplete();
+      setStep(3);
     }, 3000);
   };
 
@@ -2947,14 +2973,21 @@ function OnboardingWizard({ apiKey, onComplete }) {
     <div className="ob-bg">
       <div className="ob-card">
         <div className="ob-head">
-          {step === 0 && '① Name your product'}
-          {step === 1 && '② Pick your audience'}
-          {step === 2 && '③ Scanning the internet…'}
+          {step === 0 && '① Your demand feed is live'}
+          {step === 1 && '② The Sprint is your action queue'}
+          {step === 2 && '③ Your revenue opportunity'}
+          {step === 3 && '④ Three settings that matter'}
         </div>
         <div className="ob-body">
           {step === 0 && (
             <>
-              <p style={{fontSize:13,color:'#8B7355',marginBottom:16,lineHeight:1.6}}>We'll monitor Reddit, HackerNews, and 10 other platforms for people looking for what you offer.</p>
+              <p style={{fontSize:13,color:'#8B7355',marginBottom:12,lineHeight:1.6}}>Every 10 minutes, Ebenova scans 13 platforms for people actively asking for what you sell. Only posts with real engagement reach your feed.</p>
+              <div style={{display:'flex',flexWrap:'wrap',marginBottom:16}}>
+                {[['🔴','Reddit'],['🟠','HN'],['🐦','Twitter/X'],['▶️','YouTube'],['🐙','GitHub'],['💼','Upwork'],['🟢','Fiverr'],['📰','Medium'],['💬','Quora'],['🚀','PH'],['🇳🇬','Jiji.ng'],['📦','Amazon'],['📧','Substack']].map(([e,l])=>(
+                  <span key={l} style={{display:'inline-flex',alignItems:'center',gap:3,background:'#2a2419',borderRadius:8,padding:'2px 7px',fontSize:11,color:'#c8b89a',margin:'0 4px 4px 0'}}>{e} {l}</span>
+                ))}
+              </div>
+              <p style={{fontSize:12,color:'#8B7355',marginBottom:12,lineHeight:1.5}}>Give your product a name to get started:</p>
               <input
                 className="inp"
                 placeholder="e.g. Acme CRM, My SaaS Tool…"
@@ -2976,7 +3009,9 @@ function OnboardingWizard({ apiKey, onComplete }) {
           )}
           {step === 1 && (
             <>
-              <p style={{fontSize:13,color:'#8B7355',marginBottom:4,lineHeight:1.6}}>Choose the template that best fits your product. You can customise keywords later.</p>
+              <p style={{fontSize:13,color:'#8B7355',marginBottom:8,lineHeight:1.6}}>The ⚡ <strong style={{color:'#f5efe0'}}>10-Min Sprint</strong> filters to demand score 6+ matches — people actively looking for a solution. Each card shows three reply options: <strong style={{color:'#f5efe0'}}>Value Hook</strong>, <strong style={{color:'#f5efe0'}}>Direct Bridge</strong>, and <strong style={{color:'#f5efe0'}}>Empathy</strong>. Pick one, edit it, post it. First to reply wins 78% of the time.</p>
+              <p style={{fontSize:11,color:'#6b5c42',marginBottom:12,lineHeight:1.5}}>Demand score (1–10) measures how urgently someone wants a solution. Score 8–10 = act immediately.</p>
+              <p style={{fontSize:12,color:'#8B7355',marginBottom:4,lineHeight:1.5}}>Choose the template that best fits your product:</p>
               {err && <div style={{color:'#f87171',fontSize:12,marginBottom:8}}>{err}</div>}
               <div className="preset-grid">
                 {presets.map(p => (
@@ -3001,14 +3036,40 @@ function OnboardingWizard({ apiKey, onComplete }) {
             </>
           )}
           {step === 2 && (
-            <div className="ob-scanning">
-              <div className="ob-radar">
-                <i className="ph-fill ph-broadcast" style={{fontSize:22,color:'#fff'}}></i>
+            <div style={{padding:'8px 0'}}>
+              <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:16}}>
+                <div className="ob-radar" style={{width:32,height:32,flexShrink:0}}>
+                  <i className="ph-fill ph-broadcast" style={{fontSize:15,color:'#fff'}}></i>
+                </div>
+                <div style={{fontSize:12,color:'#8B7355'}}>First scan running in the background — results in ~15 min.</div>
               </div>
-              <div style={{textAlign:'center'}}>
-                <div style={{fontWeight:600,fontSize:15,marginBottom:6}}>Scanning now…</div>
-                <div style={{fontSize:13,color:'#8B7355',lineHeight:1.6}}>Running your first scan across Reddit, HackerNews, and more.<br/>First matches usually land within 15 minutes.</div>
+              <p style={{fontSize:13,color:'#c8b89a',marginBottom:8,lineHeight:1.65}}>The <strong style={{color:'#f5efe0'}}>Revenue Ticker</strong> estimates what unactioned high-intent leads cost you. When demand score 7+ posts go unreplied, it shows the opportunity at risk.</p>
+              <p style={{fontSize:13,color:'#8B7355',marginBottom:16,lineHeight:1.65}}>Set your average deal value in monitor settings to make it accurate. Reply to a match and mark it posted — the ticker resets.</p>
+              <div style={{background:'#1f1a13',border:'1px solid #2a2419',borderRadius:8,padding:'10px 14px',fontSize:12,color:'#8B7355'}}>
+                <strong style={{color:'#f5efe0'}}>Tip:</strong> Set your deal value → Monitor Settings → Deal Value
               </div>
+            </div>
+          )}
+          {step === 3 && (
+            <div style={{padding:'8px 0'}}>
+              <p style={{fontSize:13,color:'#8B7355',marginBottom:14,lineHeight:1.6}}>Three settings that make the product work better for you:</p>
+              <div style={{display:'flex',flexDirection:'column',gap:10,marginBottom:18}}>
+                <div style={{background:'#1f1a13',border:'1px solid #2a2419',borderRadius:8,padding:'10px 14px'}}>
+                  <div style={{fontSize:12.5,fontWeight:600,color:'#f5efe0',marginBottom:3}}>Product description</div>
+                  <div style={{fontSize:12,color:'#8B7355',lineHeight:1.5}}>Tells the AI what you sell so reply drafts are on-point. Set it when editing your monitor.</div>
+                </div>
+                <div style={{background:'#1f1a13',border:'1px solid #2a2419',borderRadius:8,padding:'10px 14px'}}>
+                  <div style={{fontSize:12.5,fontWeight:600,color:'#f5efe0',marginBottom:3}}>Exclude terms</div>
+                  <div style={{fontSize:12,color:'#8B7355',lineHeight:1.5}}>Blocks irrelevant words from reaching your feed — e.g. "gaming" for a business tool, "pregnancy" for a contracts monitor.</div>
+                </div>
+                <div style={{background:'#1f1a13',border:'1px solid #2a2419',borderRadius:8,padding:'10px 14px'}}>
+                  <div style={{fontSize:12.5,fontWeight:600,color:'#f5efe0',marginBottom:3}}>Deal value</div>
+                  <div style={{fontSize:12,color:'#8B7355',lineHeight:1.5}}>Powers the revenue opportunity estimate. Set it in Monitor Settings → Deal Value.</div>
+                </div>
+              </div>
+              <button className="btn btn-primary" style={{width:'100%'}} onClick={onComplete}>
+                Go to your feed →
+              </button>
             </div>
           )}
         </div>
