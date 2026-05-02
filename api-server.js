@@ -95,6 +95,7 @@ import { getRecentReports, topCompetitorsAcross, computeTrend } from './lib/ai-v
 import { listPresets, getPreset } from './lib/keyword-presets.js'
 import { scheduleEngagementCheck, getRecentOutcomes } from './lib/reply-tracker.js'
 import { listCorridors, getCorridor, isValidCorridorId } from './lib/diaspora-corridors.js'
+import { getKeywordHealth, getStaleKeywords } from './lib/keyword-health.js'
 
 const PORT = parseInt(process.env.API_PORT || process.env.PORT || '3001')
 // FIX 13 — MONITOR_ADMIN_KEY removed. The variable was read here but never
@@ -436,10 +437,14 @@ app.get('/v1/monitors', async (req, res) => {
       const raw = await redis.get(`insights:monitor:${id}`)
       if (raw) {
         const m = typeof raw === 'string' ? JSON.parse(raw) : raw
+        const kwStrings = m.keywords?.map(k => k.keyword) || []
+        const health = await getKeywordHealth(redis, m.id)
+        const staleKws = getStaleKeywords(health, kwStrings)
         monitors.push({
           id: m.id, name: m.name, active: m.active,
           keyword_count: m.keywords?.length || 0,
-          keywords: m.keywords?.map(k => k.keyword) || [],
+          keywords: kwStrings,
+          keywords_full: m.keywords || [],
           alert_email: m.alertEmail,
           plan: m.plan,
           last_poll_at: m.lastPollAt,
@@ -482,6 +487,8 @@ app.get('/v1/monitors', async (req, res) => {
           share_token:          m.shareToken         || null,
           deal_value:           m.dealValue          || 0,
           product_context:      m.productContext     || '',
+          stale_keywords:       staleKws,
+          keyword_health:       health,
         })
       }
     }

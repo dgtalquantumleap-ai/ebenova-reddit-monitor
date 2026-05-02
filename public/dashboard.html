@@ -1611,12 +1611,16 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
     if (!r.ok) { setErr(r.data?.error?.message || 'Could not generate suggestions.'); setLoading(false); setStep(1); return; }
     setSuggestion(r.data);
     setMonitorName(r.data.suggestedName || 'My Monitor');
-    const preChecked = new Set((r.data.keywords || []).filter(k => k.confidence === 'high').map(k => k.keyword));
-    setPicked(preChecked);
-    // Fire preview-counts in background (non-blocking)
+    // Block on live counts so step 3 opens with volume already populated
     const allKws = (r.data.keywords || []).map(k => k.keyword);
-    apiFetch('/v1/find/preview-counts', { method:'POST', body: JSON.stringify({ keywords: allKws }) }, apiKey)
-      .then(c => { if (c.ok) setCounts(c.data.counts || {}); });
+    let liveCounts = {};
+    const c = await apiFetch('/v1/find/preview-counts', { method:'POST', body: JSON.stringify({ keywords: allKws }) }, apiKey);
+    if (c.ok) { liveCounts = c.data.counts || {}; setCounts(liveCounts); }
+    // Volume-smart pre-selection: high-confidence + volume > 0; fall back to all high-confidence if all dead
+    const highConf = (r.data.keywords || []).filter(k => k.confidence === 'high').map(k => k.keyword);
+    const withVolume = highConf.filter(kw => (liveCounts[kw]?.count || 0) > 0);
+    const preChecked = new Set(withVolume.length > 0 ? withVolume : highConf);
+    setPicked(preChecked);
     setLoading(false);
     setStep(3);
   };
@@ -1916,9 +1920,10 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
             </div>
             <div style={{padding:'18px 20px',lineHeight:1.85}}>
               <div style={{marginBottom:4}}><span style={{color:'#FF6B35'}}>$</span> analyze --input "{description.slice(0, 50)}…"</div>
-              <div style={{marginBottom:4,color:'#6f6757'}}># engine: signal-v2 · streaming</div>
+              <div style={{marginBottom:4,color:'#6f6757'}}># engine: signal-v2 · live-volume</div>
               <div style={{marginBottom:4}}><span style={{color:'#34d058'}}>✓</span> parsed product context</div>
               <div style={{marginBottom:4}}><span style={{color:'#34d058'}}>✓</span> categorizing intent…</div>
+              <div style={{marginBottom:4}}><span style={{color:'#34d058'}}>✓</span> fetching live Reddit volumes…</div>
               <div style={{marginBottom:4}}><span style={{color:'#FF6B35'}}>$</span> render --output review-screen</div>
             </div>
           </div>
@@ -1944,9 +1949,49 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
         <div className="page-body" style={{maxWidth:1100}}>
           <div style={{display:'grid',gridTemplateColumns:'1fr 320px',gap:24}}>
             <div>
+              {suggestion?.profile && (() => {
+                const p = suggestion.profile
+                return (
+                  <div className="card" style={{padding:'14px 18px',marginBottom:16,background:'#F8FAFC',border:'1px solid #E2E8F0'}}>
+                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,letterSpacing:2,color:'#64748B',marginBottom:10,display:'flex',alignItems:'center',gap:8}}>
+                      <span style={{color:'#FF6B35',fontSize:12}}>◆</span> PRODUCT INTELLIGENCE
+                    </div>
+                    <div style={{display:'flex',flexWrap:'wrap',gap:16,fontSize:12,color:'#475569'}}>
+                      {p.category && (
+                        <div><span style={{fontWeight:600,color:'#0F172A'}}>Category</span> — {p.category}</div>
+                      )}
+                      {p.targetCustomer && (
+                        <div><span style={{fontWeight:600,color:'#0F172A'}}>Buyer</span> — {p.targetCustomer}</div>
+                      )}
+                    </div>
+                    {p.competitors?.length > 0 && (
+                      <div style={{marginTop:8,fontSize:12,color:'#475569'}}>
+                        <span style={{fontWeight:600,color:'#0F172A'}}>Competitors detected</span> —{' '}
+                        {p.competitors.map(c => (
+                          <span key={c} style={{display:'inline-block',background:'#FEF2F2',border:'1px solid #FECACA',color:'#991B1B',borderRadius:4,padding:'0 6px',marginRight:4,fontFamily:"'JetBrains Mono',monospace",fontSize:11}}>{c}</span>
+                        ))}
+                        <span style={{color:'#94A3B8',fontSize:11}}> · comparison keywords added automatically</span>
+                      </div>
+                    )}
+                    {p.customerPainLanguage?.length > 0 && (
+                      <div style={{marginTop:8,fontSize:12,color:'#475569'}}>
+                        <span style={{fontWeight:600,color:'#0F172A'}}>Customer voice</span> —{' '}
+                        <span style={{color:'#64748B',fontStyle:'italic'}}>"{p.customerPainLanguage.slice(0, 3).join('" · "')}"</span>
+                      </div>
+                    )}
+                  </div>
+                )
+              })()}
               {groups.map(intent => {
-                const items = (suggestion?.keywords || []).filter(k => k.intentType === intent);
-                if (items.length === 0) return null;
+                const rawItems = (suggestion?.keywords || []).filter(k => k.intentType === intent);
+                if (rawItems.length === 0) return null;
+                // Sort by volume DESC so highest-signal keywords surface first
+                const items = [...rawItems].sort((a, b) => {
+                  const ca = counts[a.keyword]?.count ?? -1;
+                  const cb = counts[b.keyword]?.count ?? -1;
+                  return cb - ca;
+                });
+                const maxCount = Math.max(...items.map(k => counts[k.keyword]?.count || 0), 1);
                 const meta = intentMeta[intent];
                 return (
                   <div key={intent} className="card" style={{padding:'20px 22px',marginBottom:14}}>
@@ -1957,6 +2002,10 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
                       {items.map(k => {
                         const on = picked.has(k.keyword);
                         const c = counts[k.keyword];
+                        const vol = c?.count ?? 0;
+                        const isDead = c && vol === 0;
+                        const volPct = Math.round((vol / maxCount) * 100);
+                        const volColor = vol > 20 ? '#16A34A' : vol > 5 ? '#D97706' : vol > 0 ? '#EA580C' : '#94A3B8';
                         // PR #28 — per-keyword type toggle. Visual: gold outline
                         // for 'keyword' (default), red/orange outline for 'competitor'.
                         const kwType = keywordTypes.get(k.keyword) || 'keyword';
@@ -1971,7 +2020,7 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
                           <div key={k.keyword} onClick={()=>togglePick(k.keyword)}
                             style={{display:'flex',alignItems:'center',gap:14,padding:'11px 14px',borderRadius:8,cursor:'pointer',
                               background:on?(isCompetitor?'#FEF2F2':'#FFF7F2'):'transparent',
-                              border:on?(isCompetitor?'1px solid #FCA5A5':'1px solid #FED7AA'):'1px solid transparent',
+                              border:on?(isDead?'1px solid #FCA5A5':isCompetitor?'1px solid #FCA5A5':'1px solid #FED7AA'):'1px solid transparent',
                               opacity:on?1:0.7}}>
                             <div style={{width:18,height:18,borderRadius:4,
                               border:on?(isCompetitor?'1.5px solid #DC2626':'1.5px solid #FF6B35'):'1.5px solid #CBD5E1',
@@ -1979,7 +2028,14 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
                               display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,color:'#fff',flexShrink:0}}>
                               {on?'✓':''}
                             </div>
-                            <div style={{flex:1,fontSize:14,color:'#0F172A',fontWeight:500}}>{k.keyword}</div>
+                            <div style={{flex:1,minWidth:0}}>
+                              <div style={{fontSize:14,color:'#0F172A',fontWeight:500,marginBottom: c ? 4 : 0}}>{k.keyword}</div>
+                              {c && vol > 0 && (
+                                <div style={{height:3,borderRadius:2,background:'#F1F5F9',overflow:'hidden'}}>
+                                  <div style={{height:'100%',width:`${volPct}%`,background:volColor,borderRadius:2,transition:'width .3s'}}></div>
+                                </div>
+                              )}
+                            </div>
                             {on && (
                               <button type="button" onClick={flipType} title={isCompetitor ? 'Currently a competitor keyword — click to switch to your-own' : 'Currently your-own — click to switch to competitor'}
                                 style={{padding:'3px 9px',borderRadius:10,fontSize:10,fontWeight:700,letterSpacing:'.3px',textTransform:'uppercase',cursor:'pointer',fontFamily:'inherit',border:'none',
@@ -1987,8 +2043,13 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
                                 {isCompetitor ? '⚔ Competitor' : '◆ Keyword'}
                               </button>
                             )}
-                            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:c?(c.count > 5 ? '#16A34A' : c.count > 0 ? '#D97706' : '#94A3B8'):'#94A3B8',fontWeight:600,flexShrink:0}}>
-                              {c ? `${c.count} matches/wk` : '…'}
+                            <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:2,flexShrink:0}}>
+                              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:volColor,fontWeight:600}}>
+                                {c ? `${vol} /wk` : '…'}
+                              </div>
+                              {isDead && on && (
+                                <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,color:'#DC2626',letterSpacing:.5}}>NO SIGNAL</div>
+                              )}
                             </div>
                           </div>
                         );
@@ -2008,25 +2069,39 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
               {err && <div className="alert alert-error" style={{marginTop:14}}><i className="ph ph-warning-circle"></i>{err}</div>}
             </div>
 
-            <div style={{position:'sticky',top:20,alignSelf:'start'}}>
-              <div style={{background:'#0a0907',color:'#F5EFE0',borderRadius:10,border:'1px solid #1E293B',overflow:'hidden',boxShadow:'0 20px 40px rgba(0,0,0,0.3)'}}>
-                <div style={{background:'linear-gradient(to bottom,#1f1a13,#14110d)',borderBottom:'1px solid #2a2419',padding:'11px 16px',fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:'#6f6757',letterSpacing:2,display:'flex',alignItems:'center',gap:10}}>
-                  <span style={{width:6,height:6,borderRadius:'50%',background:'#34d058',boxShadow:'0 0 6px #34d058'}}></span> LIVE TALLY
-                </div>
-                <div style={{padding:'22px 22px 18px'}}>
-                  <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:48,fontWeight:700,color:'#FF6B35',letterSpacing:-2,lineHeight:1,marginBottom:6}}>
-                    {totalMatches()}<small style={{fontSize:14,color:'#6f6757',fontWeight:500,letterSpacing:1,marginLeft:6}}>matches/wk</small>
+            {(() => {
+              const deadSelected = [...picked].filter(kw => counts[kw] && counts[kw].count === 0).length;
+              const allDead = picked.size > 0 && deadSelected === picked.size;
+              return (
+              <div style={{position:'sticky',top:20,alignSelf:'start'}}>
+                <div style={{background:'#0a0907',color:'#F5EFE0',borderRadius:10,border:'1px solid #1E293B',overflow:'hidden',boxShadow:'0 20px 40px rgba(0,0,0,0.3)'}}>
+                  <div style={{background:'linear-gradient(to bottom,#1f1a13,#14110d)',borderBottom:'1px solid #2a2419',padding:'11px 16px',fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:'#6f6757',letterSpacing:2,display:'flex',alignItems:'center',gap:10}}>
+                    <span style={{width:6,height:6,borderRadius:'50%',background:'#34d058',boxShadow:'0 0 6px #34d058'}}></span> LIVE TALLY
                   </div>
-                  <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:'#b9b09f',letterSpacing:1}}>{picked.size} KEYWORDS SELECTED</div>
-                </div>
-                <div style={{padding:'18px 22px',borderTop:'1px solid #2a2419',background:'rgba(255,107,53,0.04)'}}>
-                  <button className="btn btn-primary" onClick={saveAsMonitor} disabled={picked.size===0}
-                    style={{width:'100%',padding:'13px 16px',fontSize:13,background:'#FF6B35'}}>
-                    <i className="ph-bold ph-floppy-disk"></i> Save as monitor →
-                  </button>
+                  <div style={{padding:'22px 22px 18px'}}>
+                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:48,fontWeight:700,color:'#FF6B35',letterSpacing:-2,lineHeight:1,marginBottom:6}}>
+                      {totalMatches()}<small style={{fontSize:14,color:'#6f6757',fontWeight:500,letterSpacing:1,marginLeft:6}}>matches/wk</small>
+                    </div>
+                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:'#b9b09f',letterSpacing:1,marginBottom: deadSelected > 0 ? 10 : 0}}>{picked.size} KEYWORDS SELECTED</div>
+                    {deadSelected > 0 && (
+                      <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:'#DC2626',background:'rgba(220,38,38,0.08)',border:'1px solid rgba(220,38,38,0.2)',borderRadius:6,padding:'7px 10px',display:'flex',alignItems:'center',gap:6}}>
+                        <span style={{fontSize:12}}>⚠</span>
+                        {deadSelected === picked.size
+                          ? 'All selected keywords have no signal this week. Consider swapping to higher-volume ones.'
+                          : `${deadSelected} selected keyword${deadSelected > 1 ? 's have' : ' has'} no signal this week.`}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{padding:'18px 22px',borderTop:'1px solid #2a2419',background:'rgba(255,107,53,0.04)'}}>
+                    <button className="btn btn-primary" onClick={saveAsMonitor} disabled={picked.size===0}
+                      style={{width:'100%',padding:'13px 16px',fontSize:13,background: allDead ? '#9A3412' : '#FF6B35'}}>
+                      <i className="ph-bold ph-floppy-disk"></i> Save as monitor →
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
+              );
+            })()}
           </div>
         </div>
       </>
@@ -2497,10 +2572,18 @@ function Settings({ apiKey, userEmail, plan, onSignOut, monitors, onRefresh }) {
                       ) : null
                     })()}
                   </div>
-                  <div style={{fontSize:12,color:'#94A3B8',marginTop:2}}>
-                    {isBuilder
-                      ? `${m.total_builders_found || 0} builders tracked`
-                      : `${m.keyword_count} keywords · ${m.total_matches_found || 0} matches found`}
+                  <div style={{fontSize:12,color:'#94A3B8',marginTop:2,display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
+                    <span>
+                      {isBuilder
+                        ? `${m.total_builders_found || 0} builders tracked`
+                        : `${m.keyword_count} keywords · ${m.total_matches_found || 0} matches found`}
+                    </span>
+                    {!isBuilder && m.stale_keywords?.length > 0 && (
+                      <span title={`${m.stale_keywords.length} keyword${m.stale_keywords.length > 1 ? 's' : ''} with no signal in 30+ days: ${m.stale_keywords.join(', ')}`}
+                        style={{display:'inline-flex',alignItems:'center',gap:3,padding:'1px 6px',borderRadius:999,background:'#FEF9EC',border:'1px solid #FCD34D',color:'#92400E',fontSize:10,fontWeight:600,cursor:'default'}}>
+                        ⚠ {m.stale_keywords.length} stale
+                      </span>
+                    )}
                   </div>
                 </div>
                 {/* Batch B — Edit button. Opens EditMonitorModal pre-populated
@@ -2647,7 +2730,9 @@ function EditMonitorModal({ apiKey, monitor, corridors, onClose, onSaved }) {
   const [excludeTermsInput,      setExcludeTermsInput]      = useState((monitor.exclude_terms      || monitor.excludeTerms      || []).join(', '))
   const [blockedSubredditsInput, setBlockedSubredditsInput] = useState((monitor.blocked_subreddits || monitor.blockedSubreddits || []).join(', '))
   const [keywordsInput,          setKeywordsInput]          = useState(
-    (monitor.keywords || []).map(k => k.type === 'phrase' ? `"${k.keyword}"` : k.keyword).join(', ')
+    (monitor.keywords_full || monitor.keywords || [])
+      .map(k => typeof k === 'object' ? (k.type === 'phrase' ? `"${k.keyword}"` : k.keyword) : k)
+      .join(', ')
   )
   const [productCtxInput,        setProductCtxInput]        = useState(monitor.product_context     || '')
   const [saving, setSaving] = useState(false)
@@ -2693,7 +2778,8 @@ function EditMonitorModal({ apiKey, monitor, corridors, onClose, onSaved }) {
     // quoted strings and sets type: 'phrase' automatically.
     const _rawTokens = keywordsInput.split(',').map(s => s.trim()).filter(Boolean)
     const _curKws    = _rawTokens.join(',')
-    const _savedKws  = (monitor.keywords || []).map(k => k.type === 'phrase' ? `"${k.keyword}"` : k.keyword).join(',')
+    const _savedKws  = (monitor.keywords_full || monitor.keywords || [])
+      .map(k => typeof k === 'object' ? (k.type === 'phrase' ? `"${k.keyword}"` : k.keyword) : k).join(',')
     if (_curKws !== _savedKws && _rawTokens.length > 0)
       body.keywords = _rawTokens.map(raw => ({ keyword: raw }))
 
@@ -2747,6 +2833,23 @@ function EditMonitorModal({ apiKey, monitor, corridors, onClose, onSaved }) {
             <label className="label">Keywords <span style={{fontSize:11,fontWeight:400,color:'#94A3B8'}}>· comma-separated · replaces current list</span></label>
             <input className="inp" placeholder='scope creep, "exact phrase", unpaid invoice' value={keywordsInput} onChange={e=>setKeywordsInput(e.target.value)} />
             <div style={{fontSize:11,color:'#6b7280',marginTop:4}}>{parseCommaSeparated(keywordsInput).length} keyword{parseCommaSeparated(keywordsInput).length !== 1 ? 's' : ''} · <span style={{color:'#94A3B8'}}>wrap in "quotes" for exact phrase match</span></div>
+            {(() => {
+              const stale = monitor.stale_keywords || []
+              if (stale.length === 0) return null
+              return (
+                <div style={{marginTop:8,padding:'9px 12px',borderRadius:7,background:'#FEF9EC',border:'1px solid #FCD34D',fontSize:12}}>
+                  <div style={{fontWeight:600,color:'#92400E',marginBottom:4,display:'flex',alignItems:'center',gap:6}}>
+                    <span>⚠</span> {stale.length} keyword{stale.length > 1 ? 's' : ''} with no signal in 30+ days
+                  </div>
+                  <div style={{color:'#78350F',lineHeight:1.6}}>
+                    {stale.map(kw => (
+                      <span key={kw} style={{display:'inline-block',background:'rgba(146,64,14,.1)',borderRadius:4,padding:'1px 6px',marginRight:4,marginBottom:2,fontFamily:"'JetBrains Mono',monospace",fontSize:11}}>{kw}</span>
+                    ))}
+                  </div>
+                  <div style={{color:'#92400E',marginTop:5,fontSize:11}}>Consider replacing these with higher-volume alternatives from Find Customers.</div>
+                </div>
+              )
+            })()}
           </div>
         )}
 

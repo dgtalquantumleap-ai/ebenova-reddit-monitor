@@ -63,6 +63,7 @@ import { runEngagementSweep, processPendingChecks } from './lib/reply-tracker.js
 import { isBuilderPost, extractTopics, recordBuilderProfile, getBuilderProfiles, sendBuilderDigest, PLATFORMS_WITH_REAL_USERNAMES } from './lib/builder-tracker.js'
 import { getCorridor } from './lib/diaspora-corridors.js'
 import { passesRelevanceCheck } from './lib/relevance.js'
+import { updateKeywordHealth } from './lib/keyword-health.js'
 import { buildBulkEmailExtras } from './lib/email-headers.js'
 
 // F14: lazy daily cost caps. Soft-fail so the worker degrades gracefully
@@ -843,6 +844,7 @@ async function runMonitor(monitor) {
       for (const m of redditMatches) {
         m.productContext = ctx
         m.keywordType = kwType   // PR #28
+        m.matchedKeyword = kw.keyword
         // ── Relevance gate ─────────────────────────────────────────────
         if (!passesRelevanceCheck(m, kw.keyword, kwType)) { _redditIrrelevant++; continue }
         // ── Engagement gate ────────────────────────────────────────────
@@ -930,7 +932,7 @@ async function runMonitor(monitor) {
       const matches = await scraper(kw, { seenIds, delay, MAX_AGE_MS: maxAgeMs })
       let _gated = 0
       for (const m of matches) {
-        m.productContext = ctx; m.keywordType = kwType
+        m.productContext = ctx; m.keywordType = kwType; m.matchedKeyword = kw.keyword
         // ── Relevance gate ───────────────────────────────────────────────
         if (!passesRelevanceCheck(m, kw.keyword, kwType)) { _gated++; continue }
         // ── Engagement gate ──────────────────────────────────────────────
@@ -1140,6 +1142,18 @@ async function runMonitor(monitor) {
   try {
     const redis = getRedis()
     await storeMatches(redis, monitor, allMatches)
+
+    // Per-keyword health tracking. Builds a keyword → count map from allMatches.
+    // Keywords with 0 matches this cycle also get registered so firstSeenAt is set.
+    {
+      const matchesByKw = new Map(monitor.keywords.map(kw => [kw.keyword, 0]))
+      for (const m of allMatches) {
+        if (m.matchedKeyword && matchesByKw.has(m.matchedKeyword)) {
+          matchesByKw.set(m.matchedKeyword, matchesByKw.get(m.matchedKeyword) + 1)
+        }
+      }
+      await updateKeywordHealth(redis, monitor.id, matchesByKw)
+    }
 
     // Update monitor's lastPollAt + totalMatchesFound
     const updatedMonitor = {
