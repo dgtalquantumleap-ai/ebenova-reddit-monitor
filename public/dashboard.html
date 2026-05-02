@@ -288,6 +288,21 @@ async function apiFetch(path, opts={}, apiKey) {
 // from the fetched list (drift-proof); this list only gates the initial
 // localStorage prefs hydration.
 var KNOWN_PLATFORMS = ['reddit','hackernews','medium','substack','quora','upwork','fiverr','github','producthunt','twitter','jijing','youtube','amazon'];
+var PLATFORM_META = {
+  reddit:      { emoji:'🔴', label:'Reddit' },
+  hackernews:  { emoji:'🟠', label:'Hacker News' },
+  medium:      { emoji:'📰', label:'Medium' },
+  substack:    { emoji:'📧', label:'Substack' },
+  quora:       { emoji:'💬', label:'Quora' },
+  upwork:      { emoji:'💼', label:'Upwork' },
+  fiverr:      { emoji:'🟢', label:'Fiverr' },
+  github:      { emoji:'🐙', label:'GitHub' },
+  producthunt: { emoji:'🚀', label:'Product Hunt' },
+  twitter:     { emoji:'🐦', label:'Twitter/X' },
+  jijing:      { emoji:'🇳🇬', label:'Jiji.ng' },
+  youtube:     { emoji:'▶️', label:'YouTube' },
+  amazon:      { emoji:'📦', label:'Amazon Reviews' },
+};
 
 function readLandingPlatformPrefs(known) {
   try {
@@ -1240,7 +1255,7 @@ function MatchesFeed({ apiKey, monitors }) {
           {selMonitor?.platforms?.length > 0 && (
             <div style={{marginTop:8,display:'flex',flexWrap:'wrap'}}>
               {selMonitor.platforms.map(pid => {
-                const p = availablePlatforms.find(x => x.id === pid) || { emoji: '•', label: pid };
+                const p = PLATFORM_META[pid] || { emoji: '•', label: pid };
                 return (
                   <span key={pid} style={{display:'inline-flex',alignItems:'center',gap:4,padding:'2px 8px',background:'#f3f4f6',borderRadius:12,fontSize:11,color:'#374151',margin:'0 4px 4px 0'}}>
                     {p.emoji} {p.label}
