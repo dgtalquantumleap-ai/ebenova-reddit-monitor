@@ -826,6 +826,9 @@ async function runMonitor(monitor) {
   const allMatches = []
   const seenIds = { has: (id) => hasSeen(monitor.id, id), add: (id) => markSeen(monitor.id, id) }
   const maxAgeMs = 24 * 60 * 60 * 1000 // 24h for v2 monitors
+  // Let everything through on the very first poll so new users see results
+  // immediately. After that, the engagement gate removes low-signal noise.
+  const _isFirstPoll = (monitor.totalMatchesFound || 0) === 0
 
   // Reddit — explicitly opt-in per platforms array. No longer always-on.
   if (platforms.includes('reddit')) {
@@ -850,7 +853,7 @@ async function runMonitor(monitor) {
           m.source === 'github' &&
           !(m.author || '').toLowerCase().includes('[bot]')
         )
-        if (!_hasEngagement && !_isFreshUnanswered &&
+        if (!_isFirstPoll && !_hasEngagement && !_isFreshUnanswered &&
             !_isHighTrustSource && !_isHumanGithub) continue
         // ── End engagement gate ─────────────────────────────────────────
         allMatches.push(m)

@@ -591,6 +591,7 @@ function MatchCard({ match, monitorId, apiKey, onAction }) {
             onChange={e => setDraftText(e.target.value)}
             placeholder="Edit your reply…"
           />
+          {!postedAt && <div style={{fontSize:11,color:'#9A3412',opacity:.65,marginTop:4}}>Copy → post on the platform → click <strong>Mark posted</strong> below to track your reply.</div>}
         </div>
       )}
       <div style={{display:'flex',gap:6,flexWrap:'wrap',alignItems:'center',marginTop:12,paddingTop:12,borderTop:'1px solid #F8FAFC'}}>
@@ -1067,7 +1068,16 @@ function AIVisibilityPanel({ apiKey, monitorId }) {
 function RevenueTicker({ matches, monitor }) {
   const dealValue = monitor?.deal_value || 0;
   const unactioned = matches.filter(m => (m.demandScore || 0) >= 7 && m.feedback !== 'up').length;
-  if (!unactioned) return null;
+  if (!unactioned) {
+    if (matches.length > 0) return null; // has matches, none high-demand — stay quiet
+    // No matches yet — show a one-line teaser so the ticker isn't invisible on day one
+    return (
+      <div className="rev-ticker rev-ticker-nudge">
+        <i className="ph ph-coin"></i>
+        <span>Revenue opportunity tracker — activates when high-demand matches arrive.{!dealValue && ' Set your deal value in monitor settings to see revenue at risk.'}</span>
+      </div>
+    );
+  }
   const cost = dealValue > 0 ? unactioned * dealValue * 0.10 : 0;
   const fmt = n => '$' + n.toLocaleString('en-US', { maximumFractionDigits: 0 });
   const helpText = <div style={{fontSize:11,color:'#9ca3af',marginTop:4,paddingLeft:22}}>Estimated from unactioned demand 6+ matches × your deal value × 10% conversion. Set deal value in monitor settings.</div>;
@@ -1358,9 +1368,7 @@ function MatchesFeed({ apiKey, monitors }) {
                 </div>
               </div>
             )}
-            {!loading && matches.length > 0 && (
-              <RevenueTicker matches={matches} monitor={selMonitor} />
-            )}
+            {!loading && <RevenueTicker matches={matches} monitor={selMonitor} />}
             {sprintMode && !loading && matches.length > 0 && (
               <SprintView
                 matches={matches.filter(m =>
@@ -2638,6 +2646,8 @@ function EditMonitorModal({ apiKey, monitor, corridors, onClose, onSaved }) {
   const [corridorId,  setCorridorId]  = useState(monitor.diaspora_corridor || '')
   const [excludeTermsInput,      setExcludeTermsInput]      = useState((monitor.exclude_terms      || monitor.excludeTerms      || []).join(', '))
   const [blockedSubredditsInput, setBlockedSubredditsInput] = useState((monitor.blocked_subreddits || monitor.blockedSubreddits || []).join(', '))
+  const [keywordsInput,          setKeywordsInput]          = useState((monitor.keywords           || []).join(', '))
+  const [productCtxInput,        setProductCtxInput]        = useState(monitor.product_context     || '')
   const [saving, setSaving] = useState(false)
   const [err, setErr]       = useState('')
   const [availablePlatforms, setAvailablePlatforms] = useState([])
@@ -2675,6 +2685,15 @@ function EditMonitorModal({ apiKey, monitor, corridors, onClose, onSaved }) {
     if (corridorId !== (monitor.diaspora_corridor || '')) body.diasporaCorridor = corridorId || null
     const platformsChanged = JSON.stringify([...platforms].sort()) !== JSON.stringify([...(monitor.platforms || [])].sort())
     if (platformsChanged) body.platforms = platforms
+
+    const _curKws    = parseCommaSeparated(keywordsInput).join(',')
+    const _savedKws  = (monitor.keywords || []).join(',')
+    if (_curKws !== _savedKws && parseCommaSeparated(keywordsInput).length > 0)
+      body.keywords = parseCommaSeparated(keywordsInput).map(k => ({ keyword: k }))
+
+    const _curCtx   = productCtxInput.trim()
+    const _savedCtx = monitor.product_context || ''
+    if (_curCtx !== _savedCtx) body.productContext = _curCtx
 
     const _curExclude  = parseCommaSeparated(excludeTermsInput).join(',')
     const _savedExclude = (monitor.exclude_terms || monitor.excludeTerms || []).join(',')
@@ -2716,6 +2735,21 @@ function EditMonitorModal({ apiKey, monitor, corridors, onClose, onSaved }) {
           <label className="label">Monitor name</label>
           <input className="inp" value={name} onChange={e=>setName(e.target.value)} />
         </div>
+
+        {!isBuilder && (
+          <div className="field" style={{marginBottom:14}}>
+            <label className="label">Keywords <span style={{fontSize:11,fontWeight:400,color:'#94A3B8'}}>· comma-separated · replaces current list</span></label>
+            <input className="inp" placeholder="scope creep, unpaid invoice, need a CRM" value={keywordsInput} onChange={e=>setKeywordsInput(e.target.value)} />
+            <div style={{fontSize:11,color:'#6b7280',marginTop:4}}>{parseCommaSeparated(keywordsInput).length} keyword{parseCommaSeparated(keywordsInput).length !== 1 ? 's' : ''}</div>
+          </div>
+        )}
+
+        {!isBuilder && (
+          <div className="field" style={{marginBottom:14}}>
+            <label className="label">Product description <span style={{fontSize:11,fontWeight:400,color:'#94A3B8'}}>· used in every AI reply draft</span></label>
+            <textarea className="inp" rows={3} placeholder="e.g. Lightweight contract tool for freelancers — $29/mo, no per-seat pricing, 5-min setup." value={productCtxInput} onChange={e=>setProductCtxInput(e.target.value)} style={{resize:'vertical',minHeight:64,fontFamily:'inherit',fontSize:13,lineHeight:1.5}} />
+          </div>
+        )}
 
         {!isBuilder && (
           <div className="field" style={{marginBottom:14}}>

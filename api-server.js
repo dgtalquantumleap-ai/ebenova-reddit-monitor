@@ -481,6 +481,7 @@ app.get('/v1/monitors', async (req, res) => {
           // copy the URL to the clipboard.
           share_token:          m.shareToken         || null,
           deal_value:           m.dealValue          || 0,
+          product_context:      m.productContext     || '',
         })
       }
     }
@@ -856,8 +857,36 @@ app.patch('/v1/monitors/:id', async (req, res) => {
         .slice(0, 50)
     }
 
+    // Field 18: keywords — full replacement of the keyword list, same
+    // normalisation as POST. Enforces the per-plan keyword limit.
+    if (Object.prototype.hasOwnProperty.call(body, 'keywords')) {
+      if (!Array.isArray(body.keywords)) {
+        return res.status(400).json({ success: false, error: { code: 'INVALID_KEYWORDS', message: '`keywords` must be an array' } })
+      }
+      const cleanKws = normalizeKeywordList(body.keywords)
+      if (cleanKws.length === 0) {
+        return res.status(400).json({ success: false, error: { code: 'INVALID_KEYWORDS', message: 'At least one valid keyword is required' } })
+      }
+      const _plan = m.plan || 'starter'
+      const _limits = PLAN_LIMITS[_plan] || PLAN_LIMITS.starter
+      if (cleanKws.length > _limits.keywords) {
+        return res.status(400).json({ success: false, error: { code: 'KEYWORD_LIMIT_EXCEEDED', message: `Max ${_limits.keywords} keywords on ${_plan} plan` } })
+      }
+      updates.keywords = cleanKws
+    }
+
+    // Field 19: productContext — describes what the user sells; injected into
+    // every AI reply-draft prompt. Empty string clears it (falls back to
+    // preset context at draft time).
+    if (Object.prototype.hasOwnProperty.call(body, 'productContext')) {
+      if (body.productContext !== null && typeof body.productContext !== 'string') {
+        return res.status(400).json({ success: false, error: { code: 'INVALID_INPUT', message: '`productContext` must be a string or null' } })
+      }
+      updates.productContext = (body.productContext || '').trim().slice(0, 2000)
+    }
+
     if (Object.keys(updates).length === 0) {
-      return res.status(400).json({ success: false, error: { code: 'NO_UPDATES', message: 'No supported fields in body. Patchable: name, platforms, emailEnabled, productUrl, utmSource, utmMedium, utmCampaign, webhookUrl, slackWebhookUrl, replyTone, mode, minConsistency, brandName, diasporaCorridor, excludeTerms, blockedSubreddits' } })
+      return res.status(400).json({ success: false, error: { code: 'NO_UPDATES', message: 'No supported fields in body. Patchable: name, platforms, emailEnabled, productUrl, utmSource, utmMedium, utmCampaign, webhookUrl, slackWebhookUrl, replyTone, mode, minConsistency, brandName, diasporaCorridor, excludeTerms, blockedSubreddits, keywords, productContext' } })
     }
     const next = { ...m, ...updates }
     await redis.set(`insights:monitor:${id}`, JSON.stringify(next))
