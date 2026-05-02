@@ -62,6 +62,7 @@ import { isoWeekLabel } from './lib/keyword-types.js'
 import { runEngagementSweep, processPendingChecks } from './lib/reply-tracker.js'
 import { isBuilderPost, extractTopics, recordBuilderProfile, getBuilderProfiles, sendBuilderDigest, PLATFORMS_WITH_REAL_USERNAMES } from './lib/builder-tracker.js'
 import { getCorridor } from './lib/diaspora-corridors.js'
+import { passesRelevanceCheck } from './lib/relevance.js'
 import { buildBulkEmailExtras } from './lib/email-headers.js'
 
 // F14: lazy daily cost caps. Soft-fail so the worker degrades gracefully
@@ -314,9 +315,11 @@ async function searchReddit(monitorId, keywordEntry) {
   const results = []
 
   // One URL per named subreddit, or a single global search if none are set.
+  // Pass keyword type so phrase keywords get force-quoted in the Reddit query.
+  const kwType = keywordEntry.type || 'keyword'
   const urls = subreddits.length > 0
-    ? subreddits.map(sr => buildRedditSearchUrl(keyword, sr))
-    : [buildRedditSearchUrl(keyword, null)]
+    ? subreddits.map(sr => buildRedditSearchUrl(keyword, sr, { type: kwType }))
+    : [buildRedditSearchUrl(keyword, null, { type: kwType })]
 
   // Plain headers — no Bearer, no client_id. UA is still polite to send;
   // Reddit's RSS endpoints don't gate on it the way the JSON API does.
@@ -836,9 +839,12 @@ async function runMonitor(monitor) {
       const ctx = kw.productContext || monitor.productContext || ''
       const kwType = kw.type || 'keyword'
       const redditMatches = await searchReddit(monitor.id, kw)
+      let _redditIrrelevant = 0
       for (const m of redditMatches) {
         m.productContext = ctx
         m.keywordType = kwType   // PR #28
+        // ── Relevance gate ─────────────────────────────────────────────
+        if (!passesRelevanceCheck(m, kw.keyword, kwType)) { _redditIrrelevant++; continue }
         // ── Engagement gate ────────────────────────────────────────────
         const _hasEngagement = (m.score >= 1 || m.comments >= 1)
         const _isFreshUnanswered = (() => {
@@ -859,7 +865,8 @@ async function runMonitor(monitor) {
         allMatches.push(m)
       }
       if (redditMatches.length > 0) {
-        console.log(`${label} Reddit "${kw.keyword}"${kwType === 'competitor' ? ' [competitor]' : ''}: ${redditMatches.length} new`)
+        const _redditKept = redditMatches.length - _redditIrrelevant
+        console.log(`${label} Reddit "${kw.keyword}"${kwType === 'competitor' ? ' [competitor]' : ''}${kwType === 'phrase' ? ' [phrase]' : ''}: ${_redditKept} relevant${_redditIrrelevant ? ` (${_redditIrrelevant} irrelevant dropped)` : ''}`)
       }
       await delay(2000)
 
@@ -924,6 +931,8 @@ async function runMonitor(monitor) {
       let _gated = 0
       for (const m of matches) {
         m.productContext = ctx; m.keywordType = kwType
+        // ── Relevance gate ───────────────────────────────────────────────
+        if (!passesRelevanceCheck(m, kw.keyword, kwType)) { _gated++; continue }
         // ── Engagement gate ──────────────────────────────────────────────
         const _hasEngagement = (m.score >= 1 || m.comments >= 1)
         const _isFreshUnanswered = (() => {
@@ -944,7 +953,7 @@ async function runMonitor(monitor) {
         allMatches.push(m)
       }
       const _kept = matches.length - _gated
-      if (_kept) console.log(`${label} ${PLATFORM_LABELS[key] || key} "${kw.keyword}"${kwType === 'competitor' ? ' [competitor]' : ''}: ${_kept} new${_gated ? ` (${_gated} zero-engagement dropped)` : ''}`)
+      if (_kept) console.log(`${label} ${PLATFORM_LABELS[key] || key} "${kw.keyword}"${kwType === 'competitor' ? ' [competitor]' : ''}${kwType === 'phrase' ? ' [phrase]' : ''}: ${_kept} new${_gated ? ` (${_gated} irrelevant/zero-engagement dropped)` : ''}`)
       await delay(delayMs)
     }
   }

@@ -100,18 +100,53 @@ test('normalizeKeywordList: returns [] for non-array', () => {
 
 // ── VALID_KEYWORD_TYPES + isValidKeywordType ──────────────────────────────
 
-test('VALID_KEYWORD_TYPES is exactly [keyword, competitor]', () => {
-  assert.deepEqual(VALID_KEYWORD_TYPES, ['keyword', 'competitor'])
+test('VALID_KEYWORD_TYPES includes phrase', () => {
+  assert.ok(VALID_KEYWORD_TYPES.includes('phrase'))
+  assert.ok(VALID_KEYWORD_TYPES.includes('keyword'))
+  assert.ok(VALID_KEYWORD_TYPES.includes('competitor'))
+  assert.equal(VALID_KEYWORD_TYPES.length, 3)
 })
 
-test('isValidKeywordType: accepts both, rejects everything else', () => {
+test('isValidKeywordType: accepts keyword, competitor, phrase', () => {
   assert.equal(isValidKeywordType('keyword'),    true)
   assert.equal(isValidKeywordType('competitor'), true)
-  assert.equal(isValidKeywordType('  KEYWORD '), true)   // trim + lowercase
+  assert.equal(isValidKeywordType('phrase'),     true)
+  assert.equal(isValidKeywordType('  PHRASE '),  true)   // trim + lowercase
   assert.equal(isValidKeywordType('rival'),      false)
   assert.equal(isValidKeywordType(''),           false)
   assert.equal(isValidKeywordType(null),         false)
   assert.equal(isValidKeywordType(123),          false)
+})
+
+// ── phrase type ───────────────────────────────────────────────────────────────
+
+test('normalizeKeyword: quoted string → type=phrase, quotes stripped', () => {
+  const r = normalizeKeyword('"scope creep"')
+  assert.equal(r.keyword, 'scope creep')
+  assert.equal(r.type, 'phrase')
+})
+
+test('normalizeKeyword: single-quoted word → type=phrase', () => {
+  const r = normalizeKeyword('"freelance"')
+  assert.equal(r.keyword, 'freelance')
+  assert.equal(r.type, 'phrase')
+})
+
+test('normalizeKeyword: object with type=phrase is preserved', () => {
+  const r = normalizeKeyword({ keyword: 'scope creep', type: 'phrase' })
+  assert.equal(r.type, 'phrase')
+  assert.equal(r.keyword, 'scope creep')
+})
+
+test('normalizeKeyword: quoted string with only spaces inside is rejected', () => {
+  assert.equal(normalizeKeyword('"  "'), null)
+  assert.equal(normalizeKeyword('" "'), null)
+})
+
+test('normalizeKeyword: unmatched quotes are treated as plain keyword', () => {
+  const r = normalizeKeyword('"no closing')
+  assert.equal(r.type, 'keyword')
+  assert.equal(r.keyword, '"no closing')
 })
 
 // ── isoWeekLabel ──────────────────────────────────────────────────────────

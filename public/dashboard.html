@@ -2646,7 +2646,9 @@ function EditMonitorModal({ apiKey, monitor, corridors, onClose, onSaved }) {
   const [corridorId,  setCorridorId]  = useState(monitor.diaspora_corridor || '')
   const [excludeTermsInput,      setExcludeTermsInput]      = useState((monitor.exclude_terms      || monitor.excludeTerms      || []).join(', '))
   const [blockedSubredditsInput, setBlockedSubredditsInput] = useState((monitor.blocked_subreddits || monitor.blockedSubreddits || []).join(', '))
-  const [keywordsInput,          setKeywordsInput]          = useState((monitor.keywords           || []).join(', '))
+  const [keywordsInput,          setKeywordsInput]          = useState(
+    (monitor.keywords || []).map(k => k.type === 'phrase' ? `"${k.keyword}"` : k.keyword).join(', ')
+  )
   const [productCtxInput,        setProductCtxInput]        = useState(monitor.product_context     || '')
   const [saving, setSaving] = useState(false)
   const [err, setErr]       = useState('')
@@ -2686,10 +2688,14 @@ function EditMonitorModal({ apiKey, monitor, corridors, onClose, onSaved }) {
     const platformsChanged = JSON.stringify([...platforms].sort()) !== JSON.stringify([...(monitor.platforms || [])].sort())
     if (platformsChanged) body.platforms = platforms
 
-    const _curKws    = parseCommaSeparated(keywordsInput).join(',')
-    const _savedKws  = (monitor.keywords || []).join(',')
-    if (_curKws !== _savedKws && parseCommaSeparated(keywordsInput).length > 0)
-      body.keywords = parseCommaSeparated(keywordsInput).map(k => ({ keyword: k }))
+    // Split on commas but preserve quoted phrases (e.g. `"scope creep"`) intact.
+    // Pass each raw token (with quotes) to the API — normalizeKeyword detects
+    // quoted strings and sets type: 'phrase' automatically.
+    const _rawTokens = keywordsInput.split(',').map(s => s.trim()).filter(Boolean)
+    const _curKws    = _rawTokens.join(',')
+    const _savedKws  = (monitor.keywords || []).map(k => k.type === 'phrase' ? `"${k.keyword}"` : k.keyword).join(',')
+    if (_curKws !== _savedKws && _rawTokens.length > 0)
+      body.keywords = _rawTokens.map(raw => ({ keyword: raw }))
 
     const _curCtx   = productCtxInput.trim()
     const _savedCtx = monitor.product_context || ''
@@ -2739,8 +2745,8 @@ function EditMonitorModal({ apiKey, monitor, corridors, onClose, onSaved }) {
         {!isBuilder && (
           <div className="field" style={{marginBottom:14}}>
             <label className="label">Keywords <span style={{fontSize:11,fontWeight:400,color:'#94A3B8'}}>· comma-separated · replaces current list</span></label>
-            <input className="inp" placeholder="scope creep, unpaid invoice, need a CRM" value={keywordsInput} onChange={e=>setKeywordsInput(e.target.value)} />
-            <div style={{fontSize:11,color:'#6b7280',marginTop:4}}>{parseCommaSeparated(keywordsInput).length} keyword{parseCommaSeparated(keywordsInput).length !== 1 ? 's' : ''}</div>
+            <input className="inp" placeholder='scope creep, "exact phrase", unpaid invoice' value={keywordsInput} onChange={e=>setKeywordsInput(e.target.value)} />
+            <div style={{fontSize:11,color:'#6b7280',marginTop:4}}>{parseCommaSeparated(keywordsInput).length} keyword{parseCommaSeparated(keywordsInput).length !== 1 ? 's' : ''} · <span style={{color:'#94A3B8'}}>wrap in "quotes" for exact phrase match</span></div>
           </div>
         )}
 

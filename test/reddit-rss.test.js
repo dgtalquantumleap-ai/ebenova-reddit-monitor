@@ -67,6 +67,16 @@ test('buildRedditSearchUrl: single word keyword is not quoted in URL', () => {
   assert.ok(!url.includes('%22freelance%22'), 'Single word should not be wrapped in quotes')
 })
 
+test('buildRedditSearchUrl: type=phrase forces quoting even for single-word keywords', () => {
+  const url = buildRedditSearchUrl('freelance', null, { type: 'phrase' })
+  assert.ok(url.includes(encodeURIComponent('"freelance"')), 'phrase type should force quotes on single word')
+})
+
+test('buildRedditSearchUrl: type=phrase quotes multi-word keywords', () => {
+  const url = buildRedditSearchUrl('scope creep', null, { type: 'phrase' })
+  assert.ok(url.includes(encodeURIComponent('"scope creep"')))
+})
+
 // ── parseRedditRSS ────────────────────────────────────────────────────────────
 
 const SAMPLE_FEED = `<?xml version="1.0" encoding="UTF-8"?>
