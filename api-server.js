@@ -437,6 +437,7 @@ app.get('/v1/monitors', async (req, res) => {
       const raw = await redis.get(`insights:monitor:${id}`)
       if (raw) {
         const m = typeof raw === 'string' ? JSON.parse(raw) : raw
+        if (m.active === false) continue
         const kwStrings = m.keywords?.map(k => k.keyword) || []
         const health = await getKeywordHealth(redis, m.id)
         const staleKws = getStaleKeywords(health, kwStrings)
@@ -1169,6 +1170,7 @@ app.delete('/v1/monitors/:id', async (req, res) => {
     if (m.owner !== auth.owner) return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'Not your monitor' } })
     await redis.set(`insights:monitor:${id}`, JSON.stringify({ ...m, active: false }))
     await redis.srem('insights:active_monitors', id)
+    await redis.srem(`insights:monitors:${auth.owner}`, id)
     res.json({ success: true, monitor_id: id, active: false })
   } catch (err) {
     serverError(res, err)

@@ -397,13 +397,14 @@ function AuthModal({ onSave }) {
 }
 
 // ΓöÇΓöÇ Sidebar ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
-function Sidebar({ tab, setTab, userEmail, plan, monitorCount, onSignOut }) {
+function Sidebar({ tab, setTab, userEmail, plan, monitorCount, draftCount, onSignOut }) {
   const planLabel = {starter:'Starter',growth:'Growth',scale:'Scale'}[plan]||'Starter';
   const initial = (userEmail||'?')[0].toUpperCase();
 
   const items = [
-    { id:'find', icon:'ph-magnifying-glass-plus', label:'Find Customers' },
-    { id:'feed', icon:'ph-newspaper',             label:'Monitor Feed', count: monitorCount > 0 ? monitorCount : null },
+    { id:'find',   icon:'ph-magnifying-glass-plus', label:'Find Customers' },
+    { id:'feed',   icon:'ph-newspaper',             label:'Monitor Feed', count: monitorCount > 0 ? monitorCount : null },
+    { id:'drafts', icon:'ph-pencil-line',           label:'Drafts',       count: draftCount > 0 ? draftCount : null },
   ];
 
   return (
@@ -1388,6 +1389,92 @@ function MatchesFeed({ apiKey, monitors }) {
             ))}
           </>
         )}
+      </div>
+    </>
+  );
+}
+
+// ── Drafts Inbox (PR #37) ─────────────────────────────────────────────────
+// All pending AI drafts across every keyword monitor, sorted by intent priority.
+const DRAFT_INTENT_ORDER = { buying: 0, asking_for_tool: 1, researching: 2, complaining: 3, venting: 4 };
+
+function DraftsFeed({ apiKey, monitors, onDraftCount }) {
+  const [allMatches, setAllMatches] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  const load = useCallback(async () => {
+    const kwMonitors = monitors.filter(m => m.mode !== 'builder_tracker');
+    if (!kwMonitors.length) { setAllMatches([]); onDraftCount && onDraftCount(0); return; }
+    setLoading(true);
+    const results = await Promise.all(
+      kwMonitors.map(m => apiFetch(`/v1/matches?monitor_id=${m.id}&limit=50`, {}, apiKey))
+    );
+    const pending = [];
+    results.forEach((r, i) => {
+      if (r.ok) {
+        (r.data.matches || [])
+          .filter(m => m.draft && !m.postedAt && m.feedback !== 'down')
+          .forEach(m => pending.push({ ...m, _monitorId: kwMonitors[i].id }));
+      }
+    });
+    pending.sort((a, b) => (DRAFT_INTENT_ORDER[a.intent] ?? 99) - (DRAFT_INTENT_ORDER[b.intent] ?? 99));
+    setAllMatches(pending);
+    onDraftCount && onDraftCount(pending.length);
+    setLoading(false);
+  }, [apiKey, monitors]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleAction = (type, mid, newDraft, newDraftedBy) => {
+    if (type === 'draft') setAllMatches(ms => ms.map(m => m.id === mid ? { ...m, draft: newDraft, draftedBy: newDraftedBy } : m));
+  };
+
+  if (!monitors.length) return (
+    <>
+      <div className="page-header">
+        <div><h1 className="page-title">Drafts</h1><p className="page-subtitle">AI-drafted replies ready to review and send</p></div>
+      </div>
+      <div className="page-body">
+        <div className="card">
+          <div className="empty">
+            <div className="empty-icon"><i className="ph ph-pencil-line"></i></div>
+            <div className="empty-title">No monitors yet</div>
+            <div className="empty-desc">Head to Find Customers to set up a monitor. Drafts appear here once Ebenova finds and drafts replies to matching posts.</div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+
+  return (
+    <>
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Drafts</h1>
+          <p className="page-subtitle">
+            {loading ? 'Loading…' : allMatches.length > 0 ? `${allMatches.length} draft${allMatches.length === 1 ? '' : 's'} waiting — sorted by priority` : 'No drafts waiting'}
+          </p>
+        </div>
+        <div style={{display:'flex',gap:8,alignItems:'center',marginTop:4}}>
+          <button className="btn btn-white btn-sm" onClick={load} disabled={loading}>
+            <i className={`ph ph-arrow-clockwise${loading?' spin':''}`}></i> Refresh
+          </button>
+        </div>
+      </div>
+      <div className="page-body">
+        {loading && <div style={{display:'flex',flexDirection:'column',gap:8}}>{[1,2,3].map(i=><div key={i} className="shimmer" style={{height:200}} />)}</div>}
+        {!loading && allMatches.length === 0 && (
+          <div className="card">
+            <div className="empty">
+              <div className="empty-icon"><i className="ph ph-pencil-line"></i></div>
+              <div className="empty-title">No drafts waiting</div>
+              <div className="empty-desc">Drafts appear here when Ebenova finds a matching post and generates a reply. Run a monitor cycle or click <strong>New Draft</strong> on any match in the feed.</div>
+            </div>
+          </div>
+        )}
+        {!loading && allMatches.map(m => (
+          <MatchCard key={m.id} match={m} monitorId={m._monitorId} apiKey={apiKey} onAction={handleAction} />
+        ))}
       </div>
     </>
   );
@@ -3257,6 +3344,7 @@ function App() {
   });
   const [tab, setTab] = useState('find');
   const [monitors, setMonitors] = useState([]);
+  const [draftCount, setDraftCount] = useState(null);
   const [userEmail, setUserEmail] = useState('');
   const [plan, setPlan] = useState('starter');
   const [showAuth, setShowAuth] = useState(!localStorage.getItem('ebi_key'));
@@ -3297,11 +3385,12 @@ function App() {
           onComplete={() => { setShowOnboarding(false); loadMonitors(); setTab('feed'); }}
         />
       )}
-      <Sidebar tab={tab} setTab={setTab} userEmail={userEmail} plan={plan} monitorCount={monitors.length} onSignOut={signOut} />
+      <Sidebar tab={tab} setTab={setTab} userEmail={userEmail} plan={plan} monitorCount={monitors.length} draftCount={draftCount} onSignOut={signOut} />
       <FeedbackWidget apiKey={apiKey} />
       <div className="main">
         {tab==='find'     && <FindCustomers apiKey={apiKey} onMonitorCreated={()=>{ loadMonitors(); setTab('feed'); }} />}
         {tab==='feed'     && <MatchesFeed apiKey={apiKey} monitors={monitors} />}
+        {tab==='drafts'   && <DraftsFeed apiKey={apiKey} monitors={monitors} onDraftCount={setDraftCount} />}
         {tab==='settings' && <Settings apiKey={apiKey} userEmail={userEmail} plan={plan} onSignOut={signOut} monitors={monitors} onRefresh={loadMonitors} />}
       </div>
     </div>

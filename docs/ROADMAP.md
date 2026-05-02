@@ -295,6 +295,30 @@ This is unique positioning — no competitor monitors diaspora corridors.
 
 ---
 
+### PR #37 — Dedicated Drafts Inbox
+
+- Layer: 3 — Execution
+- Files: `public/dashboard.html` only (client-side filter + tab)
+
+**Problem:** AI draft replies are currently embedded in individual match cards in the
+Monitor Feed. Users miss drafts by scrolling past them, and there's no single place
+to review all unused drafts across monitors before a reply session.
+
+Spec:
+
+- Add a **"Drafts"** tab in the sidebar (between Feed and Insights)
+- Query: all matches where `draft !== null && postedAt === null && skippedAt === null`
+  across all monitors, sorted by `intent` priority (buying → asking_for_tool → researching)
+- Card layout identical to the feed MatchCard but with draft body always expanded
+- Actions: **Copy + Mark Posted**, **Regenerate**, **Skip** — same handlers as feed
+- Badge on the sidebar tab showing count of pending drafts (refreshes with the feed poll)
+- Empty state: "No drafts waiting — run a monitor cycle or click New Draft on any match."
+
+Why now: Users doing a reply session want a clean queue, not a scroll hunt.
+This turns drafts from an incidental discovery into an intentional workflow.
+
+---
+
 ## Platforms Currently Active
 
 | Platform | Status | Scraper File |
