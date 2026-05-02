@@ -836,6 +836,23 @@ async function runMonitor(monitor) {
       for (const m of redditMatches) {
         m.productContext = ctx
         m.keywordType = kwType   // PR #28
+        // ── Engagement gate ────────────────────────────────────────────
+        const _hasEngagement = (m.score >= 1 || m.comments >= 1)
+        const _isFreshUnanswered = (() => {
+          const _ageMs = Date.now() - new Date(m.createdAt || 0).getTime()
+          return _ageMs < 2 * 60 * 60 * 1000
+        })()
+        const _isHighTrustSource = [
+          'hackernews','medium','substack','upwork','fiverr',
+          'youtube','amazon','jijing','twitter'
+        ].includes(m.source)
+        const _isHumanGithub = (
+          m.source === 'github' &&
+          !(m.author || '').toLowerCase().includes('[bot]')
+        )
+        if (!_hasEngagement && !_isFreshUnanswered &&
+            !_isHighTrustSource && !_isHumanGithub) continue
+        // ── End engagement gate ─────────────────────────────────────────
         allMatches.push(m)
       }
       if (redditMatches.length > 0) {
@@ -901,8 +918,30 @@ async function runMonitor(monitor) {
       const ctx = kw.productContext || monitor.productContext || ''
       const kwType = kw.type || 'keyword'   // PR #28
       const matches = await scraper(kw, { seenIds, delay, MAX_AGE_MS: maxAgeMs })
-      matches.forEach(m => { m.productContext = ctx; m.keywordType = kwType; allMatches.push(m) })
-      if (matches.length) console.log(`${label} ${PLATFORM_LABELS[key] || key} "${kw.keyword}"${kwType === 'competitor' ? ' [competitor]' : ''}: ${matches.length} new`)
+      let _gated = 0
+      for (const m of matches) {
+        m.productContext = ctx; m.keywordType = kwType
+        // ── Engagement gate ──────────────────────────────────────────────
+        const _hasEngagement = (m.score >= 1 || m.comments >= 1)
+        const _isFreshUnanswered = (() => {
+          const _ageMs = Date.now() - new Date(m.createdAt || 0).getTime()
+          return _ageMs < 2 * 60 * 60 * 1000
+        })()
+        const _isHighTrustSource = [
+          'hackernews','medium','substack','upwork','fiverr',
+          'youtube','amazon','jijing','twitter'
+        ].includes(m.source)
+        const _isHumanGithub = (
+          m.source === 'github' &&
+          !(m.author || '').toLowerCase().includes('[bot]')
+        )
+        if (!_hasEngagement && !_isFreshUnanswered &&
+            !_isHighTrustSource && !_isHumanGithub) { _gated++; continue }
+        // ── End engagement gate ───────────────────────────────────────────
+        allMatches.push(m)
+      }
+      const _kept = matches.length - _gated
+      if (_kept) console.log(`${label} ${PLATFORM_LABELS[key] || key} "${kw.keyword}"${kwType === 'competitor' ? ' [competitor]' : ''}: ${_kept} new${_gated ? ` (${_gated} zero-engagement dropped)` : ''}`)
       await delay(delayMs)
     }
   }

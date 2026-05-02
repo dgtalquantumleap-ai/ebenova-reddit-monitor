@@ -480,15 +480,23 @@ function ClassificationBadge({ spec }) {
   return <span className="badge" style={{background:spec.bg,color:spec.color,fontSize:10,fontWeight:700,padding:'2px 8px',borderRadius:10,letterSpacing:'.2px'}}>{spec.label}</span>;
 }
 
+// Extract a plain string from a draft field that may be a string, null, or a
+// legacy object shape ({ draft, model } from an older pipeline version).
+function extractDraftText(draft) {
+  if (!draft) return '';
+  if (typeof draft === 'string') return draft;
+  return draft.text || draft.draft || draft.body || draft.content || '';
+}
+
 function MatchCard({ match, monitorId, apiKey, onAction }) {
   const [drafting, setDrafting] = useState(false);
   const [gone, setGone] = useState(false);
   // Editable copy of the draft. Stays local so the user can tweak before
   // copying. Resets whenever the upstream draft changes (initial load,
   // regenerate, etc.).
-  const [draftText, setDraftText] = useState(match.draft || '');
+  const [draftText, setDraftText] = useState(() => extractDraftText(match.draft));
   const [copied, setCopied] = useState(false);
-  useEffect(() => { setDraftText(match.draft || ''); setCopied(false); }, [match.draft]);
+  useEffect(() => { setDraftText(extractDraftText(match.draft)); setCopied(false); }, [match.draft]);
 
   // Posted state — local optimistic shadow of match.postedAt. Updates on
   // PATCH success; resets if the upstream prop changes (e.g., a parent
@@ -526,6 +534,10 @@ function MatchCard({ match, monitorId, apiKey, onAction }) {
 
   if (gone) return null;
 
+  const _engHigh  = (match.score||0) >= 10 || (match.comments||0) >= 5;
+  const _engAny   = (match.score||0) >= 1  || (match.comments||0) >= 1;
+  const _engStyle = { fontWeight: _engHigh ? 600 : 400, color: _engHigh ? '#10b981' : _engAny ? 'inherit' : '#6b7280' };
+
   return (
     <div className="result-card fade-up">
       <div style={{display:'flex',alignItems:'flex-start',gap:8,marginBottom:10,flexWrap:'wrap'}}>
@@ -548,8 +560,8 @@ function MatchCard({ match, monitorId, apiKey, onAction }) {
       {match.body && <p style={{fontSize:13,color:'#64748B',lineHeight:1.65,marginBottom:10}}>{match.body.slice(0,260)}{match.body.length>260?'…':''}</p>}
       <div style={{display:'flex',gap:8,alignItems:'center',fontSize:12,color:'#94A3B8',marginBottom:match.draft?0:10,flexWrap:'wrap'}}>
         {match.author && <span>u/{match.author}</span>}
-        {match.score!=null && <span>· {match.score} pts</span>}
-        {match.comments!=null && <span>· {match.comments} replies</span>}
+        {match.score!=null && <span style={_engStyle}>· {match.score} pts</span>}
+        {match.comments!=null && <span style={_engStyle}>· {match.comments} replies</span>}
         {match.keyword && <span style={{padding:'1px 7px',background:'#F8FAFC',border:'1px solid #E2E8F0',borderRadius:4,color:'#64748B',marginLeft:4}}>"{match.keyword}"</span>}
       </div>
       {match.draft && (
