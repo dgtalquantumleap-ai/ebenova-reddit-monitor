@@ -85,6 +85,7 @@ import { applyInviteToUser } from './lib/invite.js'
 import { draftCall, extractInjectedUtmUrl } from './lib/draft-call.js'
 import { validatePlatforms, migrateLegacyPlatforms, VALID_PLATFORMS, PLATFORM_LABELS, PLATFORM_EMOJIS } from './lib/platforms.js'
 import { classifyMatch, intentPriority } from './lib/classify.js'
+import { generateVariants } from './lib/variants-call.js'
 import { sendOutboundWebhook, buildPayload as buildWebhookPayload } from './lib/outbound-webhook.js'
 import { toCsv, matchToExportRow, MATCH_EXPORT_COLUMNS } from './lib/csv-export.js'
 import { gatherReportData, buildExecutiveSummary, renderReportHtml, resolveReportToken } from './lib/client-report.js'
@@ -399,11 +400,19 @@ app.get('/health', async (req, res) => {
 app.get('/v1/me', async (req, res) => {
   const auth = await authenticate(req)
   if (!auth.ok) return res.status(auth.status).json({ success: false, error: auth.error })
+  let isOnboarded = true
+  try {
+    const redis = getRedis()
+    const rawKey = req.headers['authorization']?.slice(7).trim() || ''
+    const flag = await redis.get(`onboarded:${rawKey}`)
+    isOnboarded = flag === '1'
+  } catch (_) { isOnboarded = true }
   res.json({
     success: true,
     email: auth.owner,
     plan: auth.keyData.insightsPlan || 'starter',
     name: auth.keyData.name || '',
+    isOnboarded,
   })
 })
 
@@ -463,6 +472,7 @@ app.get('/v1/monitors', async (req, res) => {
           // report at /report?token=… — exposed so the dashboard can
           // copy the URL to the clipboard.
           share_token:          m.shareToken         || null,
+          deal_value:           m.dealValue          || 0,
         })
       }
     }
@@ -482,6 +492,7 @@ app.post('/v1/monitors', async (req, res) => {
     mode, minConsistency,
     brandName,
     diasporaCorridor,
+    dealValue,
     includeMedium, includeSubstack, includeQuora, includeUpworkForum, includeFiverrForum } = req.body
 
   // PR #36 — diaspora corridor (optional). When set, the worker overrides
@@ -613,6 +624,7 @@ app.post('/v1/monitors', async (req, res) => {
       // prompt sizes bounded.
       brandName:          (brandName || '').toString().trim().slice(0, 80),
       diasporaCorridor:   resolvedCorridor,
+      dealValue: (typeof dealValue === 'number' && dealValue > 0) ? Math.round(dealValue) : 0,
       active: true, plan, createdAt: now, lastPollAt: null, totalMatchesFound: 0 }
     await redis.set(`insights:monitor:${id}`, JSON.stringify(monitor))
     await redis.expire(`insights:monitor:${id}`, ONE_YEAR_SECONDS).catch(() => {})
@@ -792,6 +804,18 @@ app.patch('/v1/monitors/:id', async (req, res) => {
       updates.replyTone = body.replyTone
     }
 
+    // Field 15: dealValue — expected revenue per closed deal (for opportunity cost ticker).
+    if (Object.prototype.hasOwnProperty.call(body, 'dealValue')) {
+      const dv = body.dealValue
+      if (dv === null || dv === 0) {
+        updates.dealValue = 0
+      } else if (typeof dv !== 'number' || dv < 0) {
+        return res.status(400).json({ success: false, error: { code: 'INVALID_DEAL_VALUE', message: '`dealValue` must be a positive number or 0' } })
+      } else {
+        updates.dealValue = Math.round(dv)
+      }
+    }
+
     // Field 14: Batch B — name. Allow renaming a monitor.
     if (Object.prototype.hasOwnProperty.call(body, 'name')) {
       if (typeof body.name !== 'string' || !body.name.trim()) {
@@ -821,6 +845,7 @@ app.patch('/v1/monitors/:id', async (req, res) => {
     if (updates.slackWebhookUrl  !== undefined) echo.slack_webhook_url = next.slackWebhookUrl
     if (updates.replyTone        !== undefined) echo.reply_tone        = next.replyTone
     if (updates.name             !== undefined) echo.name              = next.name
+    if (updates.dealValue        !== undefined) echo.deal_value        = next.dealValue
     res.json(echo)
   } catch (err) {
     serverError(res, err)
@@ -1042,6 +1067,22 @@ app.post('/v1/monitors/:id/poll-now', async (req, res) => {
       monitor_id: id,
       message: 'Scan queued — your monitor will run within the next 60 seconds.',
     })
+  } catch (err) {
+    serverError(res, err)
+  }
+})
+
+// ── POST /v1/monitors/:id/onboard ─────────────────────────────────────────
+// Marks the API key as onboarded. Called by the wizard on completion.
+// Sets onboarded:{rawKey} = '1' with no TTL (permanent).
+app.post('/v1/monitors/:id/onboard', async (req, res) => {
+  const auth = await authenticate(req)
+  if (!auth.ok) return res.status(auth.status).json({ success: false, error: auth.error })
+  try {
+    const redis = getRedis()
+    const rawKey = req.headers['authorization']?.slice(7).trim() || ''
+    await redis.set(`onboarded:${rawKey}`, '1')
+    res.json({ success: true })
   } catch (err) {
     serverError(res, err)
   }
@@ -1571,6 +1612,48 @@ app.post('/v1/matches/draft', async (req, res) => {
       draftedBy,
       ...(backfill.intent ? { sentiment: backfill.sentiment, intent: backfill.intent } : {}),
     })
+  } catch (err) {
+    serverError(res, err)
+  }
+})
+
+// ── POST /v1/matches/:id/variants ─────────────────────────────────────────
+// Returns 3 AI reply variants (valueHook / directBridge / empathy) for a match.
+// Results are cached in Redis for 24h so repeated calls don't burn Groq quota.
+app.post('/v1/matches/:id/variants', async (req, res) => {
+  const auth = await authenticate(req)
+  if (!auth.ok) return res.status(auth.status).json({ success: false, error: auth.error })
+  const { id: matchId } = req.params
+  try {
+    const redis = getRedis()
+    const cacheKey = `variants:${matchId}`
+    const cached = await redis.get(cacheKey)
+    if (cached) {
+      const v = typeof cached === 'string' ? JSON.parse(cached) : cached
+      return res.json({ success: true, variants: v, cached: true })
+    }
+    // Verify ownership — find the match across the caller's monitors
+    const monitorIds = await redis.smembers(`insights:monitors:${auth.owner}`) || []
+    let match = null
+    for (const mid of monitorIds) {
+      const raw = await redis.get(`insights:matches:${mid}`)
+      if (!raw) continue
+      const matches = typeof raw === 'string' ? JSON.parse(raw) : raw
+      match = Array.isArray(matches) ? matches.find(m => m.id === matchId) : null
+      if (match) break
+    }
+    if (!match) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Match not found' } })
+    const monitorRaw = await redis.get(`insights:monitor:${match.monitorId || monitorIds[0]}`)
+    const monitor = monitorRaw ? (typeof monitorRaw === 'string' ? JSON.parse(monitorRaw) : monitorRaw) : {}
+    const variants = await generateVariants({
+      title:          match.title || '',
+      body:           match.body  || '',
+      productContext: match.productContext || monitor.productContext || '',
+    })
+    if (!variants) return res.status(503).json({ success: false, error: { code: 'VARIANTS_FAILED', message: 'Could not generate variants — check GROQ_API_KEY' } })
+    await redis.set(cacheKey, JSON.stringify(variants))
+    await redis.expire(cacheKey, 60 * 60 * 24)
+    res.json({ success: true, variants, cached: false })
   } catch (err) {
     serverError(res, err)
   }
