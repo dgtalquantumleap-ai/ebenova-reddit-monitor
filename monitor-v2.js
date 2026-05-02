@@ -2,9 +2,8 @@
 // Multi-tenant Insights worker — polls Redis for active monitors,
 // runs keyword searches for each, stores matches, sends email alerts.
 //
-// Runs on Railway alongside the existing monitor.js (v1 = Skido's own keywords).
 // Start with: node monitor-v2.js
-// Env vars needed: REDIS_URL, RESEND_API_KEY, GROQ_API_KEY, FROM_EMAIL
+// Env vars needed: UPSTASH_REDIS_REST_URL, UPSTASH_REDIS_REST_TOKEN, RESEND_API_KEY, GROQ_API_KEY
 
 import { loadEnv } from './lib/env.js'
 
@@ -102,13 +101,17 @@ async function hasSeenWithRedis(monitorId, postId) {
   try {
     const r = await redis.get(`seen:v2:${monitorId}:${postId}`)
     if (r) { seenMap.set(`${monitorId}:${postId}`, true); return true }
-  } catch (_) {}
+  } catch (err) {
+    console.error(`[v2][${monitorId}] Redis seen-check error:`, err.message)
+  }
   return false
 }
 
 function markSeen(monitorId, postId) {
   seenMap.set(`${monitorId}:${postId}`, true)
-  if (redis) redis.setex(`seen:v2:${monitorId}:${postId}`, 60 * 60 * 24 * 3, '1').catch(() => {})
+  if (redis) redis.setex(`seen:v2:${monitorId}:${postId}`, 60 * 60 * 24 * 3, '1').catch(err => {
+    console.error(`[v2][${monitorId}] Redis markSeen error:`, err.message)
+  })
   if (seenMap.size > MAX_SEEN) {
     // Prune oldest 10k entries
     const keys = [...seenMap.keys()].slice(0, 10000)
@@ -262,7 +265,7 @@ async function semanticSearchSubreddit(monitorId, subreddit, keywordEntry, query
       await delay(200) // small delay between embedding calls
     }
   } catch (err) {
-    console.error(`[v2][semantic] Error scanning r/${subreddit}:`, err.message)
+    console.error(`[v2][${monitorId}][semantic] Error scanning r/${subreddit}:`, err.message)
   }
   return results
 }
@@ -301,7 +304,7 @@ async function searchReddit(monitorId, keywordEntry) {
       const res = await fetch(url, { headers })
       if (!res.ok) {
         const retryAfter = parseRetryAfter(res.headers)
-        console.warn(`[v2][reddit:rss] ${res.status} for "${keyword}" → ${url.slice(0, 100)}…${retryAfter ? ` (Retry-After: ${retryAfter}s)` : ''}`)
+        console.warn(`[v2][${monitorId}][reddit:rss] ${res.status} for "${keyword}" → ${url.slice(0, 100)}…${retryAfter ? ` (Retry-After: ${retryAfter}s)` : ''}`)
         await delay((retryAfter || 3) * 1000)
         continue
       }
@@ -331,9 +334,9 @@ async function searchReddit(monitorId, keywordEntry) {
           approved:  APPROVED_SUBREDDITS.has(entry.subreddit),
         })
       }
-      console.log(`[v2][reddit:rss] "${keyword}" → ${entries.length} fetched, ${newCount} new, ${agedOut} stale${entries.length === 0 ? ' (empty feed)' : ''}`)
+      console.log(`[v2][${monitorId}][reddit:rss] "${keyword}" → ${entries.length} fetched, ${newCount} new, ${agedOut} stale${entries.length === 0 ? ' (empty feed)' : ''}`)
     } catch (err) {
-      console.error(`[v2][reddit:rss] fetch error "${keyword}":`, err.message)
+      console.error(`[v2][${monitorId}][reddit:rss] fetch error "${keyword}":`, err.message)
     }
     await delay(2000)
   }
@@ -956,12 +959,25 @@ console.log(`  Redis: ${process.env.UPSTASH_REDIS_REST_URL ? 'Upstash REST' : '�
 console.log('  Monitors loaded from: insights:active_monitors (Redis set)')
 console.log('━'.repeat(60))
 
+// ── Startup env validation ────────────────────────────────────────────────────
+const _REQUIRED = [
+  ['UPSTASH_REDIS_REST_URL',   process.env.UPSTASH_REDIS_REST_URL],
+  ['UPSTASH_REDIS_REST_TOKEN', process.env.UPSTASH_REDIS_REST_TOKEN],
+]
+const _MISSING = _REQUIRED.filter(([, v]) => !v).map(([k]) => k)
+if (_MISSING.length) {
+  console.error(`[v2] ❌ Missing required env vars: ${_MISSING.join(', ')}`)
+  console.error('[v2] Set these in Railway Variables → Redeploy.')
+  process.exit(1)
+}
+
+if (!RESEND_API_KEY) console.warn('[v2] ⚠️  RESEND_API_KEY not set — email alerts disabled for all monitors')
+if (!GROQ_API_KEY)   console.warn('[v2] ⚠️  GROQ_API_KEY not set — AI reply drafts disabled for all monitors')
+
 if (!redis) {
-  console.warn('[v2] ⚠️  Running without Redis — multi-tenant features disabled. Set UPSTASH_REDIS_REST_URL to enable.')
-  // Keep process alive but skip polling
-  setInterval(() => {
-    console.log('[v2] ⏳ Idle — waiting for Redis to be configured…')
-  }, 300_000)
+  // Should not reach here after the exit(1) above, but guard anyway
+  console.error('[v2] ❌ Redis client failed to initialise — exiting')
+  process.exit(1)
 } else {
   // Memory usage logging every 5 minutes
   setInterval(() => {

@@ -1339,9 +1339,20 @@ async function notifyOperatorOfDeletion({ monitorId, monitorName, accountAlsoDel
 }
 
 // ── Start ─────────────────────────────────────────────────────────────────
+const _API_REQUIRED = [
+  ['UPSTASH_REDIS_REST_URL',   process.env.UPSTASH_REDIS_REST_URL],
+  ['UPSTASH_REDIS_REST_TOKEN', process.env.UPSTASH_REDIS_REST_TOKEN],
+]
+const _API_MISSING = _API_REQUIRED.filter(([, v]) => !v).map(([k]) => k)
+if (_API_MISSING.length) {
+  console.error(`[api] ❌ Missing required env vars: ${_API_MISSING.join(', ')}`)
+  console.error('[api] Set these in Railway Variables → Redeploy.')
+  process.exit(1)
+}
+
 app.listen(PORT, () => {
   console.log(`[api] Ebenova Insights API listening on :${PORT}`)
-  console.log(`[api] Redis: ${process.env.UPSTASH_REDIS_REST_URL ? 'configured' : '⚠️ UPSTASH_REDIS_REST_URL not set'}`)
+  console.log(`[api] Redis: configured`)
 })
 
 export default app

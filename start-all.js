@@ -1,5 +1,5 @@
 // start-all.js — Railway entry point
-// Forks: api-server.js (HTTP API), monitor.js (v1 cron), monitor-v2.js (v2 multi-tenant cron)
+// Forks: api-server.js (HTTP API), monitor-v2.js (v2 multi-tenant cron)
 // All three run under a single Railway service.
 // If any worker crashes, it auto-restarts after 10 seconds.
 
@@ -8,7 +8,6 @@ import { resolve } from 'path'
 
 const WORKERS = [
   { name: 'api',  file: 'api-server.js' },
-  { name: 'v1',   file: 'monitor.js'    },
   { name: 'v2',   file: 'monitor-v2.js' },
 ]
 
