@@ -1,15 +1,15 @@
 // start-all.js — Railway entry point
-// Forks: api-server.js (HTTP API), monitor.js (v1 cron), monitor-v2.js (v2 multi-tenant cron)
-// All three run under a single Railway service.
+// Forks: api-server.js (HTTP API), monitor-v2.js (v2 multi-tenant cron)
+// V1 (monitor.js) was decommissioned — its keywords now live as 7 V2 monitors
+// seeded via scripts/seed-v1-monitor.js.
 // If any worker crashes, it auto-restarts after 10 seconds.
 
 import { fork } from 'child_process'
 import { resolve } from 'path'
 
 const WORKERS = [
-  { name: 'api',  file: 'api-server.js' },
-  { name: 'v1',   file: 'monitor.js'    },
-  { name: 'v2',   file: 'monitor-v2.js' },
+  { name: 'api', file: 'api-server.js'  },
+  { name: 'v2',  file: 'monitor-v2.js' },
 ]
 
 const processes = new Map()
