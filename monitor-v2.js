@@ -955,9 +955,24 @@ async function runMonitor(monitor) {
     if (i + CONCURRENCY < allMatches.length) await delay(1000)
   }
 
-  // Priority sort — intent first, then source rank, then recency.
-  // INTENT_BOOST puts 'asking_for_tool' at the top because it's the most
-  // explicit "I need a solution" signal. Unclassified matches go last.
+  // Unanswered thread detection — replyCount=0 AND post is <2h old.
+  // RSS feeds don't expose comment counts so replyCount defaults to 0
+  // for all RSS sources; isUnanswered is most reliable for JSON-API sources.
+  const _nowMs = Date.now()
+  for (const m of allMatches) {
+    m.replyCount = m.comments || 0
+    const _ageMs = _nowMs - new Date(m.createdAt || 0).getTime()
+    m.isUnanswered = m.replyCount === 0 && _ageMs < 2 * 60 * 60 * 1000
+  }
+
+  // Priority sort — unanswered tier first, then intent, then source rank, then recency.
+  function _unansweredTier(m) {
+    const ds = m.demandScore || 0
+    if (m.isUnanswered && ds >= 8) return 0
+    if (m.isUnanswered && ds >= 5) return 1
+    if (ds >= 8)                   return 2
+    return 3
+  }
   const INTENT_BOOST = {
     asking_for_tool: 0,
     buying:          1,
@@ -968,13 +983,14 @@ async function runMonitor(monitor) {
   }
   const SOURCE_RANK = { reddit: 0, hackernews: 1, quora: 2, medium: 3, substack: 4, upwork: 5, fiverr: 6, twitter: 7, jijing: 8, youtube: 9, amazon: 10 }
   allMatches.sort((a, b) => {
+    const ua = _unansweredTier(a), ub = _unansweredTier(b)
+    if (ua !== ub) return ua - ub
     const ia = INTENT_BOOST[a.intent] ?? 6
     const ib = INTENT_BOOST[b.intent] ?? 6
     if (ia !== ib) return ia - ib
     const ra = SOURCE_RANK[a.source] ?? 99
     const rb = SOURCE_RANK[b.source] ?? 99
     if (ra !== rb) return ra - rb
-    // Within the same intent + source, newer first
     return new Date(b.createdAt) - new Date(a.createdAt)
   })
 
