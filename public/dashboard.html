@@ -2950,6 +2950,7 @@ function FeedbackWidget({ apiKey }) {
 function OnboardingWizard({ apiKey, onComplete }) {
   const [step, setStep] = useState(0); // 0=name, 1=preset, 2=scanning
   const [name, setName] = useState('');
+  const [productCtx, setProductCtx] = useState('');
   const [presets, setPresets] = useState([]);
   const [selPreset, setSelPreset] = useState(null);
   const [err, setErr] = useState('');
@@ -2970,7 +2971,7 @@ function OnboardingWizard({ apiKey, onComplete }) {
       body: JSON.stringify({
         name: name.trim(),
         keywords: (preset?.keywords || []).slice(0, 10).map(k => ({ keyword: k })),
-        productContext: preset?.productContext || '',
+        productContext: productCtx.trim() || preset?.productContext || '',
         platforms: preset?.platforms || ['reddit'],
       }),
     }, apiKey);
@@ -3040,9 +3041,20 @@ function OnboardingWizard({ apiKey, onComplete }) {
                   </div>
                 ))}
               </div>
+              <div style={{marginTop:14}}>
+                <p style={{fontSize:12,color:'#8B7355',marginBottom:6,lineHeight:1.5}}>Describe your product <span style={{color:'#6b5c42'}}>(optional — makes reply drafts specific to you)</span></p>
+                <textarea
+                  className="inp"
+                  rows={3}
+                  placeholder={`e.g. ${name.trim() || 'Acme CRM'} is a lightweight CRM for freelancers — $29/mo flat rate, no per-seat pricing, 5-min setup.`}
+                  value={productCtx}
+                  onChange={e => setProductCtx(e.target.value)}
+                  style={{background:'#1f1a13',border:'1px solid #2a2419',color:'#f5efe0',resize:'vertical',minHeight:64,fontFamily:'inherit',fontSize:13,lineHeight:1.5}}
+                />
+              </div>
               <button
                 className="btn btn-primary"
-                style={{width:'100%',marginTop:16}}
+                style={{width:'100%',marginTop:12}}
                 disabled={!selPreset}
                 onClick={createMonitor}
               >
