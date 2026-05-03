@@ -123,6 +123,37 @@ select.inp{cursor:pointer}
 .sprint-nav{display:flex;gap:6px;margin-bottom:10px}
 .variant-tab{padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #E2E8F0;background:#F8FAFC;color:#64748B}
 .variant-tab.active{background:#0F172A;color:#fff;border-color:#0F172A}
+/* Help guide modal */
+.hg-bg{position:fixed;inset:0;background:rgba(15,23,42,.55);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:999;padding:16px}
+.hg-modal{width:100%;max-width:680px;max-height:90vh;background:#fff;border-radius:14px;box-shadow:0 24px 64px rgba(0,0,0,.18);display:flex;flex-direction:column;overflow:hidden}
+.hg-header{padding:20px 24px 16px;border-bottom:1px solid #F1F5F9;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.hg-title{font-size:16px;font-weight:700;color:#0F172A;letter-spacing:-.3px}
+.hg-subtitle{font-size:12px;color:#64748B;margin-top:2px}
+.hg-close{background:none;border:none;cursor:pointer;color:#94A3B8;padding:4px;border-radius:6px;display:flex;align-items:center;font-size:18px;transition:color .15s}
+.hg-close:hover{color:#475569;background:#F8FAFC}
+.hg-tabs{display:flex;gap:2px;padding:12px 24px 0;border-bottom:1px solid #F1F5F9;flex-shrink:0;overflow-x:auto}
+.hg-tab{padding:8px 14px;border-radius:8px 8px 0 0;font-size:12.5px;font-weight:600;cursor:pointer;border:none;background:transparent;color:#64748B;white-space:nowrap;transition:all .15s;font-family:inherit;border-bottom:2px solid transparent;margin-bottom:-1px}
+.hg-tab:hover{color:#0F172A;background:#F8FAFC}
+.hg-tab.active{color:#FF6B35;border-bottom-color:#FF6B35;background:#FFF7F2}
+.hg-body{padding:24px;overflow-y:auto;flex:1}
+.hg-section{margin-bottom:20px}
+.hg-section:last-child{margin-bottom:0}
+.hg-sh{font-size:13px;font-weight:700;color:#0F172A;margin-bottom:6px;display:flex;align-items:center;gap:7px}
+.hg-p{font-size:13px;color:#475569;line-height:1.65;margin-bottom:10px}
+.hg-items{display:flex;flex-direction:column;gap:6px}
+.hg-item{display:flex;gap:10px;align-items:flex-start;padding:9px 12px;background:#F8FAFC;border:1px solid #F1F5F9;border-radius:8px}
+.hg-item-icon{font-size:14px;flex-shrink:0;margin-top:1px;color:#FF6B35}
+.hg-item-body{flex:1}
+.hg-item-label{font-size:12.5px;font-weight:600;color:#0F172A;margin-bottom:2px}
+.hg-item-desc{font-size:12px;color:#64748B;line-height:1.55}
+/* Tooltip */
+.tip-wrap{position:relative;display:inline-flex}
+.tip-wrap .tip-box{position:absolute;bottom:calc(100% + 7px);left:50%;transform:translateX(-50%);background:#0F172A;color:#F8FAFC;font-size:11.5px;font-weight:500;line-height:1.45;padding:6px 10px;border-radius:7px;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .15s;z-index:200;max-width:220px;white-space:normal;text-align:center;box-shadow:0 4px 12px rgba(0,0,0,.2)}
+.tip-wrap .tip-box::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:#0F172A}
+.tip-wrap:hover .tip-box{opacity:1}
+/* Help button in sidebar */
+.sb-help-btn{display:flex;align-items:center;justify-content:center;gap:8px;padding:8px 10px;border-radius:8px;cursor:pointer;border:1px solid #1E293B;background:transparent;color:#475569;font-size:12px;font-weight:600;width:calc(100% - 20px);margin:0 10px;transition:all .15s;font-family:inherit}
+.sb-help-btn:hover{background:#1E293B;color:#94A3B8;border-color:#334155}
 /* Onboarding wizard overlay */
 @keyframes radar-pulse{0%{box-shadow:0 0 0 0 rgba(255,107,53,.4)}70%{box-shadow:0 0 0 12px rgba(255,107,53,0)}100%{box-shadow:0 0 0 0 rgba(255,107,53,0)}}
 .ob-bg{position:fixed;inset:0;background:rgba(10,9,7,.9);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;z-index:1000;padding:16px}
@@ -397,13 +428,167 @@ function AuthModal({ onSave }) {
 }
 
 // ΓöÇΓöÇ Sidebar ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
-function Sidebar({ tab, setTab, userEmail, plan, monitorCount, onSignOut }) {
+// ── Tooltip ───────────────────────────────────────────────────────────────────
+function Tip({ text, children }) {
+  return (
+    <span className="tip-wrap">
+      {children}
+      <span className="tip-box">{text}</span>
+    </span>
+  );
+}
+
+// ── HelpGuide modal ───────────────────────────────────────────────────────────
+const HELP_TABS = [
+  { id:'overview', label:'🗺️ Overview' },
+  { id:'find',     label:'🔍 Find Customers' },
+  { id:'feed',     label:'📰 Monitor Feed' },
+  { id:'drafts',   label:'✏️ Drafts' },
+  { id:'actions',  label:'⚡ Taking Action' },
+  { id:'settings', label:'⚙️ Settings' },
+];
+
+function HelpGuide({ onClose }) {
+  const [activeTab, setActiveTab] = useState('overview');
+  return (
+    <div className="hg-bg" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="hg-modal">
+        <div className="hg-header">
+          <div>
+            <div className="hg-title">Navigation Guide</div>
+            <div className="hg-subtitle">Everything you can do in Ebenova Insights</div>
+          </div>
+          <button className="hg-close" onClick={onClose} aria-label="Close guide"><i className="ph ph-x"></i></button>
+        </div>
+        <div className="hg-tabs">
+          {HELP_TABS.map(t => (
+            <button key={t.id} className={`hg-tab${activeTab===t.id?' active':''}`} onClick={() => setActiveTab(t.id)}>{t.label}</button>
+          ))}
+        </div>
+        <div className="hg-body">
+
+          {activeTab==='overview' && <>
+            <div className="hg-section">
+              <div className="hg-sh"><i className="ph-fill ph-broadcast" style={{color:'#FF6B35'}}></i> What Ebenova Insights does</div>
+              <div className="hg-p">Ebenova scans 13 platforms every 10 minutes for people publicly asking for what you sell. When it finds one, it surfaces the post and generates a ready-to-send reply draft. You review, edit, and post it directly on the platform.</div>
+            </div>
+            <div className="hg-section">
+              <div className="hg-sh">Three sections</div>
+              <div className="hg-items">
+                <div className="hg-item"><i className="ph-bold ph-magnifying-glass-plus hg-item-icon"></i><div className="hg-item-body"><div className="hg-item-label">Find Customers</div><div className="hg-item-desc">Create a new monitor. Enter a description of what you sell (and optionally your website URL), and the AI generates relevant keywords, subreddits, and platforms. Review and save — your monitor starts scanning within seconds.</div></div></div>
+                <div className="hg-item"><i className="ph-bold ph-newspaper hg-item-icon"></i><div className="hg-item-body"><div className="hg-item-label">Monitor Feed</div><div className="hg-item-desc">Your live stream of matched posts across all monitors. Each card shows the post, engagement signals, intent classification, and an AI reply draft. This is where you decide what to act on.</div></div></div>
+                <div className="hg-item"><i className="ph-bold ph-pencil-line hg-item-icon"></i><div className="hg-item-body"><div className="hg-item-label">Drafts</div><div className="hg-item-desc">All pending AI-generated reply drafts across every monitor in one queue, sorted by intent priority. Use this for a focused reply session.</div></div></div>
+              </div>
+            </div>
+            <div className="hg-section">
+              <div className="hg-sh">Platforms scanned</div>
+              <div style={{display:'flex',flexWrap:'wrap',gap:6,marginTop:4}}>
+                {[['🔴','Reddit'],['🟠','HN'],['🐦','Twitter/X'],['▶️','YouTube'],['🐙','GitHub'],['💼','Upwork'],['🟢','Fiverr'],['📰','Medium'],['💬','Quora'],['🚀','PH'],['🇳🇬','Jiji.ng'],['📦','Amazon'],['📧','Substack']].map(([e,l])=>(
+                  <span key={l} style={{display:'inline-flex',alignItems:'center',gap:4,background:'#F8FAFC',border:'1px solid #E2E8F0',borderRadius:6,padding:'3px 9px',fontSize:12,color:'#475569'}}>{e} {l}</span>
+                ))}
+              </div>
+            </div>
+          </>}
+
+          {activeTab==='find' && <>
+            <div className="hg-section">
+              <div className="hg-sh">Creating a monitor — 4 steps</div>
+              <div className="hg-items">
+                <div className="hg-item"><span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,fontWeight:700,color:'#FF6B35',flexShrink:0,marginTop:1}}>①</span><div className="hg-item-body"><div className="hg-item-label">Describe what you sell</div><div className="hg-item-desc">Write 2–3 sentences about your product or service. Optionally paste your website URL — the AI reads your actual page copy to generate sharper keywords.</div></div></div>
+                <div className="hg-item"><span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,fontWeight:700,color:'#FF6B35',flexShrink:0,marginTop:1}}>②</span><div className="hg-item-body"><div className="hg-item-label">Review keywords</div><div className="hg-item-desc">AI suggests 12–20 keywords tagged by intent. Volume bars show how many posts each keyword has right now. Select high-volume keywords. Add your own. Deselect irrelevant ones.</div></div></div>
+                <div className="hg-item"><span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,fontWeight:700,color:'#FF6B35',flexShrink:0,marginTop:1}}>③</span><div className="hg-item-body"><div className="hg-item-label">Choose platforms</div><div className="hg-item-desc">Pick which platforms to scan. Defaults are pre-selected based on your product type. Each chip toggles a platform on/off.</div></div></div>
+                <div className="hg-item"><span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,fontWeight:700,color:'#FF6B35',flexShrink:0,marginTop:1}}>④</span><div className="hg-item-body"><div className="hg-item-label">Confirm and launch</div><div className="hg-item-desc">Name your monitor, set an alert email, and save. First scan starts within seconds. You'll receive a confirmation email.</div></div></div>
+              </div>
+            </div>
+            <div className="hg-section">
+              <div className="hg-sh">Keyword volume bars</div>
+              <div className="hg-p"><span style={{color:'#16A34A',fontWeight:600}}>Green</span> = 10+ posts this week. <span style={{color:'#EA580C',fontWeight:600}}>Orange</span> = 1–9 posts. <span style={{color:'#9CA3AF',fontWeight:600}}>Grey</span> = zero volume. Avoid selecting all-grey keywords — your monitor will find very few matches.</div>
+            </div>
+            <div className="hg-section">
+              <div className="hg-sh">Industry presets</div>
+              <div className="hg-p">If you're in a standard vertical (Healthcare, SaaS, Freelancing, etc.), use a preset to skip keyword brainstorming. Presets load a curated keyword list + platform set you can edit before saving.</div>
+            </div>
+          </>}
+
+          {activeTab==='feed' && <>
+            <div className="hg-section">
+              <div className="hg-sh">Reading a match card</div>
+              <div className="hg-items">
+                <div className="hg-item"><i className="ph-fill ph-lightning hg-item-icon"></i><div className="hg-item-body"><div className="hg-item-label">High priority badge</div><div className="hg-item-desc">Priority score 8+. Strong signal — act on these first.</div></div></div>
+                <div className="hg-item"><i className="ph-fill ph-chart-line-up hg-item-icon"></i><div className="hg-item-body"><div className="hg-item-label">Demand score (1–10)</div><div className="hg-item-desc">How urgently the person wants a solution. ⚡ PEAK (8–10) = reply immediately. 5–7 = warm lead. Below 5 = low priority.</div></div></div>
+                <div className="hg-item"><i className="ph ph-target hg-item-icon"></i><div className="hg-item-body"><div className="hg-item-label">Intent badge</div><div className="hg-item-desc">🎯 BUYING = ready to pay. 🔧 ASKING FOR TOOL = looking for a product. 📊 RESEARCHING = comparing options. 😤 COMPLAINING = frustrated with a competitor. 😩 VENTING = emotional, lower value.</div></div></div>
+                <div className="hg-item"><i className="ph ph-chat-circle hg-item-icon"></i><div className="hg-item-body"><div className="hg-item-label">🟢 No replies yet</div><div className="hg-item-desc">Post has zero replies. First-mover advantage — reply before competitors do.</div></div></div>
+              </div>
+            </div>
+            <div className="hg-section">
+              <div className="hg-sh">10-Min Sprint</div>
+              <div className="hg-p">A focused view showing only demand score 6+ matches — the highest-value leads. Each card shows three reply variants: <strong>Value Hook</strong> (lead with benefit), <strong>Direct Bridge</strong> (connect pain to your solution), <strong>Empathy</strong> (validate frustration first). Pick one, edit, post.</div>
+            </div>
+          </>}
+
+          {activeTab==='drafts' && <>
+            <div className="hg-section">
+              <div className="hg-sh">What the Drafts tab is for</div>
+              <div className="hg-p">All pending AI reply drafts across every monitor in one sorted queue. Use it for reply sessions — instead of scrolling the full feed, you see only posts that already have a draft ready. Sorted by intent: Buying → Asking for tool → Researching.</div>
+            </div>
+            <div className="hg-section">
+              <div className="hg-sh">Draft actions</div>
+              <div className="hg-items">
+                <div className="hg-item"><i className="ph-bold ph-copy hg-item-icon"></i><div className="hg-item-body"><div className="hg-item-label">Copy</div><div className="hg-item-desc">Copies the edited draft text to your clipboard. Edit it in the text box first to personalise it.</div></div></div>
+                <div className="hg-item"><i className="ph ph-check hg-item-icon"></i><div className="hg-item-body"><div className="hg-item-label">Mark posted</div><div className="hg-item-desc">Records that you've replied to this post with a timestamp. Click again to undo.</div></div></div>
+                <div className="hg-item"><i className="ph ph-arrow-clockwise hg-item-icon"></i><div className="hg-item-body"><div className="hg-item-label">New draft</div><div className="hg-item-desc">Regenerates the AI reply. The AI uses your monitor's product context to personalise it.</div></div></div>
+                <div className="hg-item"><i className="ph ph-x hg-item-icon"></i><div className="hg-item-body"><div className="hg-item-label">Skip</div><div className="hg-item-desc">Dismisses the card. Signals to the AI that this type of match isn't useful — improves future suggestions.</div></div></div>
+              </div>
+            </div>
+          </>}
+
+          {activeTab==='actions' && <>
+            <div className="hg-section">
+              <div className="hg-sh">The reply workflow</div>
+              <div className="hg-items">
+                <div className="hg-item"><span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,fontWeight:700,color:'#FF6B35',flexShrink:0,marginTop:1}}>1</span><div className="hg-item-body"><div className="hg-item-label">Find a match</div><div className="hg-item-desc">Open Monitor Feed or Drafts. Look for high demand score or 🟢 No replies yet first.</div></div></div>
+                <div className="hg-item"><span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,fontWeight:700,color:'#FF6B35',flexShrink:0,marginTop:1}}>2</span><div className="hg-item-body"><div className="hg-item-label">Edit the draft</div><div className="hg-item-desc">The text box is editable. Add your name, personalise the opener, make it sound like you. A personalised reply outperforms a generic one.</div></div></div>
+                <div className="hg-item"><span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,fontWeight:700,color:'#FF6B35',flexShrink:0,marginTop:1}}>3</span><div className="hg-item-body"><div className="hg-item-label">Copy → open post → reply</div><div className="hg-item-desc">Click Copy, then click the post title to open it on the platform. Paste your reply. Mention their specific situation — don't post the draft verbatim.</div></div></div>
+                <div className="hg-item"><span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,fontWeight:700,color:'#FF6B35',flexShrink:0,marginTop:1}}>4</span><div className="hg-item-body"><div className="hg-item-label">Mark posted</div><div className="hg-item-desc">Come back and click Mark Posted. This timestamps your reply so you can track your activity over time.</div></div></div>
+              </div>
+            </div>
+            <div className="hg-section">
+              <div className="hg-sh">Email alerts</div>
+              <div className="hg-p">When a new high-intent match is found, Ebenova emails your monitor's alert address with the post title, snippet, and a link back. You can disable alerts per monitor in Settings.</div>
+            </div>
+            <div className="hg-section">
+              <div className="hg-sh">Weekly digest</div>
+              <div className="hg-p">Every Monday you receive a digest of last week's top matches with a strategic briefing — dominant pain points, best unanswered thread still open, top lead, and a recommended action for the week ahead.</div>
+            </div>
+          </>}
+
+          {activeTab==='settings' && <>
+            <div className="hg-section">
+              <div className="hg-sh">Per-monitor settings</div>
+              <div className="hg-items">
+                <div className="hg-item"><i className="ph ph-bell hg-item-icon"></i><div className="hg-item-body"><div className="hg-item-label">Alert email</div><div className="hg-item-desc">The email that receives match notifications. Can differ from your login email. Toggle off to check the dashboard manually.</div></div></div>
+                <div className="hg-item"><i className="ph ph-link hg-item-icon"></i><div className="hg-item-body"><div className="hg-item-label">Product URL + UTM tracking</div><div className="hg-item-desc">When set, every AI draft reply includes your product URL with UTM parameters so you can trace inbound traffic back to specific replies in Google Analytics.</div></div></div>
+                <div className="hg-item"><i className="ph ph-prohibit hg-item-icon"></i><div className="hg-item-body"><div className="hg-item-label">Exclude terms</div><div className="hg-item-desc">Comma-separated words that filter out irrelevant matches. E.g. exclude "gaming" if you sell a business tool.</div></div></div>
+                <div className="hg-item"><i className="ph ph-currency-dollar hg-item-icon"></i><div className="hg-item-body"><div className="hg-item-label">Deal value</div><div className="hg-item-desc">Your average revenue per customer. Powers the revenue opportunity estimate — shows what unreplied high-intent leads cost you.</div></div></div>
+                <div className="hg-item"><i className="ph ph-webhooks-logo hg-item-icon"></i><div className="hg-item-body"><div className="hg-item-label">Webhook</div><div className="hg-item-desc">Sends a JSON payload to your URL every time a new match is found. Use it to pipe matches into Slack, Notion, a CRM, or any automation tool.</div></div></div>
+              </div>
+            </div>
+          </>}
+
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Sidebar({ tab, setTab, userEmail, plan, monitorCount, draftCount, onSignOut, onHelp }) {
   const planLabel = {starter:'Starter',growth:'Growth',scale:'Scale'}[plan]||'Starter';
   const initial = (userEmail||'?')[0].toUpperCase();
 
   const items = [
-    { id:'find', icon:'ph-magnifying-glass-plus', label:'Find Customers' },
-    { id:'feed', icon:'ph-newspaper',             label:'Monitor Feed', count: monitorCount > 0 ? monitorCount : null },
+    { id:'find',   icon:'ph-magnifying-glass-plus', label:'Find Customers' },
+    { id:'feed',   icon:'ph-newspaper',             label:'Monitor Feed', count: monitorCount > 0 ? monitorCount : null },
+    { id:'drafts', icon:'ph-pencil-line',           label:'Drafts',       count: draftCount > 0 ? draftCount : null },
   ];
 
   return (
@@ -431,6 +616,13 @@ function Sidebar({ tab, setTab, userEmail, plan, monitorCount, onSignOut }) {
           <i className="ph-bold ph-gear"></i>
           <span>Settings</span>
         </button>
+
+        <div style={{marginTop:'auto',paddingTop:12}}>
+          <button className="sb-help-btn" onClick={onHelp}>
+            <i className="ph ph-question" style={{fontSize:15}}></i>
+            <span>Navigation guide</span>
+          </button>
+        </div>
       </nav>
 
       <div className="sb-footer">
@@ -596,25 +788,32 @@ function MatchCard({ match, monitorId, apiKey, onAction }) {
       )}
       <div style={{display:'flex',gap:6,flexWrap:'wrap',alignItems:'center',marginTop:12,paddingTop:12,borderTop:'1px solid #F8FAFC'}}>
         {match.draft && (
-          <button className="btn btn-primary btn-sm" onClick={copyDraft} disabled={!draftText}>
-            <i className={`ph-bold ph-${copied?'check':'copy'}`}></i> {copied ? 'Copied' : 'Copy'}
-          </button>
+          <Tip text="Copy the edited draft to your clipboard, then paste it on the platform">
+            <button className="btn btn-primary btn-sm" onClick={copyDraft} disabled={!draftText}>
+              <i className={`ph-bold ph-${copied?'check':'copy'}`}></i> {copied ? 'Copied' : 'Copy'}
+            </button>
+          </Tip>
         )}
-        <button
-          className={`btn btn-sm ${postedAt ? 'btn-posted' : 'btn-ghost'}`}
-          onClick={togglePosted}
-          disabled={posting}
-          title={postedAt ? 'Click to undo' : 'Mark this match as a reply you posted'}
-        >
-          <i className={`ph${postedAt ? '-fill ph-check-circle' : ' ph-check'}`}></i>
-          {postedAt ? `Posted ${timeAgo(postedAt)}` : (posting ? 'Saving…' : 'Mark posted')}
-        </button>
-        <button className="btn btn-ghost btn-sm" onClick={regenerate} disabled={drafting}>
-          <i className={`ph ph-arrow-clockwise${drafting?' spin':''}`}></i> {drafting?'Drafting…':'New draft'}
-        </button>
-        <button className="btn btn-sm" style={{background:'transparent',border:'1px solid #F1F5F9',color:'#94A3B8',cursor:'pointer'}} onClick={()=>feedback('down')}>
-          <i className="ph ph-x"></i> Skip
-        </button>
+        <Tip text={postedAt ? 'Undo — mark as not posted' : 'Record that you replied to this post'}>
+          <button
+            className={`btn btn-sm ${postedAt ? 'btn-posted' : 'btn-ghost'}`}
+            onClick={togglePosted}
+            disabled={posting}
+          >
+            <i className={`ph${postedAt ? '-fill ph-check-circle' : ' ph-check'}`}></i>
+            {postedAt ? `Posted ${timeAgo(postedAt)}` : (posting ? 'Saving…' : 'Mark posted')}
+          </button>
+        </Tip>
+        <Tip text="Generate a new AI reply draft for this post">
+          <button className="btn btn-ghost btn-sm" onClick={regenerate} disabled={drafting}>
+            <i className={`ph ph-arrow-clockwise${drafting?' spin':''}`}></i> {drafting?'Drafting…':'New draft'}
+          </button>
+        </Tip>
+        <Tip text="Dismiss this match — signals it's not relevant">
+          <button className="btn btn-sm" style={{background:'transparent',border:'1px solid #F1F5F9',color:'#94A3B8',cursor:'pointer'}} onClick={()=>feedback('down')}>
+            <i className="ph ph-x"></i> Skip
+          </button>
+        </Tip>
         <a href={match.url} target="_blank" rel="noreferrer" className="btn btn-sm" style={{marginLeft:'auto',background:'transparent',border:'none',color:'#FF6B35',fontWeight:600,padding:'6px 4px',gap:4}}>
           Open thread <i className="ph ph-arrow-square-out"></i>
         </a>
@@ -1393,6 +1592,92 @@ function MatchesFeed({ apiKey, monitors }) {
   );
 }
 
+// ── Drafts Inbox (PR #37) ─────────────────────────────────────────────────
+// All pending AI drafts across every keyword monitor, sorted by intent priority.
+const DRAFT_INTENT_ORDER = { buying: 0, asking_for_tool: 1, researching: 2, complaining: 3, venting: 4 };
+
+function DraftsFeed({ apiKey, monitors, onDraftCount }) {
+  const [allMatches, setAllMatches] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  const load = useCallback(async () => {
+    const kwMonitors = monitors.filter(m => m.mode !== 'builder_tracker');
+    if (!kwMonitors.length) { setAllMatches([]); onDraftCount && onDraftCount(0); return; }
+    setLoading(true);
+    const results = await Promise.all(
+      kwMonitors.map(m => apiFetch(`/v1/matches?monitor_id=${m.id}&limit=50`, {}, apiKey))
+    );
+    const pending = [];
+    results.forEach((r, i) => {
+      if (r.ok) {
+        (r.data.matches || [])
+          .filter(m => m.draft && !m.postedAt && m.feedback !== 'down')
+          .forEach(m => pending.push({ ...m, _monitorId: kwMonitors[i].id }));
+      }
+    });
+    pending.sort((a, b) => (DRAFT_INTENT_ORDER[a.intent] ?? 99) - (DRAFT_INTENT_ORDER[b.intent] ?? 99));
+    setAllMatches(pending);
+    onDraftCount && onDraftCount(pending.length);
+    setLoading(false);
+  }, [apiKey, monitors]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleAction = (type, mid, newDraft, newDraftedBy) => {
+    if (type === 'draft') setAllMatches(ms => ms.map(m => m.id === mid ? { ...m, draft: newDraft, draftedBy: newDraftedBy } : m));
+  };
+
+  if (!monitors.length) return (
+    <>
+      <div className="page-header">
+        <div><h1 className="page-title">Drafts</h1><p className="page-subtitle">AI-drafted replies ready to review and send</p></div>
+      </div>
+      <div className="page-body">
+        <div className="card">
+          <div className="empty">
+            <div className="empty-icon"><i className="ph ph-pencil-line"></i></div>
+            <div className="empty-title">No monitors yet</div>
+            <div className="empty-desc">Head to Find Customers to set up a monitor. Drafts appear here once Ebenova finds and drafts replies to matching posts.</div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+
+  return (
+    <>
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Drafts</h1>
+          <p className="page-subtitle">
+            {loading ? 'Loading…' : allMatches.length > 0 ? `${allMatches.length} draft${allMatches.length === 1 ? '' : 's'} waiting — sorted by priority` : 'No drafts waiting'}
+          </p>
+        </div>
+        <div style={{display:'flex',gap:8,alignItems:'center',marginTop:4}}>
+          <button className="btn btn-white btn-sm" onClick={load} disabled={loading}>
+            <i className={`ph ph-arrow-clockwise${loading?' spin':''}`}></i> Refresh
+          </button>
+        </div>
+      </div>
+      <div className="page-body">
+        {loading && <div style={{display:'flex',flexDirection:'column',gap:8}}>{[1,2,3].map(i=><div key={i} className="shimmer" style={{height:200}} />)}</div>}
+        {!loading && allMatches.length === 0 && (
+          <div className="card">
+            <div className="empty">
+              <div className="empty-icon"><i className="ph ph-pencil-line"></i></div>
+              <div className="empty-title">No drafts waiting</div>
+              <div className="empty-desc">Drafts appear here when Ebenova finds a matching post and generates a reply. Run a monitor cycle or click <strong>New Draft</strong> on any match in the feed.</div>
+            </div>
+          </div>
+        )}
+        {!loading && allMatches.map(m => (
+          <MatchCard key={m.id} match={m} monitorId={m._monitorId} apiKey={apiKey} onAction={handleAction} />
+        ))}
+      </div>
+    </>
+  );
+}
+
 // ΓöÇΓöÇ Create Monitor ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 // ── Monitor Mode primitives (PR #32) ───────────────────────────────────────
 // Per-mode metadata in one place so the selector card, the in-list badge,
@@ -1542,6 +1827,7 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
       .catch(() => {})
   }, [])
   const [description, setDescription] = useState('')
+  const [websiteUrl, setWebsiteUrl] = useState('')
   const [suggestion, setSuggestion] = useState(null)
   const [counts, setCounts] = useState({})
   const [picked, setPicked] = useState(new Set())
@@ -1607,7 +1893,7 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
   const generateSuggestions = async () => {
     if (description.trim().length < 20) { setErr('Tell me a bit more — at least 20 characters.'); return; }
     setErr(''); setLoading(true); setStep(2);
-    const r = await apiFetch('/v1/find/suggest', { method:'POST', body: JSON.stringify({ description }) }, apiKey);
+    const r = await apiFetch('/v1/find/suggest', { method:'POST', body: JSON.stringify({ description, productUrl: websiteUrl.trim() || undefined }) }, apiKey);
     if (!r.ok) { setErr(r.data?.error?.message || 'Could not generate suggestions.'); setLoading(false); setStep(1); return; }
     setSuggestion(r.data);
     setMonitorName(r.data.suggestedName || 'My Monitor');
@@ -1648,6 +1934,15 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
 
   const saveAsMonitor = () => {
     if (picked.size === 0) { setErr('Pick at least one keyword.'); return; }
+    // Warn before proceeding if every selected keyword has zero volume — the
+    // monitor will find very few matches and users won't understand why.
+    const allDead = [...picked].every(kw => {
+      const c = counts[kw];
+      return c !== undefined && c.count === 0;
+    });
+    if (allDead && !window.confirm(
+      `None of your ${picked.size} selected keyword${picked.size === 1 ? '' : 's'} found any recent posts across Reddit and other platforms.\n\nYour monitor may find very few matches.\n\nTip: keywords with orange or green volume bars are actively being discussed right now — try selecting those instead.\n\nContinue anyway?`
+    )) return;
     setErr('');
     setStep(4);
   };
@@ -1691,6 +1986,8 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
     const m = await apiFetch('/v1/monitors', { method:'POST', body: JSON.stringify(body) }, apiKey);
     if (!m.ok) { setErr(m.data?.error?.message || 'Could not create monitor.'); setLoading(false); setStep(3); return; }
     setSavedMonitorId(m.data.monitor_id);
+    // Kick off the first scan immediately — don't make the user wait up to 10 minutes for the cron tick
+    apiFetch(`/v1/monitors/${m.data.monitor_id}/poll-now`, { method: 'POST' }, apiKey).catch(() => {});
     // Pull sample matches from already-cached counts
     const samples = [];
     for (const kw of allKws.slice(0, 5)) {
@@ -1875,6 +2172,14 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
             style={{padding:'18px 20px',fontSize:15,lineHeight:1.65,fontFamily:'inherit'}}
             placeholder="e.g. I run a small SEO agency. We help SaaS startups get their first 10k organic visitors. Most clients come to us frustrated with content agencies that didn't move the needle."
           />
+          <div style={{marginTop:10,display:'flex',alignItems:'center',gap:10}}>
+            <div style={{flex:1}}>
+              <input className="inp" type="url" value={websiteUrl} onChange={e=>setWebsiteUrl(e.target.value)}
+                style={{padding:'10px 14px',fontSize:13,fontFamily:"'JetBrains Mono',monospace"}}
+                placeholder="https://yourproduct.com — optional, makes keywords sharper"
+              />
+            </div>
+          </div>
           {err && <div className="alert alert-error" style={{marginTop:12}}><i className="ph ph-warning-circle"></i>{err}</div>}
           <div style={{display:'flex',gap:12,alignItems:'center',marginTop:18,flexWrap:'wrap'}}>
             <button className="btn btn-primary" onClick={generateSuggestions} disabled={loading||description.trim().length < 20} style={{padding:'14px 24px',fontSize:14}}>
@@ -3257,10 +3562,12 @@ function App() {
   });
   const [tab, setTab] = useState('find');
   const [monitors, setMonitors] = useState([]);
+  const [draftCount, setDraftCount] = useState(null);
   const [userEmail, setUserEmail] = useState('');
   const [plan, setPlan] = useState('starter');
   const [showAuth, setShowAuth] = useState(!localStorage.getItem('ebi_key'));
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
 
   const signOut = () => { localStorage.removeItem('ebi_key'); location.reload(); };
 
@@ -3297,11 +3604,13 @@ function App() {
           onComplete={() => { setShowOnboarding(false); loadMonitors(); setTab('feed'); }}
         />
       )}
-      <Sidebar tab={tab} setTab={setTab} userEmail={userEmail} plan={plan} monitorCount={monitors.length} onSignOut={signOut} />
+      {showHelp && <HelpGuide onClose={() => setShowHelp(false)} />}
+      <Sidebar tab={tab} setTab={setTab} userEmail={userEmail} plan={plan} monitorCount={monitors.length} draftCount={draftCount} onSignOut={signOut} onHelp={() => setShowHelp(true)} />
       <FeedbackWidget apiKey={apiKey} />
       <div className="main">
         {tab==='find'     && <FindCustomers apiKey={apiKey} onMonitorCreated={()=>{ loadMonitors(); setTab('feed'); }} />}
         {tab==='feed'     && <MatchesFeed apiKey={apiKey} monitors={monitors} />}
+        {tab==='drafts'   && <DraftsFeed apiKey={apiKey} monitors={monitors} onDraftCount={setDraftCount} />}
         {tab==='settings' && <Settings apiKey={apiKey} userEmail={userEmail} plan={plan} onSignOut={signOut} monitors={monitors} onRefresh={loadMonitors} />}
       </div>
     </div>
