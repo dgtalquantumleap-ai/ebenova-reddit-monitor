@@ -205,8 +205,8 @@ test('6. youtube is registered in VALID_PLATFORMS with label + emoji', () => {
   assert.ok(VALID_PLATFORMS.includes('youtube'),  'youtube must be in VALID_PLATFORMS')
   assert.equal(PLATFORM_LABELS.youtube, 'YouTube')
   assert.equal(PLATFORM_EMOJIS.youtube, '▶️')
-  // youtube + amazon both added; total now 13.
-  assert.equal(VALID_PLATFORMS.length, 13)
+  // stackoverflow added; total now 14.
+  assert.equal(VALID_PLATFORMS.length, 14)
 })
 
 // ── Internals pinned ──────────────────────────────────────────────────────

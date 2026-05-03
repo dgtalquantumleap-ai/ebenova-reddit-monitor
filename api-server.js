@@ -91,6 +91,7 @@ import { listCorridors, getCorridor, isValidCorridorId } from './lib/diaspora-co
 import { getKeywordHealth, getStaleKeywords } from './lib/keyword-health.js'
 import { buildHealthReport } from './lib/platform-health.js'
 import searchHackerNews    from './lib/scrapers/hackernews.js'
+import searchStackOverflow from './lib/scrapers/stackoverflow.js'
 import searchMedium        from './lib/scrapers/medium.js'
 import searchSubstack      from './lib/scrapers/substack.js'
 import searchQuora         from './lib/scrapers/quora.js'

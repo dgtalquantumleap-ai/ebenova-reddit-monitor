@@ -35,6 +35,7 @@ import searchQuora         from './lib/scrapers/quora.js'
 import searchUpwork        from './lib/scrapers/upwork.js'
 import searchFiverr        from './lib/scrapers/fiverr.js'
 import searchHackerNews    from './lib/scrapers/hackernews.js'
+import searchStackOverflow from './lib/scrapers/stackoverflow.js'
 import searchGitHub        from './lib/scrapers/github.js'
 import searchProductHunt   from './lib/scrapers/producthunt.js'
 import searchTwitter       from './lib/scrapers/twitter.js'
@@ -900,7 +901,7 @@ async function runMonitor(monitor) {
           return _ageMs < 2 * 60 * 60 * 1000
         })()
         const _isHighTrustSource = [
-          'hackernews','medium','substack','upwork','fiverr',
+          'hackernews','stackoverflow','medium','substack','upwork','fiverr',
           'youtube','amazon','jijing','twitter'
         ].includes(m.source)
         const _isHumanGithub = (
@@ -948,8 +949,9 @@ async function runMonitor(monitor) {
   // (handled above), then HN, Quora, Medium, Substack, Upwork, Fiverr,
   // GitHub, ProductHunt — matches SOURCE_RANK below.
   const platformRunners = [
-    { key: 'hackernews',  scraper: searchHackerNews,  delayMs: 1500 },
-    { key: 'medium',      scraper: searchMedium,      delayMs: 1500 },
+    { key: 'hackernews',    scraper: searchHackerNews,    delayMs: 1500 },
+    { key: 'stackoverflow', scraper: searchStackOverflow, delayMs: 1500 },
+    { key: 'medium',        scraper: searchMedium,        delayMs: 1500 },
     { key: 'substack',    scraper: searchSubstack,    delayMs: 1500 },
     { key: 'quora',       scraper: searchQuora,       delayMs: 2000 },
     { key: 'upwork',      scraper: searchUpwork,      delayMs: 3000 },
@@ -988,7 +990,7 @@ async function runMonitor(monitor) {
           return _ageMs < 2 * 60 * 60 * 1000
         })()
         const _isHighTrustSource = [
-          'hackernews','medium','substack','upwork','fiverr',
+          'hackernews','stackoverflow','medium','substack','upwork','fiverr',
           'youtube','amazon','jijing','twitter'
         ].includes(m.source)
         const _isHumanGithub = (
@@ -1124,7 +1126,7 @@ async function runMonitor(monitor) {
     recommending:    4,
     venting:         5,
   }
-  const SOURCE_RANK = { reddit: 0, hackernews: 1, quora: 2, medium: 3, substack: 4, upwork: 5, fiverr: 6, twitter: 7, jijing: 8, youtube: 9, amazon: 10 }
+  const SOURCE_RANK = { reddit: 0, hackernews: 1, stackoverflow: 2, quora: 3, medium: 4, substack: 5, upwork: 6, fiverr: 7, twitter: 8, jijing: 9, youtube: 10, amazon: 11 }
   allMatches.sort((a, b) => {
     const ua = _unansweredTier(a), ub = _unansweredTier(b)
     if (ua !== ub) return ua - ub
