@@ -91,6 +91,7 @@ import { sendOutboundWebhook, buildPayload as buildWebhookPayload } from './lib/
 import { toCsv, matchToExportRow, MATCH_EXPORT_COLUMNS } from './lib/csv-export.js'
 import { gatherReportData, buildExecutiveSummary, renderReportHtml, resolveReportToken } from './lib/client-report.js'
 import { normalizeKeywordList, isoWeekLabel, previousIsoWeekLabel } from './lib/keyword-types.js'
+import { resolveKeyword } from './lib/reddit-rss.js'
 import { getBuilderProfiles, buildersToCSV } from './lib/builder-tracker.js'
 import { getRecentReports, topCompetitorsAcross, computeTrend } from './lib/ai-visibility.js'
 import { listPresets, getPreset } from './lib/keyword-presets.js'
@@ -412,6 +413,56 @@ app.get('/v1/admin/platform-health', async (req, res) => {
     }
     const platforms = await buildHealthReport(PLATFORM_SCRAPERS, 'freelance', ctx)
     res.json({ success: true, platforms, ts: new Date().toISOString() })
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message })
+  }
+})
+
+// ── GET /v1/admin/monitor-diagnostics ─────────────────────────────────────
+// Admin-only: surfaces per-monitor state to diagnose why demo users may not
+// be getting results. Checks: polling cadence, keyword format, match count,
+// email delivery. Requires X-Admin-Secret header.
+app.get('/v1/admin/monitor-diagnostics', async (req, res) => {
+  const adminSecret = process.env.EBENOVA_ADMIN_SECRET
+  const provided    = req.headers['x-admin-secret']
+  if (!adminSecret || !provided || provided !== adminSecret) {
+    return res.status(401).json({ success: false, error: 'Unauthorized' })
+  }
+  try {
+    const redis = getRedis()
+    const monitorIds = await redis.smembers('insights:active_monitors') || []
+    const diagnostics = []
+    for (const id of monitorIds) {
+      try {
+        const raw = await redis.get(`insights:monitor:${id}`)
+        if (!raw) continue
+        const m = typeof raw === 'string' ? JSON.parse(raw) : raw
+        if (!m.active) continue
+
+        const keywords = (m.keywords || []).map(k => resolveKeyword(k)).filter(Boolean)
+        const kw0 = m.keywords?.[0]
+
+        diagnostics.push({
+          monitorId:          m.id,
+          name:               m.name,
+          owner:              m.owner,
+          keywords,
+          platforms:          migrateLegacyPlatforms(m),
+          lastPollAt:         m.lastPollAt         || null,
+          lastMatchCount:     m.lastMatchCount      ?? null,
+          lastEmailSentAt:    m.lastEmailSentAt     || null,
+          totalMatchesAllTime: m.totalMatchesFound  || 0,
+          // What the first keyword looks like after resolveKeyword — confirms
+          // whether [object Object] is fixed for this monitor's stored data.
+          keywordSample:      kw0 ? resolveKeyword(kw0) : null,
+          // Raw first keyword object so we can see its stored shape directly.
+          _keyword0Raw:       kw0 ?? null,
+        })
+      } catch (err) {
+        diagnostics.push({ monitorId: id, error: err.message })
+      }
+    }
+    res.json({ success: true, count: diagnostics.length, monitors: diagnostics, ts: new Date().toISOString() })
   } catch (err) {
     res.status(500).json({ success: false, error: err.message })
   }

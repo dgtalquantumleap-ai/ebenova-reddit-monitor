@@ -58,7 +58,7 @@ import { recordAuthor } from './lib/author-profiles.js'
 import { fireWebhook, buildPayload as buildWebhookPayload } from './lib/outbound-webhook.js'
 import { runAllDigests } from './lib/weekly-digest.js'
 import { runVisibilitySweep } from './lib/ai-visibility.js'
-import { isoWeekLabel } from './lib/keyword-types.js'
+import { normalizeKeywordList, isoWeekLabel } from './lib/keyword-types.js'
 import { runEngagementSweep, processPendingChecks } from './lib/reply-tracker.js'
 import { isBuilderPost, extractTopics, recordBuilderProfile, getBuilderProfiles, sendBuilderDigest, PLATFORMS_WITH_REAL_USERNAMES } from './lib/builder-tracker.js'
 import { getCorridor } from './lib/diaspora-corridors.js'
@@ -626,6 +626,16 @@ async function sendMonitorAlert(monitor, matches) {
       ...buildBulkEmailExtras({ html, unsubscribeUrl: unsubUrl }),
     })
     console.log(`[v2][${monitor.id}] Alert sent to ${monitor.alertEmail} — ${matches.length} matches`)
+    // Stamp lastEmailSentAt so the admin diagnostics endpoint can surface it.
+    if (redis) {
+      try {
+        const _fresh = await redis.get(`insights:monitor:${monitor.id}`)
+        if (_fresh) {
+          const _parsed = typeof _fresh === 'string' ? JSON.parse(_fresh) : _fresh
+          await redis.set(`insights:monitor:${monitor.id}`, JSON.stringify({ ..._parsed, lastEmailSentAt: new Date().toISOString() }))
+        }
+      } catch (_) {}
+    }
   } catch (err) {
     console.error(`[v2][${monitor.id}] Failed to send alert:`, err.message)
   }
@@ -804,6 +814,38 @@ async function runMonitor(monitor) {
   }
 
   const label = `[v2][${monitor.id}][${monitor.name}]`
+
+  // Keyword[0] diagnostic log — tells us immediately if keywords are stored as
+  // objects (correct) or strings (very old), and whether keyword.keyword is a
+  // string (correct) or a nested object (the [object Object] bug).
+  {
+    const kw0 = monitor.keywords?.[0]
+    console.log(`[v2][${monitor.id}] Keyword[0] type: ${typeof kw0}, value: ${JSON.stringify(kw0)}`)
+  }
+
+  // Keyword migration: if any keyword entry has a non-string .keyword field
+  // (monitors created before normalizeKeyword was enforced, or via older API
+  // clients that sent { keyword: { term: '...', type: '...' } }), re-normalize
+  // the whole keywords array in-place and write the fix back to Redis so the
+  // next cycle doesn't repeat the migration.
+  if (monitor.keywords?.some(k => typeof k !== 'string' && typeof k?.keyword !== 'string')) {
+    console.log(`[v2][${monitor.id}] ⚠️  Keyword format needs migration — normalizing now`)
+    const normalized = normalizeKeywordList(monitor.keywords)
+    monitor = { ...monitor, keywords: normalized }
+    try {
+      const _r = getRedis()
+      if (_r) {
+        const _fresh = await _r.get(`insights:monitor:${monitor.id}`)
+        if (_fresh) {
+          const _parsed = typeof _fresh === 'string' ? JSON.parse(_fresh) : _fresh
+          await _r.set(`insights:monitor:${monitor.id}`, JSON.stringify({ ..._parsed, keywords: normalized }))
+          console.log(`[v2][${monitor.id}] ✅ Keywords migrated and written back to Redis (${normalized.length} keywords)`)
+        }
+      }
+    } catch (_migErr) {
+      console.warn(`[v2][${monitor.id}] Keyword migration write failed: ${_migErr.message}`)
+    }
+  }
 
   // PR #36 — diaspora corridor override. When set, we swap in the
   // corridor's keywords + platforms for THIS cycle only (don't mutate the
@@ -1159,11 +1201,12 @@ async function runMonitor(monitor) {
       await updateKeywordHealth(redis, monitor.id, matchesByKw)
     }
 
-    // Update monitor's lastPollAt + totalMatchesFound
+    // Update monitor's lastPollAt + totalMatchesFound + lastMatchCount
     const updatedMonitor = {
       ...monitor,
-      lastPollAt: new Date().toISOString(),
+      lastPollAt:        new Date().toISOString(),
       totalMatchesFound: (monitor.totalMatchesFound || 0) + allMatches.length,
+      lastMatchCount:    allMatches.length,
     }
     await redis.set(`insights:monitor:${monitor.id}`, JSON.stringify(updatedMonitor))
 
