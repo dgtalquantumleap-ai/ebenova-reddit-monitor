@@ -34,8 +34,8 @@ test('per-spec routing assignments', () => {
   assert.equal(TASK_ROUTING.generate_onboarding_keywords, 'CLAUDE')
 })
 
-test('FALLBACK_CHAIN is GROQ_QUALITY → GROQ_FAST', () => {
-  assert.deepEqual(FALLBACK_CHAIN, ['GROQ_QUALITY', 'GROQ_FAST'])
+test('FALLBACK_CHAIN is GROQ_QUALITY → GROQ_FAST → DEEPSEEK', () => {
+  assert.deepEqual(FALLBACK_CHAIN, ['GROQ_QUALITY', 'GROQ_FAST', 'DEEPSEEK'])
 })
 
 test('buildTryOrder: preferred=DEEPSEEK → DEEPSEEK, GROQ_QUALITY, GROQ_FAST', () => {
@@ -43,11 +43,11 @@ test('buildTryOrder: preferred=DEEPSEEK → DEEPSEEK, GROQ_QUALITY, GROQ_FAST', 
 })
 
 test('buildTryOrder: preferred=GROQ_QUALITY does not duplicate', () => {
-  assert.deepEqual(buildTryOrder('GROQ_QUALITY'), ['GROQ_QUALITY', 'GROQ_FAST'])
+  assert.deepEqual(buildTryOrder('GROQ_QUALITY'), ['GROQ_QUALITY', 'GROQ_FAST', 'DEEPSEEK'])
 })
 
 test('buildTryOrder: preferred=GROQ_FAST does not duplicate', () => {
-  assert.deepEqual(buildTryOrder('GROQ_FAST'), ['GROQ_FAST', 'GROQ_QUALITY'])
+  assert.deepEqual(buildTryOrder('GROQ_FAST'), ['GROQ_FAST', 'GROQ_QUALITY', 'DEEPSEEK'])
 })
 
 // ── Mock provider helpers ──────────────────────────────────────────────────
