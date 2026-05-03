@@ -31,6 +31,7 @@ import {
   deleteMonitorAndData,
   logDeletion,
   removeResendContact,
+  buildEmailFooter,
 } from './lib/account-deletion.js'
 import searchMedium      from './lib/scrapers/medium.js'
 import searchSubstack    from './lib/scrapers/substack.js'
@@ -650,6 +651,50 @@ app.post('/v1/monitors', async (req, res) => {
     await redis.set(`report:token:${shareToken}`, id)
     await redis.expire(`report:token:${shareToken}`, ONE_YEAR_SECONDS).catch(() => {})
     await redis.sadd('insights:active_monitors', id)
+
+    // Fire-and-forget "your monitor is scanning" email — sets expectations
+    // before the first alert lands. Required unsubscribe footer per CASL/NDPR.
+    ;(async () => {
+      const resendKey = process.env.RESEND_API_KEY
+      if (!resendKey) return
+      try {
+        const { Resend } = await import('resend')
+        const resend = new Resend(resendKey)
+        const from = process.env.FROM_EMAIL || 'insights@ebenova.org'
+        const appUrl = process.env.APP_URL || 'https://ebenova.org'
+        const kwPreview = cleanKws.slice(0, 5).map(k => `"${escapeHtmlInline(k.keyword)}"`).join(', ')
+        const extraKws = cleanKws.length > 5 ? ` +${cleanKws.length - 5} more` : ''
+        const platformCount = resolvedPlatforms.length
+        const platformLabel = platformCount === 1 ? '1 platform' : `${platformCount} platforms`
+        await resend.emails.send({
+          from: `Ebenova Insights <${from}>`,
+          to:   monitor.alertEmail,
+          subject: `"${monitor.name}" is live — first scan starts now`,
+          html: `<!DOCTYPE html><html><body style="font-family:system-ui,sans-serif;max-width:560px;margin:0 auto;padding:32px 24px;background:#f5f5f5;">
+            <div style="padding:24px;background:#0e0e0e;border-radius:8px;margin-bottom:24px;">
+              <div style="font-size:18px;font-weight:700;color:#FF6B35;">📡 Ebenova Insights</div>
+            </div>
+            <div style="padding:24px;background:#fff;border-radius:8px;border:1px solid #eee;">
+              <p style="margin:0 0 12px;font-size:16px;font-weight:600;color:#0f172a;">Your monitor is scanning.</p>
+              <p style="margin:0 0 14px;font-size:14px;color:#334155;line-height:1.6;">
+                <strong>${escapeHtmlInline(monitor.name)}</strong> is now watching ${platformLabel} for people discussing:
+              </p>
+              <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px 16px;margin:0 0 16px;font-size:13px;color:#475569;line-height:1.8;">
+                ${kwPreview}${escapeHtmlInline(extraKws)}
+              </div>
+              <p style="margin:0 0 20px;font-size:14px;color:#334155;line-height:1.6;">
+                When we find someone asking for what you sell, you'll get an email with the post and a ready-to-send AI reply draft. The first scan runs within the next few minutes.
+              </p>
+              <a href="${appUrl}/dashboard" style="display:inline-block;background:#FF6B35;color:#fff;font-weight:700;padding:12px 24px;border-radius:6px;text-decoration:none;font-size:14px;">Open Dashboard →</a>
+            </div>
+            ${buildEmailFooter(unsubscribeToken)}
+          </body></html>`,
+        }).catch(err => console.error('[monitor] scanning email failed:', err.message))
+      } catch (err) {
+        console.error('[monitor] scanning email setup failed:', err.message)
+      }
+    })()
+
     res.status(201).json({ success: true, monitor_id: id, name: monitor.name, keyword_count: cleanKws.length,
       keywords: cleanKws.map(k => k.keyword), plan, alert_email: monitor.alertEmail, active: true,
       email_enabled: true,

@@ -1735,6 +1735,15 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
 
   const saveAsMonitor = () => {
     if (picked.size === 0) { setErr('Pick at least one keyword.'); return; }
+    // Warn before proceeding if every selected keyword has zero volume — the
+    // monitor will find very few matches and users won't understand why.
+    const allDead = [...picked].every(kw => {
+      const c = counts[kw];
+      return c !== undefined && c.count === 0;
+    });
+    if (allDead && !window.confirm(
+      `None of your ${picked.size} selected keyword${picked.size === 1 ? '' : 's'} found any recent posts across Reddit and other platforms.\n\nYour monitor may find very few matches.\n\nTip: keywords with orange or green volume bars are actively being discussed right now — try selecting those instead.\n\nContinue anyway?`
+    )) return;
     setErr('');
     setStep(4);
   };
@@ -1778,6 +1787,8 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
     const m = await apiFetch('/v1/monitors', { method:'POST', body: JSON.stringify(body) }, apiKey);
     if (!m.ok) { setErr(m.data?.error?.message || 'Could not create monitor.'); setLoading(false); setStep(3); return; }
     setSavedMonitorId(m.data.monitor_id);
+    // Kick off the first scan immediately — don't make the user wait up to 10 minutes for the cron tick
+    apiFetch(`/v1/monitors/${m.data.monitor_id}/poll-now`, { method: 'POST' }, apiKey).catch(() => {});
     // Pull sample matches from already-cached counts
     const samples = [];
     for (const kw of allKws.slice(0, 5)) {
