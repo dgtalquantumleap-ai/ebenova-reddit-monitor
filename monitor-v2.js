@@ -51,7 +51,7 @@ import { sanitizeForPrompt } from './lib/llm-safe-prompt.js'
 import { embeddingCacheKey } from './lib/embedding-cache.js'
 import { makeCostCap } from './lib/cost-cap.js'
 import { draftCall, extractInjectedUtmUrl } from './lib/draft-call.js'
-import { parseRedditRSS, buildRedditSearchUrl, parseRetryAfter } from './lib/reddit-rss.js'
+import { parseRedditRSS, buildRedditSearchUrl, parseRetryAfter, resolveKeyword } from './lib/reddit-rss.js'
 import { generateUnsubscribeToken, buildEmailFooter } from './lib/account-deletion.js'
 import { classifyMatch, intentPriority, isHighPriority } from './lib/classify.js'
 import { recordAuthor } from './lib/author-profiles.js'
@@ -312,7 +312,8 @@ async function semanticSearchSubreddit(monitorId, subreddit, keywordEntry, query
 // Failure logging: every non-2xx is logged with status + URL so cycle logs
 // surface problems immediately (vs. silently returning Medium-only).
 async function searchReddit(monitorId, keywordEntry) {
-  const { keyword, subreddits = [] } = keywordEntry
+  const keyword = resolveKeyword(keywordEntry)
+  const { subreddits = [] } = keywordEntry
   const results = []
 
   // One URL per named subreddit, or a single global search if none are set.
@@ -321,6 +322,9 @@ async function searchReddit(monitorId, keywordEntry) {
   const urls = subreddits.length > 0
     ? subreddits.map(sr => buildRedditSearchUrl(keyword, sr, { type: kwType }))
     : [buildRedditSearchUrl(keyword, null, { type: kwType })]
+  // Monitors with many subreddits (>5 per keyword) hit 429s more frequently.
+  // Widen the inter-fetch gap to 3 s to stay within Reddit's anonymous rate limit.
+  const interDelay = subreddits.length > 5 ? 3000 : 2000
 
   // Plain headers — no Bearer, no client_id. UA is still polite to send;
   // Reddit's RSS endpoints don't gate on it the way the JSON API does.
@@ -368,7 +372,7 @@ async function searchReddit(monitorId, keywordEntry) {
     } catch (err) {
       console.error(`[v2][reddit:rss] fetch error "${keyword}":`, err.message)
     }
-    await delay(2000)
+    await delay(interDelay)
   }
   return results
 }
