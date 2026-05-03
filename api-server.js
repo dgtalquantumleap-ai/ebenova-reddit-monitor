@@ -33,15 +33,6 @@ import {
   removeResendContact,
   buildEmailFooter,
 } from './lib/account-deletion.js'
-import searchMedium      from './lib/scrapers/medium.js'
-import searchSubstack    from './lib/scrapers/substack.js'
-import searchQuora       from './lib/scrapers/quora.js'
-import searchUpwork      from './lib/scrapers/upwork.js'
-import searchFiverr      from './lib/scrapers/fiverr.js'
-import searchGitHub      from './lib/scrapers/github.js'
-import searchProductHunt from './lib/scrapers/producthunt.js'
-import searchTwitter     from './lib/scrapers/twitter.js'
-// LinkedIn scraper exists but is not wired in — see lib/platforms.js for why.
 import { loadEnv } from './lib/env.js'
 import { makeCorsMiddleware } from './lib/cors.js'
 import helmet from 'helmet'
