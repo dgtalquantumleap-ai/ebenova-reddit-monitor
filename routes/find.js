@@ -96,12 +96,20 @@ export function makeFindHandler({ redis, suggestFn, countsFn }) {
       const auth = await authenticate(req)
       if (!auth) return res.status(401).json({ success: false, error: { code: 'INVALID_KEY', message: 'API key required' } })
 
-      const { description } = req.body || {}
+      const { description, productUrl } = req.body || {}
       if (typeof description !== 'string' || description.trim().length < 20) {
         return res.status(400).json({ success: false, error: { code: 'INVALID_INPUT', message: 'Tell me a bit more about what you sell — at least 20 characters.' } })
       }
       if (description.length > 1500) {
         return res.status(400).json({ success: false, error: { code: 'INVALID_INPUT', message: 'Description too long — keep it under 1500 characters.' } })
+      }
+      // productUrl: optional, must be http(s) if present
+      let safeProductUrl = null
+      if (productUrl && typeof productUrl === 'string') {
+        try {
+          const u = new URL(productUrl.trim())
+          if (u.protocol === 'http:' || u.protocol === 'https:') safeProductUrl = u.href
+        } catch { /* ignore invalid URL */ }
       }
 
       const ip = req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket?.remoteAddress || 'unknown'
@@ -118,7 +126,7 @@ export function makeFindHandler({ redis, suggestFn, countsFn }) {
       }
 
       try {
-        const result = await suggestFn({ description })
+        const result = await suggestFn({ description, productUrl: safeProductUrl })
         return res.json({ success: true, ...result })
       } catch (err) {
         console.error('[find/suggest] error:', err.message)

@@ -1629,6 +1629,7 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
       .catch(() => {})
   }, [])
   const [description, setDescription] = useState('')
+  const [websiteUrl, setWebsiteUrl] = useState('')
   const [suggestion, setSuggestion] = useState(null)
   const [counts, setCounts] = useState({})
   const [picked, setPicked] = useState(new Set())
@@ -1694,7 +1695,7 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
   const generateSuggestions = async () => {
     if (description.trim().length < 20) { setErr('Tell me a bit more — at least 20 characters.'); return; }
     setErr(''); setLoading(true); setStep(2);
-    const r = await apiFetch('/v1/find/suggest', { method:'POST', body: JSON.stringify({ description }) }, apiKey);
+    const r = await apiFetch('/v1/find/suggest', { method:'POST', body: JSON.stringify({ description, productUrl: websiteUrl.trim() || undefined }) }, apiKey);
     if (!r.ok) { setErr(r.data?.error?.message || 'Could not generate suggestions.'); setLoading(false); setStep(1); return; }
     setSuggestion(r.data);
     setMonitorName(r.data.suggestedName || 'My Monitor');
@@ -1973,6 +1974,14 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
             style={{padding:'18px 20px',fontSize:15,lineHeight:1.65,fontFamily:'inherit'}}
             placeholder="e.g. I run a small SEO agency. We help SaaS startups get their first 10k organic visitors. Most clients come to us frustrated with content agencies that didn't move the needle."
           />
+          <div style={{marginTop:10,display:'flex',alignItems:'center',gap:10}}>
+            <div style={{flex:1}}>
+              <input className="inp" type="url" value={websiteUrl} onChange={e=>setWebsiteUrl(e.target.value)}
+                style={{padding:'10px 14px',fontSize:13,fontFamily:"'JetBrains Mono',monospace"}}
+                placeholder="https://yourproduct.com — optional, makes keywords sharper"
+              />
+            </div>
+          </div>
           {err && <div className="alert alert-error" style={{marginTop:12}}><i className="ph ph-warning-circle"></i>{err}</div>}
           <div style={{display:'flex',gap:12,alignItems:'center',marginTop:18,flexWrap:'wrap'}}>
             <button className="btn btn-primary" onClick={generateSuggestions} disabled={loading||description.trim().length < 20} style={{padding:'14px 24px',fontSize:14}}>
