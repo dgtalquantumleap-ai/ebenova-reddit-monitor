@@ -17,64 +17,70 @@ const ctx = () => ({
   MAX_AGE_MS: 24 * 60 * 60 * 1000,
 })
 
-// ── Test 6: Twitter Nitter RSS parser ─────────────────────────────────────────
+// ── Test 6: Twitter (agent-twitter-client) result shape ───────────────────────
 
-test('6. Twitter (Nitter RSS) parseNitterRSS extracts tweet fields correctly', () => {
-  const { parseNitterRSS } = twitterInternals
-  const seenIds = { has: () => false, add: () => {} }
-  const xml = `<rss><channel>
-    <item>
-      <title><![CDATA[@testuser: freelance contract template needed]]></title>
-      <link>https://nitter.poast.org/testuser/status/9876543210#m</link>
-      <pubDate>Sat, 03 May 2026 10:00:00 GMT</pubDate>
-      <dc:creator>@testuser</dc:creator>
-      <description><![CDATA[freelance contract template needed — any recommendations?]]></description>
-    </item>
-  </channel></rss>`
-  const results = parseNitterRSS(xml, 'freelance contract', seenIds, 24 * 60 * 60 * 1000)
+test('6. Twitter (agent-twitter-client) returns correct item shape from mock scraper', async () => {
+  twitterInternals.resetScraper()
+
+  const mockTweet = {
+    id:         '9876543210',
+    text:       'freelance contract template needed — any recommendations?',
+    username:   'testuser',
+    likes:      5,
+    replies:    2,
+    timeParsed: new Date('2026-05-03T10:00:00Z'),
+  }
+  twitterInternals._setScraperForTest({
+    fetchSearchTweets: async () => ({ tweets: [mockTweet] }),
+    getCookies:        async () => [],
+  })
+
+  const results = await searchTwitter({ keyword: 'freelance contract' }, ctx())
+
   assert.equal(results.length, 1)
-  assert.equal(results[0].url, 'https://x.com/testuser/status/9876543210')
-  assert.equal(results[0].author, 'testuser')
-  assert.equal(results[0].source, 'twitter')
+  assert.equal(results[0].id,        'twitter_9876543210')
+  assert.equal(results[0].url,       'https://x.com/testuser/status/9876543210')
+  assert.equal(results[0].author,    'testuser')
+  assert.equal(results[0].source,    'twitter')
   assert.equal(results[0].subreddit, 'Twitter')
-  assert.ok(!results[0].title.startsWith('@testuser:'), 'title should not start with @username:')
-  assert.equal(results[0].approved, true)
+  assert.equal(results[0].approved,  true)
+  assert.equal(results[0].score,     5)
+  assert.equal(results[0].comments,  2)
+
+  twitterInternals.resetScraper()
 })
 
-// ── Test 7: Twitter falls back to second instance on first failure ─────────────
+// ── Test 7: Twitter returns [] when credentials not set ───────────────────────
 
-test('7. Twitter falls back to second Nitter instance when first returns non-2xx', async () => {
-  twitterInternals.resetAllDownLogged()
-  let callCount = 0
-  const fakeXml = `<rss><channel>
-    <item>
-      <title><![CDATA[@u: freelance dev]]></title>
-      <link>https://nitter.privacydev.net/u/status/111222333444#m</link>
-      <pubDate>Sat, 03 May 2026 09:00:00 GMT</pubDate>
-      <dc:creator>@u</dc:creator>
-      <description><![CDATA[freelance dev]]></description>
-    </item>
-  </channel></rss>`
+test('7. Twitter returns [] when TWITTER_USERNAME / TWITTER_PASSWORD are not set', async () => {
+  twitterInternals.resetScraper()
 
-  await withFetch(async () => {
-    callCount++
-    if (callCount === 1) return { ok: false, status: 503 }
-    return { ok: true, text: async () => fakeXml }
-  }, async () => {
-    const results = await searchTwitter({ keyword: 'freelance dev' }, ctx())
-    assert.ok(results.length > 0, 'should return results from second instance')
-    assert.equal(callCount, 2, 'should have tried exactly 2 instances')
-  })
+  const savedUser = process.env.TWITTER_USERNAME
+  const savedPass = process.env.TWITTER_PASSWORD
+  delete process.env.TWITTER_USERNAME
+  delete process.env.TWITTER_PASSWORD
+
+  const results = await searchTwitter({ keyword: 'freelance dev' }, ctx())
+  assert.deepEqual(results, [])
+
+  if (savedUser !== undefined) process.env.TWITTER_USERNAME = savedUser
+  if (savedPass !== undefined) process.env.TWITTER_PASSWORD = savedPass
+  twitterInternals.resetScraper()
 })
 
-// ── Test 8: Twitter returns [] if all instances fail ──────────────────────────
+// ── Test 8: Twitter returns [] gracefully on scraper error ────────────────────
 
-test('8. Twitter returns [] gracefully when all Nitter instances fail (no throw)', async () => {
-  twitterInternals.resetAllDownLogged()
-  await withFetch(async () => { throw new Error('network error') }, async () => {
-    const results = await searchTwitter({ keyword: 'freelance' }, ctx())
-    assert.deepEqual(results, [])
+test('8. Twitter returns [] gracefully when scraper throws (no throw propagated)', async () => {
+  twitterInternals.resetScraper()
+  twitterInternals._setScraperForTest({
+    fetchSearchTweets: async () => { throw new Error('network error') },
+    getCookies:        async () => [],
   })
+
+  const results = await searchTwitter({ keyword: 'freelance' }, ctx())
+  assert.deepEqual(results, [])
+
+  twitterInternals.resetScraper()
 })
 
 // ── Test 9: Upwork returns [] on HTTP error ───────────────────────────────────
