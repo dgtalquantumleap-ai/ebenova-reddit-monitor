@@ -180,8 +180,8 @@ test('6. amazon is registered in VALID_PLATFORMS with label + emoji', () => {
   assert.ok(VALID_PLATFORMS.includes('amazon'))
   assert.equal(PLATFORM_LABELS.amazon, 'Amazon Reviews')
   assert.equal(PLATFORM_EMOJIS.amazon, '📦')
-  // stackoverflow added; total now 14.
-  assert.equal(VALID_PLATFORMS.length, 14)
+  // indiehackers + g2 added; total now 16.
+  assert.equal(VALID_PLATFORMS.length, 16)
 })
 
 // ── parseAmazonDate helper ────────────────────────────────────────────────

@@ -92,6 +92,8 @@ import { getKeywordHealth, getStaleKeywords } from './lib/keyword-health.js'
 import { buildHealthReport } from './lib/platform-health.js'
 import searchHackerNews    from './lib/scrapers/hackernews.js'
 import searchStackOverflow from './lib/scrapers/stackoverflow.js'
+import searchIndieHackers  from './lib/scrapers/indiehackers.js'
+import searchG2             from './lib/scrapers/g2.js'
 import searchMedium        from './lib/scrapers/medium.js'
 import searchSubstack      from './lib/scrapers/substack.js'
 import searchQuora         from './lib/scrapers/quora.js'
@@ -377,18 +379,21 @@ app.get('/v1/corridors/:id', (req, res) => {
 // Admin-only: calls each external scraper with a probe keyword and returns
 // per-platform { status, sample_count, error? }. Requires X-Admin-Secret.
 const PLATFORM_SCRAPERS = {
-  hackernews:  searchHackerNews,
-  medium:      searchMedium,
-  substack:    searchSubstack,
-  quora:       searchQuora,
-  upwork:      searchUpwork,
-  fiverr:      searchFiverr,
-  github:      searchGitHub,
-  producthunt: searchProductHunt,
-  twitter:     searchTwitter,
-  jijing:      searchJijiNg,
-  youtube:     searchYouTube,
-  amazon:      searchAmazonReviews,
+  hackernews:   searchHackerNews,
+  stackoverflow: searchStackOverflow,
+  indiehackers: searchIndieHackers,
+  g2:           searchG2,
+  medium:       searchMedium,
+  substack:     searchSubstack,
+  quora:        searchQuora,
+  upwork:       searchUpwork,
+  fiverr:       searchFiverr,
+  github:       searchGitHub,
+  producthunt:  searchProductHunt,
+  twitter:      searchTwitter,
+  jijing:       searchJijiNg,
+  youtube:      searchYouTube,
+  amazon:       searchAmazonReviews,
 }
 
 app.get('/v1/admin/platform-health', async (req, res) => {

@@ -36,6 +36,8 @@ import searchUpwork        from './lib/scrapers/upwork.js'
 import searchFiverr        from './lib/scrapers/fiverr.js'
 import searchHackerNews    from './lib/scrapers/hackernews.js'
 import searchStackOverflow from './lib/scrapers/stackoverflow.js'
+import searchIndieHackers  from './lib/scrapers/indiehackers.js'
+import searchG2             from './lib/scrapers/g2.js'
 import searchGitHub        from './lib/scrapers/github.js'
 import searchProductHunt   from './lib/scrapers/producthunt.js'
 import searchTwitter       from './lib/scrapers/twitter.js'
@@ -901,7 +903,7 @@ async function runMonitor(monitor) {
           return _ageMs < 2 * 60 * 60 * 1000
         })()
         const _isHighTrustSource = [
-          'hackernews','stackoverflow','medium','substack','upwork','fiverr',
+          'hackernews','stackoverflow','indiehackers','g2','medium','substack','upwork','fiverr',
           'youtube','amazon','jijing','twitter'
         ].includes(m.source)
         const _isHumanGithub = (
@@ -951,6 +953,8 @@ async function runMonitor(monitor) {
   const platformRunners = [
     { key: 'hackernews',    scraper: searchHackerNews,    delayMs: 1500 },
     { key: 'stackoverflow', scraper: searchStackOverflow, delayMs: 1500 },
+    { key: 'indiehackers', scraper: searchIndieHackers,  delayMs: 2000 },
+    { key: 'g2',           scraper: searchG2,             delayMs: 2000 },
     { key: 'medium',        scraper: searchMedium,        delayMs: 1500 },
     { key: 'substack',    scraper: searchSubstack,    delayMs: 1500 },
     { key: 'quora',       scraper: searchQuora,       delayMs: 2000 },
@@ -990,7 +994,7 @@ async function runMonitor(monitor) {
           return _ageMs < 2 * 60 * 60 * 1000
         })()
         const _isHighTrustSource = [
-          'hackernews','stackoverflow','medium','substack','upwork','fiverr',
+          'hackernews','stackoverflow','indiehackers','g2','medium','substack','upwork','fiverr',
           'youtube','amazon','jijing','twitter'
         ].includes(m.source)
         const _isHumanGithub = (
@@ -1126,7 +1130,7 @@ async function runMonitor(monitor) {
     recommending:    4,
     venting:         5,
   }
-  const SOURCE_RANK = { reddit: 0, hackernews: 1, stackoverflow: 2, quora: 3, medium: 4, substack: 5, upwork: 6, fiverr: 7, twitter: 8, jijing: 9, youtube: 10, amazon: 11 }
+  const SOURCE_RANK = { reddit: 0, hackernews: 1, stackoverflow: 2, indiehackers: 3, g2: 4, quora: 5, medium: 6, substack: 7, upwork: 8, fiverr: 9, twitter: 10, jijing: 11, youtube: 12, amazon: 13 }
   allMatches.sort((a, b) => {
     const ua = _unansweredTier(a), ub = _unansweredTier(b)
     if (ua !== ub) return ua - ub
