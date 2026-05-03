@@ -75,6 +75,7 @@ import { makeCostCap } from './lib/cost-cap.js'
 import { verifyCaptcha } from './lib/captcha.js'
 import { applyInviteToUser } from './lib/invite.js'
 import { draftCall, extractInjectedUtmUrl } from './lib/draft-call.js'
+import { evaluatePost } from './lib/post-evaluator.js'
 import { validatePlatforms, migrateLegacyPlatforms, VALID_PLATFORMS, PLATFORM_LABELS, PLATFORM_EMOJIS, PLATFORM_DISABLED } from './lib/platforms.js'
 import { classifyMatch, intentPriority } from './lib/classify.js'
 import { generateVariants } from './lib/variants-call.js'
@@ -2163,6 +2164,37 @@ app.post('/v1/search/draft', async (req, res) => {
     const gd = await gr.json()
     const raw = gd.choices?.[0]?.message?.content?.trim() || null
     res.json({ success: true, draft: (!raw || raw === 'SKIP') ? null : raw })
+  } catch (err) {
+    serverError(res, err)
+  }
+})
+
+// ── POST /v1/posts/evaluate — intent + reply evaluation for any post ─────────
+//
+// Classifies a post for buying intent using a 0-10 score (A+B+C+D+E), checks
+// community rules for safety, and generates a reply if the score exceeds 7.
+// Routes through lib/post-evaluator.js → routeAI('evaluate_post') → GROQ_QUALITY.
+//
+// Input: { platform, post_text, post_age_minutes?, community_rules? }
+// Output: { decision, intent_type, score, unsafe, reason, reply }
+app.post('/v1/posts/evaluate', async (req, res) => {
+  const auth = await authenticate(req)
+  if (!auth.ok) return res.status(auth.status).json({ success: false, error: auth.error })
+
+  const { platform, post_text, post_age_minutes, community_rules } = req.body
+
+  if (!post_text || typeof post_text !== 'string' || !post_text.trim()) {
+    return res.status(400).json({ success: false, error: { code: 'MISSING_FIELD', message: 'post_text is required' } })
+  }
+
+  try {
+    const result = await evaluatePost({
+      platform:        platform       || 'unknown',
+      postText:        post_text,
+      postAgeMinutes:  typeof post_age_minutes === 'number' ? post_age_minutes : 9999,
+      communityRules:  community_rules || '',
+    })
+    res.json({ success: true, ...result })
   } catch (err) {
     serverError(res, err)
   }
