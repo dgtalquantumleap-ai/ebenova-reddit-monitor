@@ -7,12 +7,11 @@ import { VALID_PLATFORMS, PLATFORM_LABELS, validatePlatforms } from '../lib/plat
 const REQUIRED_FIELDS = ['id','title','url','subreddit','author','score','comments','body','createdAt','keyword','source','approved']
 
 // ── Twitter scraper ────────────────────────────────────────────────────────
-// Note: TWITTER_USERNAME / TWITTER_PASSWORD credential tests removed.
-// The scraper now uses Nitter RSS (no auth). See test/platform-audit.test.js
-// for the new Nitter RSS parser + fallback tests (Tests 6-8).
+// The scraper uses agent-twitter-client. TWITTER_USERNAME / TWITTER_PASSWORD required.
+// See test/platform-audit.test.js for unit tests 6-8.
 
-test('twitter: result items have required shape fields when Nitter returns data', { skip: true }, async () => {
-  // Manual verification only — requires a live Nitter instance.
+test('twitter: result items have required shape fields when credentials are valid', { skip: true }, async () => {
+  // Manual verification only — requires live TWITTER_USERNAME / TWITTER_PASSWORD.
   const r = await searchTwitter({ keyword: 'javascript' }, { seenIds: new Set(), delay: null, MAX_AGE_MS: null })
   assert.ok(Array.isArray(r))
   if (r.length === 0) return
