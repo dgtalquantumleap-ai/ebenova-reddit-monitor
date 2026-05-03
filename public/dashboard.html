@@ -3616,7 +3616,7 @@ function OnboardingWizard({ apiKey, onComplete }) {
       method: 'POST',
       body: JSON.stringify({
         name: name.trim(),
-        keywords: (preset?.keywords || []).slice(0, 10).map(k => ({ keyword: k })),
+        keywords: (preset?.keywords || []).slice(0, 10),
         productContext: productCtx.trim() || preset?.productContext || '',
         platforms: preset?.platforms || ['reddit'],
       }),
