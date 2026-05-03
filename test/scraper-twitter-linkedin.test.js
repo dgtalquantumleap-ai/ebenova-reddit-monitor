@@ -7,48 +7,20 @@ import { VALID_PLATFORMS, PLATFORM_LABELS, validatePlatforms } from '../lib/plat
 const REQUIRED_FIELDS = ['id','title','url','subreddit','author','score','comments','body','createdAt','keyword','source','approved']
 
 // ── Twitter scraper ────────────────────────────────────────────────────────
+// Note: TWITTER_USERNAME / TWITTER_PASSWORD credential tests removed.
+// The scraper now uses Nitter RSS (no auth). See test/platform-audit.test.js
+// for the new Nitter RSS parser + fallback tests (Tests 6-8).
 
-test('twitter: returns empty array when TWITTER_USERNAME is missing', async () => {
-  const prevU = process.env.TWITTER_USERNAME
-  const prevP = process.env.TWITTER_PASSWORD
-  delete process.env.TWITTER_USERNAME
-  process.env.TWITTER_PASSWORD = 'placeholder'
-  try {
-    const r = await searchTwitter({ keyword: 'test' }, { seenIds: new Set(), delay: null, MAX_AGE_MS: null })
-    assert.ok(Array.isArray(r))
-    assert.equal(r.length, 0)
-  } finally {
-    if (prevU !== undefined) process.env.TWITTER_USERNAME = prevU
-    if (prevP !== undefined) process.env.TWITTER_PASSWORD = prevP
-    else delete process.env.TWITTER_PASSWORD
-  }
-})
-
-test('twitter: returns empty array when TWITTER_PASSWORD is missing', async () => {
-  const prevU = process.env.TWITTER_USERNAME
-  const prevP = process.env.TWITTER_PASSWORD
-  process.env.TWITTER_USERNAME = 'placeholder'
-  delete process.env.TWITTER_PASSWORD
-  try {
-    const r = await searchTwitter({ keyword: 'test' }, { seenIds: new Set(), delay: null, MAX_AGE_MS: null })
-    assert.ok(Array.isArray(r))
-    assert.equal(r.length, 0)
-  } finally {
-    if (prevU !== undefined) process.env.TWITTER_USERNAME = prevU
-    else delete process.env.TWITTER_USERNAME
-    if (prevP !== undefined) process.env.TWITTER_PASSWORD = prevP
-  }
-})
-
-test('twitter: result items have required shape fields when present', { skip: !(process.env.TWITTER_USERNAME && process.env.TWITTER_PASSWORD) }, async () => {
+test('twitter: result items have required shape fields when Nitter returns data', { skip: true }, async () => {
+  // Manual verification only — requires a live Nitter instance.
   const r = await searchTwitter({ keyword: 'javascript' }, { seenIds: new Set(), delay: null, MAX_AGE_MS: null })
   assert.ok(Array.isArray(r))
-  if (r.length === 0) return // login may have failed in test env; not a hard failure
+  if (r.length === 0) return
   for (const item of r) {
     for (const f of REQUIRED_FIELDS) assert.ok(f in item, `missing field ${f}`)
     assert.equal(item.source, 'twitter')
-    assert.ok(item.id.startsWith('twitter_'))
-    assert.ok(item.url.includes('x.com'))
+    assert.ok(item.id.startsWith('twitter_'), `id should start with twitter_: ${item.id}`)
+    assert.ok(item.url.includes('x.com'), `url should include x.com: ${item.url}`)
     assert.equal(item.approved, true)
   }
 })

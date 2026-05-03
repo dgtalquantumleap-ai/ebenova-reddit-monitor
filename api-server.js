@@ -84,7 +84,7 @@ import { makeCostCap } from './lib/cost-cap.js'
 import { verifyCaptcha } from './lib/captcha.js'
 import { applyInviteToUser } from './lib/invite.js'
 import { draftCall, extractInjectedUtmUrl } from './lib/draft-call.js'
-import { validatePlatforms, migrateLegacyPlatforms, VALID_PLATFORMS, PLATFORM_LABELS, PLATFORM_EMOJIS } from './lib/platforms.js'
+import { validatePlatforms, migrateLegacyPlatforms, VALID_PLATFORMS, PLATFORM_LABELS, PLATFORM_EMOJIS, PLATFORM_DISABLED } from './lib/platforms.js'
 import { classifyMatch, intentPriority } from './lib/classify.js'
 import { generateVariants } from './lib/variants-call.js'
 import { sendOutboundWebhook, buildPayload as buildWebhookPayload } from './lib/outbound-webhook.js'
@@ -97,6 +97,19 @@ import { listPresets, getPreset } from './lib/keyword-presets.js'
 import { scheduleEngagementCheck, getRecentOutcomes } from './lib/reply-tracker.js'
 import { listCorridors, getCorridor, isValidCorridorId } from './lib/diaspora-corridors.js'
 import { getKeywordHealth, getStaleKeywords } from './lib/keyword-health.js'
+import { buildHealthReport } from './lib/platform-health.js'
+import searchHackerNews    from './lib/scrapers/hackernews.js'
+import searchMedium        from './lib/scrapers/medium.js'
+import searchSubstack      from './lib/scrapers/substack.js'
+import searchQuora         from './lib/scrapers/quora.js'
+import searchUpwork        from './lib/scrapers/upwork.js'
+import searchFiverr        from './lib/scrapers/fiverr.js'
+import searchGitHub        from './lib/scrapers/github.js'
+import searchProductHunt   from './lib/scrapers/producthunt.js'
+import searchTwitter       from './lib/scrapers/twitter.js'
+import searchJijiNg        from './lib/scrapers/jijing.js'
+import searchYouTube       from './lib/scrapers/youtube.js'
+import searchAmazonReviews from './lib/scrapers/amazon.js'
 
 const PORT = parseInt(process.env.API_PORT || process.env.PORT || '3001')
 // FIX 13 — MONITOR_ADMIN_KEY removed. The variable was read here but never
@@ -367,6 +380,43 @@ app.get('/v1/corridors/:id', (req, res) => {
   res.json({ success: true, corridor })
 })
 
+// ── GET /v1/admin/platform-health ─────────────────────────────────────────
+// Admin-only: calls each external scraper with a probe keyword and returns
+// per-platform { status, sample_count, error? }. Requires X-Admin-Secret.
+const PLATFORM_SCRAPERS = {
+  hackernews:  searchHackerNews,
+  medium:      searchMedium,
+  substack:    searchSubstack,
+  quora:       searchQuora,
+  upwork:      searchUpwork,
+  fiverr:      searchFiverr,
+  github:      searchGitHub,
+  producthunt: searchProductHunt,
+  twitter:     searchTwitter,
+  jijing:      searchJijiNg,
+  youtube:     searchYouTube,
+  amazon:      searchAmazonReviews,
+}
+
+app.get('/v1/admin/platform-health', async (req, res) => {
+  const adminSecret = process.env.EBENOVA_ADMIN_SECRET
+  const provided    = req.headers['x-admin-secret']
+  if (!adminSecret || !provided || provided !== adminSecret) {
+    return res.status(401).json({ success: false, error: 'Unauthorized' })
+  }
+  try {
+    const ctx = {
+      seenIds:    { has: () => false, add: () => {} },
+      delay:      async () => {},
+      MAX_AGE_MS: 24 * 60 * 60 * 1000,
+    }
+    const platforms = await buildHealthReport(PLATFORM_SCRAPERS, 'freelance', ctx)
+    res.json({ success: true, platforms, ts: new Date().toISOString() })
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message })
+  }
+})
+
 // ── GET /v1/platforms ──────────────────────────────────────────────────────
 // Source of truth for the platform chip grid on the dashboard. Public —
 // the dashboard fetches this on mount and renders the result.
@@ -378,8 +428,9 @@ app.get('/v1/corridors/:id', (req, res) => {
 app.get('/v1/platforms', (req, res) => {
   const platforms = VALID_PLATFORMS.map(id => ({
     id,
-    label: PLATFORM_LABELS[id] || id,
-    emoji: PLATFORM_EMOJIS[id] || '•',
+    label:    PLATFORM_LABELS[id] || id,
+    emoji:    PLATFORM_EMOJIS[id] || '•',
+    disabled: PLATFORM_DISABLED[id] || null,
   }))
   res.json({ success: true, platforms, count: platforms.length })
 })
