@@ -443,10 +443,7 @@ app.get('/v1/admin/monitor-diagnostics', async (req, res) => {
           lastMatchCount:     m.lastMatchCount      ?? null,
           lastEmailSentAt:    m.lastEmailSentAt     || null,
           totalMatchesAllTime: m.totalMatchesFound  || 0,
-          // What the first keyword looks like after resolveKeyword — confirms
-          // whether [object Object] is fixed for this monitor's stored data.
           keywordSample:      kw0 ? resolveKeyword(kw0) : null,
-          // Raw first keyword object so we can see its stored shape directly.
           _keyword0Raw:       kw0 ?? null,
         })
       } catch (err) {
@@ -458,6 +455,7 @@ app.get('/v1/admin/monitor-diagnostics', async (req, res) => {
     res.status(500).json({ success: false, error: err.message })
   }
 })
+
 
 // ── GET /v1/platforms ──────────────────────────────────────────────────────
 // Source of truth for the platform chip grid on the dashboard. Public —
