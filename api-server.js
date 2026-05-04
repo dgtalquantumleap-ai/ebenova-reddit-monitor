@@ -1124,6 +1124,15 @@ app.get('/v1/feeds/discover', async (req, res) => {
     return res.status(400).json({ success: false, error: { code: 'INVALID_URL', message: 'Not a valid URL' } })
   }
 
+  if (baseUrl.protocol !== 'http:' && baseUrl.protocol !== 'https:') {
+    return res.status(400).json({ success: false, error: { code: 'INVALID_URL', message: 'URL must be http:// or https://' } })
+  }
+
+  const BLOCKED_HOSTS = /^(localhost|127\.|0\.0\.0\.0|::1|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.)/i
+  if (BLOCKED_HOSTS.test(baseUrl.hostname)) {
+    return res.status(400).json({ success: false, error: { code: 'INVALID_URL', message: 'URL must be a public hostname' } })
+  }
+
   const UA = 'Mozilla/5.0 (compatible; EbenovaBot/2.0; +https://ebenova.dev)'
   const feeds = []
 
@@ -1140,6 +1149,9 @@ app.get('/v1/feeds/discover', async (req, res) => {
         const titleMatch = lm[0].match(/title="([^"]+)"/)
         if (!hrefMatch) continue
         const feedUrl = new URL(hrefMatch[1], rawUrl).toString()
+        let parsedFeedUrl
+        try { parsedFeedUrl = new URL(feedUrl) } catch { continue }
+        if (parsedFeedUrl.protocol !== 'http:' && parsedFeedUrl.protocol !== 'https:') continue
         feeds.push({ url: feedUrl, title: titleMatch?.[1] || feedUrl })
       }
     }
