@@ -612,6 +612,9 @@ app.get('/v1/monitors', async (req, res) => {
           product_context:      m.productContext     || '',
           stale_keywords:       staleKws,
           keyword_health:       health,
+          // RSS + Telegram custom sources (PR rss-telegram).
+          rssFeeds:             m.rssFeeds         || [],
+          telegramChannels:     m.telegramChannels || [],
         })
       }
     }
@@ -622,6 +625,8 @@ app.get('/v1/monitors', async (req, res) => {
 })
 
 // ── POST /v1/monitors ──────────────────────────────────────────────────────
+// Note: rssFeeds and telegramChannels are not accepted at creation time.
+// Configure them after creation via PATCH /v1/monitors/:id.
 app.post('/v1/monitors', async (req, res) => {
   const auth = await authenticate(req)
   if (!auth.ok) return res.status(auth.status).json({ success: false, error: auth.error })
@@ -1152,6 +1157,7 @@ app.get('/v1/feeds/discover', async (req, res) => {
         let parsedFeedUrl
         try { parsedFeedUrl = new URL(feedUrl) } catch { continue }
         if (parsedFeedUrl.protocol !== 'http:' && parsedFeedUrl.protocol !== 'https:') continue
+        if (BLOCKED_HOSTS.test(parsedFeedUrl.hostname)) continue
         feeds.push({ url: feedUrl, title: titleMatch?.[1] || feedUrl })
       }
     }

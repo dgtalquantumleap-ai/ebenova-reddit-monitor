@@ -3422,13 +3422,11 @@ function EditMonitorModal({ apiKey, monitor, corridors, onClose, onSaved }) {
       setTelegramInputError('Handle must be 5–32 characters: letters, numbers, underscore')
       return
     }
-    if (editTelegramChannels.length >= 5) {
-      setTelegramInputError('Maximum 5 channels')
-      return
-    }
-    if (!editTelegramChannels.includes(raw)) {
-      setEditTelegramChannels([...editTelegramChannels, raw])
-    }
+    setEditTelegramChannels(prev => {
+      if (prev.length >= 5) { setTelegramInputError('Maximum 5 channels'); return prev }
+      if (prev.includes(raw)) return prev
+      return [...prev, raw]
+    })
     setTelegramInput('')
   }
 
