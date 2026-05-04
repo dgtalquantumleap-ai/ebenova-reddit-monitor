@@ -3594,31 +3594,72 @@ function FeedbackWidget({ apiKey }) {
 
 // ── App ────────────────────────────────────────────────────────────────
 function OnboardingWizard({ apiKey, onComplete }) {
-  const [step, setStep] = useState(0); // 0=name, 1=preset, 2=scanning
-  const [name, setName] = useState('');
-  const [productCtx, setProductCtx] = useState('');
-  const [presets, setPresets] = useState([]);
-  const [selPreset, setSelPreset] = useState(null);
-  const [err, setErr] = useState('');
+  // step 0 = describe, 1 = review keywords, 2 = scanning, 3 = tips
+  const [step, setStep]           = useState(0);
+  const [name, setName]           = useState('');
+  const [description, setDesc]    = useState('');
+  const [keywords, setKeywords]   = useState([]);   // [{ keyword, intentType, confidence }]
+  const [customKw, setCustomKw]   = useState('');
+  const [platforms, setPlatforms] = useState(['reddit','hackernews','medium']);
+  const [loading, setLoading]     = useState(false);
+  const [err, setErr]             = useState('');
   const [monitorId, setMonitorId] = useState(null);
 
-  useEffect(() => {
-    apiFetch('/v1/presets', {}, apiKey).then(r => {
-      if (r.ok) setPresets(r.data.presets || []);
-    });
-  }, [apiKey]);
+  const OB_PLATFORMS = [
+    { key: 'reddit',      label: '🔴 Reddit'    },
+    { key: 'hackernews',  label: '🟠 HN'        },
+    { key: 'medium',      label: '📰 Medium'    },
+    { key: 'substack',    label: '📧 Substack'  },
+    { key: 'quora',       label: '💬 Quora'     },
+    { key: 'indiehackers',label: '🦸 IH'        },
+  ];
 
-  const createMonitor = async () => {
-    if (!name.trim() || !selPreset) return;
+  const goGenerate = async () => {
+    if (!name.trim()) return;
+    setErr('');
+    const desc = description.trim();
+    if (desc.length < 20) {
+      // Skip AI, go straight to review with no pre-filled chips
+      setStep(1);
+      return;
+    }
+    setLoading(true);
+    const r = await apiFetch('/v1/find/suggest', {
+      method: 'POST', body: JSON.stringify({ description: desc }),
+    }, apiKey);
+    setLoading(false);
+    if (r.ok) {
+      const kws = (r.data.keywords || []);
+      const selected = kws.filter(k => k.confidence === 'high' || k.confidence === 'medium');
+      setKeywords(selected.length > 0 ? selected : kws.slice(0, 10));
+      if (r.data.suggestedName && !name.trim()) setName(r.data.suggestedName);
+    }
+    setStep(1);
+  };
+
+  const removeKeyword = (kw) => setKeywords(prev => prev.filter(k => k.keyword !== kw));
+
+  const addCustom = () => {
+    const k = customKw.trim();
+    if (!k || keywords.find(x => x.keyword === k)) return;
+    setKeywords(prev => [...prev, { keyword: k, intentType: 'buying', confidence: 'high' }]);
+    setCustomKw('');
+  };
+
+  const submitMonitor = async () => {
+    if (keywords.length === 0) {
+      setErr('Tell us what your product does so we can find your customers.');
+      return;
+    }
+    setErr('');
     setStep(2);
-    const preset = presets.find(p => p.id === selPreset);
     const r = await apiFetch('/v1/monitors', {
       method: 'POST',
       body: JSON.stringify({
-        name: name.trim(),
-        keywords: (preset?.keywords || []).slice(0, 10),
-        productContext: productCtx.trim() || preset?.productContext || '',
-        platforms: preset?.platforms || ['reddit'],
+        name:           name.trim() || 'My Monitor',
+        keywords:       keywords.map(k => ({ keyword: k.keyword, type: 'keyword', productContext: description.trim() })),
+        productContext: description.trim(),
+        platforms,
       }),
     }, apiKey);
     if (!r.ok) { setErr(r.data?.error?.message || 'Could not create monitor'); setStep(1); return; }
@@ -3635,79 +3676,108 @@ function OnboardingWizard({ apiKey, onComplete }) {
     <div className="ob-bg">
       <div className="ob-card">
         <div className="ob-head">
-          {step === 0 && '① Your demand feed is live'}
-          {step === 1 && '② The Sprint is your action queue'}
+          {step === 0 && '① What does your product do?'}
+          {step === 1 && '② Your customer keywords'}
           {step === 2 && '③ Your revenue opportunity'}
           {step === 3 && '④ Three settings that matter'}
         </div>
         <div className="ob-body">
+
           {step === 0 && (
             <>
-              <p style={{fontSize:13,color:'#8B7355',marginBottom:12,lineHeight:1.6}}>Every 10 minutes, Ebenova scans 13 platforms for people actively asking for what you sell. Only posts with real engagement reach your feed.</p>
-              <div style={{display:'flex',flexWrap:'wrap',marginBottom:16}}>
-                {[['🔴','Reddit'],['🟠','HN'],['🐦','Twitter/X'],['▶️','YouTube'],['🐙','GitHub'],['💼','Upwork'],['🟢','Fiverr'],['📰','Medium'],['💬','Quora'],['🚀','PH'],['🇳🇬','Jiji.ng'],['📦','Amazon'],['📧','Substack']].map(([e,l])=>(
-                  <span key={l} style={{display:'inline-flex',alignItems:'center',gap:3,background:'#2a2419',borderRadius:8,padding:'2px 7px',fontSize:11,color:'#c8b89a',margin:'0 4px 4px 0'}}>{e} {l}</span>
-                ))}
-              </div>
-              <p style={{fontSize:12,color:'#8B7355',marginBottom:12,lineHeight:1.5}}>Give your product a name to get started:</p>
+              <p style={{fontSize:13,color:'#8B7355',marginBottom:14,lineHeight:1.6}}>
+                Describe what you sell and Ebenova finds the conversations where people are already asking for it — across Reddit, HN, Medium and 10 other platforms.
+              </p>
+              <label style={{fontSize:12,color:'#8B7355',display:'block',marginBottom:4}}>Product or company name *</label>
               <input
                 className="inp"
-                placeholder="e.g. Acme CRM, My SaaS Tool…"
+                placeholder="e.g. Acme CRM"
                 value={name}
                 onChange={e => setName(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && name.trim() && setStep(1)}
+                onKeyDown={e => e.key === 'Enter' && name.trim() && !loading && goGenerate()}
                 autoFocus
-                style={{background:'#1f1a13',border:'1px solid #2a2419',color:'#f5efe0',marginBottom:16}}
+                style={{background:'#1f1a13',border:'1px solid #2a2419',color:'#f5efe0',marginBottom:12}}
               />
+              <label style={{fontSize:12,color:'#8B7355',display:'block',marginBottom:4}}>
+                What does it do? <span style={{color:'#6b5c42'}}>(1–3 sentences — the AI generates your keywords from this)</span>
+              </label>
+              <textarea
+                className="inp"
+                rows={3}
+                placeholder="e.g. I built a tool that automatically generates legal contracts for freelancers — $29/mo flat, takes 5 minutes to set up."
+                value={description}
+                onChange={e => setDesc(e.target.value)}
+                style={{background:'#1f1a13',border:'1px solid #2a2419',color:'#f5efe0',resize:'vertical',minHeight:72,fontFamily:'inherit',fontSize:13,lineHeight:1.5,marginBottom:12}}
+              />
+              {err && <div style={{color:'#f87171',fontSize:12,marginBottom:8}}>{err}</div>}
               <button
                 className="btn btn-primary"
                 style={{width:'100%'}}
-                disabled={!name.trim()}
-                onClick={() => setStep(1)}
+                disabled={!name.trim() || loading}
+                onClick={goGenerate}
               >
-                Continue →
+                {loading
+                  ? <span><i className="ph ph-circle-notch spin" style={{marginRight:6}}></i>Generating keywords…</span>
+                  : 'Find my customers →'}
               </button>
             </>
           )}
+
           {step === 1 && (
             <>
-              <p style={{fontSize:13,color:'#8B7355',marginBottom:8,lineHeight:1.6}}>The ⚡ <strong style={{color:'#f5efe0'}}>10-Min Sprint</strong> filters to demand score 6+ matches — people actively looking for a solution. Each card shows three reply options: <strong style={{color:'#f5efe0'}}>Value Hook</strong>, <strong style={{color:'#f5efe0'}}>Direct Bridge</strong>, and <strong style={{color:'#f5efe0'}}>Empathy</strong>. Pick one, edit it, post it. First to reply wins 78% of the time.</p>
-              <p style={{fontSize:11,color:'#6b5c42',marginBottom:12,lineHeight:1.5}}>Demand score (1–10) measures how urgently someone wants a solution. Score 8–10 = act immediately.</p>
-              <p style={{fontSize:12,color:'#8B7355',marginBottom:4,lineHeight:1.5}}>Choose the template that best fits your product:</p>
-              {err && <div style={{color:'#f87171',fontSize:12,marginBottom:8}}>{err}</div>}
-              <div className="preset-grid">
-                {presets.map(p => (
-                  <div
-                    key={p.id}
-                    className={`preset-card${selPreset === p.id ? ' selected' : ''}`}
-                    onClick={() => setSelPreset(p.id)}
-                  >
-                    <div className="preset-card-label">{p.label}</div>
-                    <div className="preset-card-count">{p.keywordCount} keywords</div>
+              {keywords.length > 0 ? (
+                <>
+                  <p style={{fontSize:13,color:'#8B7355',marginBottom:10,lineHeight:1.6}}>
+                    We picked these based on your description. Remove any that don't fit — you can always edit them later.
+                  </p>
+                  <div style={{display:'flex',flexWrap:'wrap',gap:6,marginBottom:14}}>
+                    {keywords.map(k => (
+                      <span key={k.keyword} style={{display:'inline-flex',alignItems:'center',gap:4,background:'#2a2419',border:'1px solid #3a3020',borderRadius:20,padding:'4px 10px',fontSize:12,color:'#f5efe0'}}>
+                        {k.keyword}
+                        <button onClick={() => removeKeyword(k.keyword)} style={{background:'none',border:'none',color:'#8B7355',cursor:'pointer',padding:'0 0 0 2px',lineHeight:1,fontSize:15}}>×</button>
+                      </span>
+                    ))}
                   </div>
-                ))}
-              </div>
-              <div style={{marginTop:14}}>
-                <p style={{fontSize:12,color:'#8B7355',marginBottom:6,lineHeight:1.5}}>Describe your product <span style={{color:'#6b5c42'}}>(optional — makes reply drafts specific to you)</span></p>
-                <textarea
+                </>
+              ) : (
+                <p style={{fontSize:13,color:'#8B7355',marginBottom:12,lineHeight:1.6}}>
+                  No keywords generated — add your own below or go back and describe your product.
+                </p>
+              )}
+              <div style={{display:'flex',gap:6,marginBottom:14}}>
+                <input
                   className="inp"
-                  rows={3}
-                  placeholder={`e.g. ${name.trim() || 'Acme CRM'} is a lightweight CRM for freelancers — $29/mo flat rate, no per-seat pricing, 5-min setup.`}
-                  value={productCtx}
-                  onChange={e => setProductCtx(e.target.value)}
-                  style={{background:'#1f1a13',border:'1px solid #2a2419',color:'#f5efe0',resize:'vertical',minHeight:64,fontFamily:'inherit',fontSize:13,lineHeight:1.5}}
+                  placeholder="Add a keyword…"
+                  value={customKw}
+                  onChange={e => setCustomKw(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && addCustom()}
+                  style={{background:'#1f1a13',border:'1px solid #2a2419',color:'#f5efe0',flex:1,marginBottom:0}}
                 />
+                <button className="btn btn-white" onClick={addCustom} style={{flexShrink:0}}>Add</button>
               </div>
-              <button
-                className="btn btn-primary"
-                style={{width:'100%',marginTop:12}}
-                disabled={!selPreset}
-                onClick={createMonitor}
-              >
+              <label style={{fontSize:12,color:'#8B7355',display:'block',marginBottom:6}}>Platforms</label>
+              <div style={{display:'flex',flexWrap:'wrap',gap:6,marginBottom:14}}>
+                {OB_PLATFORMS.map(p => {
+                  const on = platforms.includes(p.key);
+                  return (
+                    <button
+                      key={p.key}
+                      onClick={() => setPlatforms(prev => on ? prev.filter(x => x !== p.key) : [...prev, p.key])}
+                      style={{fontSize:12,padding:'3px 10px',borderRadius:6,cursor:'pointer',border:`1px solid ${on?'#3a3020':'#2a2419'}`,background:on?'#2a2419':'transparent',color:on?'#f5efe0':'#8B7355'}}
+                    >{p.label}</button>
+                  );
+                })}
+              </div>
+              {err && <div style={{color:'#f87171',fontSize:12,marginBottom:8}}>{err}</div>}
+              <button className="btn btn-primary" style={{width:'100%'}} onClick={submitMonitor}>
                 Start monitoring →
+              </button>
+              <button className="btn btn-white" style={{width:'100%',marginTop:6}} onClick={() => { setStep(0); setErr(''); }}>
+                ← Back
               </button>
             </>
           )}
+
           {step === 2 && (
             <div style={{padding:'8px 0'}}>
               <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:16}}>
@@ -3723,17 +3793,18 @@ function OnboardingWizard({ apiKey, onComplete }) {
               </div>
             </div>
           )}
+
           {step === 3 && (
             <div style={{padding:'8px 0'}}>
               <p style={{fontSize:13,color:'#8B7355',marginBottom:14,lineHeight:1.6}}>Three settings that make the product work better for you:</p>
               <div style={{display:'flex',flexDirection:'column',gap:10,marginBottom:18}}>
                 <div style={{background:'#1f1a13',border:'1px solid #2a2419',borderRadius:8,padding:'10px 14px'}}>
                   <div style={{fontSize:12.5,fontWeight:600,color:'#f5efe0',marginBottom:3}}>Product description</div>
-                  <div style={{fontSize:12,color:'#8B7355',lineHeight:1.5}}>Tells the AI what you sell so reply drafts are on-point. Set it when editing your monitor.</div>
+                  <div style={{fontSize:12,color:'#8B7355',lineHeight:1.5}}>Tells the AI what you sell so reply drafts are on-point. Edit it any time in monitor settings.</div>
                 </div>
                 <div style={{background:'#1f1a13',border:'1px solid #2a2419',borderRadius:8,padding:'10px 14px'}}>
                   <div style={{fontSize:12.5,fontWeight:600,color:'#f5efe0',marginBottom:3}}>Exclude terms</div>
-                  <div style={{fontSize:12,color:'#8B7355',lineHeight:1.5}}>Blocks irrelevant words from reaching your feed — e.g. "gaming" for a business tool, "pregnancy" for a contracts monitor.</div>
+                  <div style={{fontSize:12,color:'#8B7355',lineHeight:1.5}}>Blocks irrelevant words from reaching your feed — e.g. "gaming" for a business tool.</div>
                 </div>
                 <div style={{background:'#1f1a13',border:'1px solid #2a2419',borderRadius:8,padding:'10px 14px'}}>
                   <div style={{fontSize:12.5,fontWeight:600,color:'#f5efe0',marginBottom:3}}>Deal value</div>
@@ -3745,6 +3816,7 @@ function OnboardingWizard({ apiKey, onComplete }) {
               </button>
             </div>
           )}
+
         </div>
       </div>
     </div>
