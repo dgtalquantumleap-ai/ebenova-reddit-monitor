@@ -44,6 +44,8 @@ import searchTwitter       from './lib/scrapers/twitter.js'
 import searchJijiNg        from './lib/scrapers/jijing.js'
 import searchYouTube       from './lib/scrapers/youtube.js'
 import searchAmazonReviews from './lib/scrapers/amazon.js'
+import searchRSS      from './lib/scrapers/rss.js'
+import searchTelegram from './lib/scrapers/telegram.js'
 // LinkedIn scraper exists at lib/scrapers/linkedin.js but is parked: no
 // reliable open search backend indexes linkedin.com/posts/ from a server.
 // Re-import + re-add to platformRunners and SOURCE_RANK once we wire up
@@ -919,7 +921,7 @@ async function runMonitor(monitor) {
         })()
         const _isHighTrustSource = [
           'hackernews','stackoverflow','indiehackers','g2','medium','substack','upwork','fiverr',
-          'youtube','amazon','jijing','twitter'
+          'youtube','amazon','jijing','twitter','rss','telegram'
         ].includes(m.source)
         const _isHumanGithub = (
           m.source === 'github' &&
@@ -1013,7 +1015,7 @@ async function runMonitor(monitor) {
         })()
         const _isHighTrustSource = [
           'hackernews','stackoverflow','indiehackers','g2','medium','substack','upwork','fiverr',
-          'youtube','amazon','jijing','twitter'
+          'youtube','amazon','jijing','twitter','rss','telegram'
         ].includes(m.source)
         const _isHumanGithub = (
           m.source === 'github' &&
@@ -1029,6 +1031,37 @@ async function runMonitor(monitor) {
       if (_kept) console.log(`${label} ${PLATFORM_LABELS[key] || key} "${kw.keyword}"${kwType === 'competitor' ? ' [competitor]' : ''}${kwType === 'phrase' ? ' [phrase]' : ''}: ${_kept} new${_gated ? ` (${_gated} irrelevant/zero-engagement dropped)` : ''}`)
       await delay(delayMs)
     }
+  }
+
+  // ── Feed-based sources (run once per cycle, not per keyword) ─────────────
+  // RSS and Telegram ingest full feeds and filter client-side against all
+  // monitor keywords, so they are called once here instead of per-keyword.
+  const allKeywordStrings = monitor.keywords.map(resolveKeyword)
+  const feedCtx = {
+    seenIds,
+    delay,
+    MAX_AGE_MS: maxAgeMs,
+    allKeywords: allKeywordStrings,
+    rssFeeds:         monitor.rssFeeds         || [],
+    telegramChannels: monitor.telegramChannels || [],
+  }
+
+  for (const [platformKey, scraper] of [['rss', searchRSS], ['telegram', searchTelegram]]) {
+    if (!platforms.includes(platformKey)) continue
+    const feedMatches = await scraper(null, feedCtx)
+    let _feedGated = 0
+    for (const m of feedMatches) {
+      const kw     = monitor.keywords.find(k => resolveKeyword(k) === m.keyword) || monitor.keywords[0]
+      const kwType = (kw && kw.type) || 'keyword'
+      m.productContext  = (kw && kw.productContext) || monitor.productContext || ''
+      m.keywordType     = kwType
+      m.matchedKeyword  = m.keyword
+      if (!passesRelevanceCheck(m, m.keyword, kwType)) { _feedGated++; continue }
+      allMatches.push(m)
+    }
+    const _feedKept = feedMatches.length - _feedGated
+    if (_feedKept) console.log(`${label} ${PLATFORM_LABELS[platformKey] || platformKey}: ${_feedKept} new${_feedGated ? ` (${_feedGated} irrelevant dropped)` : ''}`)
+    if (feedMatches.length) await delay(1500)
   }
 
   // ── Feed filters: excludeTerms + blockedSubreddits ───────────────────────
