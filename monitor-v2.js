@@ -1334,13 +1334,20 @@ async function runMonitor(monitor) {
     if (fired > 0) console.log(`${label} Webhook: dispatched ${fired} payloads to ${monitor.webhookUrl}`)
   }
 
-  await sendMonitorAlert(monitor, allMatches)
+  // Only alert on high-signal intents. Researching / recommending stay in the
+  // feed for manual review but don't trigger email or Slack noise.
+  const ALERT_INTENTS = new Set(['buying', 'asking_for_tool', 'complaining', 'venting'])
+  const alertMatches = allMatches.filter(m => !m.intent || ALERT_INTENTS.has(m.intent))
+  const _silenced = allMatches.length - alertMatches.length
+  if (_silenced > 0) console.log(`${label} ${_silenced} match(es) silenced from alerts (researching/recommending intent)`)
+
+  await sendMonitorAlert(monitor, alertMatches)
 
   // Slack alert (uses per-monitor webhook if set, falls back to global env var)
   const slackUrl = monitor.slackWebhookUrl || process.env.SLACK_WEBHOOK_URL
-  if (slackUrl && allMatches.length > 0) {
-    await sendSlackAlert(slackUrl, allMatches)
-    console.log(`${label} Slack alert sent — ${allMatches.length} matches`)
+  if (slackUrl && alertMatches.length > 0) {
+    await sendSlackAlert(slackUrl, alertMatches)
+    console.log(`${label} Slack alert sent — ${alertMatches.length} matches`)
   }
 }
 
