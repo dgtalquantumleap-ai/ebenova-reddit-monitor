@@ -1334,11 +1334,17 @@ app.get('/v1/matches', async (req, res) => {
     if (m.owner !== auth.owner) return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'Not your monitor' } })
     const lim = Math.min(Math.max(parseInt(limit) || 20, 1), 100)
     const off = Math.max(parseInt(offset) || 0, 0)
-    const ids = await redis.lrange(`insights:matches:${monitor_id}`, off, off + lim - 1) || []
+    // Fetch extra IDs to account for any duplicate entries already in the list
+    // from before the storeMatches dedup fix (restart-induced double-lpush).
+    const ids = await redis.lrange(`insights:matches:${monitor_id}`, off, off + lim * 3 - 1) || []
     const matches = []
+    const seenMatchIds = new Set()
     for (const matchId of ids) {
+      if (seenMatchIds.has(matchId)) continue
+      seenMatchIds.add(matchId)
       const mr = await redis.get(`insights:match:${monitor_id}:${matchId}`)
       if (mr) matches.push(typeof mr === 'string' ? JSON.parse(mr) : mr)
+      if (matches.length >= lim) break
     }
     // Priority sort — intent first (asking_for_tool > buying > researching >
     // ...), then source rank (Reddit first), then recency. Mirrors the same
@@ -1845,15 +1851,17 @@ app.post('/v1/matches/:id/variants', async (req, res) => {
       const v = typeof cached === 'string' ? JSON.parse(cached) : cached
       return res.json({ success: true, variants: v, cached: true })
     }
-    // Verify ownership — find the match across the caller's monitors
+    // Verify ownership — look up the match hash directly across the caller's monitors.
+    // insights:matches:{mid} is a Redis LIST (IDs only); the match data lives at
+    // insights:match:{mid}:{matchId} (string key). The old code called redis.get
+    // on the list key which always throws WRONGTYPE and caused a 500 on cache miss.
     const monitorIds = await redis.smembers(`insights:monitors:${auth.owner}`) || []
     let match = null
     for (const mid of monitorIds) {
-      const raw = await redis.get(`insights:matches:${mid}`)
+      const raw = await redis.get(`insights:match:${mid}:${matchId}`)
       if (!raw) continue
-      const matches = typeof raw === 'string' ? JSON.parse(raw) : raw
-      match = Array.isArray(matches) ? matches.find(m => m.id === matchId) : null
-      if (match) break
+      match = typeof raw === 'string' ? JSON.parse(raw) : raw
+      break
     }
     if (!match) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Match not found' } })
     const monitorRaw = await redis.get(`insights:monitor:${match.monitorId || monitorIds[0]}`)

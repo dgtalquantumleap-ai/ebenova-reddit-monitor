@@ -540,13 +540,20 @@ function buildAlertEmail(monitor, matches) {
 // The list insights:matches:{monitorId} tracks all match IDs for that monitor.
 async function storeMatches(redis, monitor, matches) {
   const TTL = 60 * 60 * 24 * 7 // 7 days
-  const pipeline = []
   for (const m of matches) {
     const key = `insights:match:${monitor.id}:${m.id}`
+    // Only lpush when this is a genuinely new match. Existing keys mean the
+    // ID is already in the list — re-pushing after a restart would create
+    // duplicate list entries because the in-memory seenMap resets on restart
+    // while the 7-day match TTL keeps entries alive longer than the 3-day
+    // seen:v2 TTL.
+    const isNew = !(await redis.exists(key))
     await redis.set(key, JSON.stringify({ ...m, monitorId: monitor.id, storedAt: new Date().toISOString() }))
     await redis.expire(key, TTL)
-    await redis.lpush(`insights:matches:${monitor.id}`, m.id)
-    await redis.expire(`insights:matches:${monitor.id}`, TTL)
+    if (isNew) {
+      await redis.lpush(`insights:matches:${monitor.id}`, m.id)
+      await redis.expire(`insights:matches:${monitor.id}`, TTL)
+    }
   }
   // Trim the list to last 500 match IDs
   await redis.ltrim(`insights:matches:${monitor.id}`, 0, 499)

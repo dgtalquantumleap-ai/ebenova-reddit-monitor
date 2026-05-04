@@ -497,7 +497,7 @@ const TOUR_STEPS = [
     label: 'STEP 4 · MONITOR FEED',
     title: 'Your live demand feed.',
     text: 'The Monitor Feed is your stream of matched posts. Each match shows the post title, a snippet, engagement stats, and an AI-generated reply draft. New matches appear automatically every 10 minutes.',
-    tip: { icon: 'ph-lightning', text: 'Use the 10-Min Sprint button to filter to demand score 6+ — the highest-value leads only.' },
+    tip: { icon: 'ph-lightning', text: 'Use the 10-Min Sprint button to filter to buying intent, tool requests, and unanswered posts — the highest-value leads only.' },
   },
   {
     icon: '⚡',
@@ -712,7 +712,7 @@ function HelpGuide({ onClose }) {
             </div>
             <div className="hg-section">
               <div className="hg-sh">10-Min Sprint</div>
-              <div className="hg-p">A focused view showing only demand score 6+ matches — the highest-value leads. Each card shows three reply variants: <strong>Value Hook</strong> (lead with benefit), <strong>Direct Bridge</strong> (connect pain to your solution), <strong>Empathy</strong> (validate frustration first). Pick one, edit, post.</div>
+              <div className="hg-p">A focused view showing only high-value matches — buying intent, tool requests, and unanswered posts. Each card shows three reply variants: <strong>Value Hook</strong> (lead with benefit), <strong>Direct Bridge</strong> (connect pain to your solution), <strong>Empathy</strong> (validate frustration first). Pick one, copy, post, then click <strong>Mark posted</strong> to track your reply.</div>
             </div>
           </>}
 
@@ -1502,6 +1502,9 @@ function SprintView({ matches, monitorId, apiKey, onClose, onAction }) {
   const [variants, setVariants] = useState(null);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  // Track posted state per match so navigating away and back preserves it
+  const [postedMap, setPostedMap] = useState({});
+  const [posting, setPosting] = useState(false);
   const match = matches[idx];
 
   const loadVariants = useCallback(async (m) => {
@@ -1512,7 +1515,7 @@ function SprintView({ matches, monitorId, apiKey, onClose, onAction }) {
     if (r.ok) setVariants(r.data.variants);
   }, [apiKey]);
 
-  useEffect(() => { loadVariants(match); }, [match]);
+  useEffect(() => { if (match) loadVariants(match); }, [match?.id]);
 
   useEffect(() => {
     const handler = (e) => {
@@ -1529,7 +1532,7 @@ function SprintView({ matches, monitorId, apiKey, onClose, onAction }) {
       <div style={{fontSize:32,marginBottom:12}}>✅</div>
       <div style={{fontSize:15,fontWeight:600,color:'#374151',marginBottom:8}}>No high-priority matches right now</div>
       <div style={{fontSize:13,lineHeight:1.6}}>
-        The sprint shows demand score 6+ matches only.<br/>
+        The sprint shows buying intent, tool requests, and unanswered posts only.<br/>
         Check the full feed below for lower-signal results.
       </div>
     </div>
@@ -1541,9 +1544,23 @@ function SprintView({ matches, monitorId, apiKey, onClose, onAction }) {
   ];
   const text = variants?.[tab] || '';
 
+  const postedAt = match ? (postedMap[match.id] || match.postedAt || null) : null;
+
   const copy = () => {
     if (!text) return;
     navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); });
+  };
+
+  const togglePosted = async () => {
+    if (!match) return;
+    setPosting(true);
+    const r = await apiFetch('/v1/matches/posted', { method: 'PATCH', body: JSON.stringify({ monitor_id: monitorId, match_id: match.id }) }, apiKey);
+    setPosting(false);
+    if (r.ok) {
+      const newPostedAt = r.data.postedAt || null;
+      setPostedMap(m => ({ ...m, [match.id]: newPostedAt }));
+      onAction && onAction('posted', match.id, newPostedAt);
+    }
   };
 
   return (
@@ -1587,15 +1604,23 @@ function SprintView({ matches, monitorId, apiKey, onClose, onAction }) {
                 readOnly
                 style={{minHeight:96,marginBottom:8}}
               />
-              <button className="btn btn-primary btn-sm" onClick={copy}>
-                <i className={`ph-bold ph-${copied?'check':'copy'}`}></i> {copied?'Copied':'Copy reply'}
-              </button>
+              <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+                <button className="btn btn-primary btn-sm" onClick={copy}>
+                  <i className={`ph-bold ph-${copied?'check':'copy'}`}></i> {copied?'Copied':'Copy reply'}
+                </button>
+                <button
+                  className={`btn btn-sm ${postedAt ? 'btn-posted' : 'btn-ghost'}`}
+                  onClick={togglePosted}
+                  disabled={posting}
+                >
+                  <i className={`ph${postedAt?'-fill ph-check-circle':' ph-check'}`}></i>
+                  {postedAt ? `Posted ${timeAgo(postedAt)}` : (posting ? 'Saving…' : 'Mark posted')}
+                </button>
+              </div>
             </>
           )}
           {!loading && !variants && <div style={{fontSize:12,color:'#94A3B8',padding:'12px 0'}}>
-            {(!match.demandScore || match.demandScore < 4)
-              ? 'Low demand signal — variant generation skipped for this post.'
-              : 'Variants temporarily unavailable — will retry on next scan.'}
+            Variants temporarily unavailable — will retry on next scan.
           </div>}
         </div>
       </div>
@@ -1765,10 +1790,9 @@ function MatchesFeed({ apiKey, monitors }) {
             {sprintMode && !loading && matches.length > 0 && (
               <SprintView
                 matches={matches.filter(m =>
-                  (m.demandScore || 0) >= 6 ||
-                  (m.isUnanswered && (m.demandScore || 0) >= 4) ||
                   m.intent === 'asking_for_tool' ||
-                  m.intent === 'buying'
+                  m.intent === 'buying' ||
+                  m.isUnanswered
                 )}
                 monitorId={selId}
                 apiKey={apiKey}
