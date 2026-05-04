@@ -1051,12 +1051,14 @@ async function runMonitor(monitor) {
     const feedMatches = await scraper(null, feedCtx)
     let _feedGated = 0
     for (const m of feedMatches) {
-      const kw     = monitor.keywords.find(k => resolveKeyword(k) === m.keyword) || monitor.keywords[0]
+      const kw     = monitor.keywords.find(k => resolveKeyword(k).toLowerCase() === m.keyword.toLowerCase()) || monitor.keywords[0]
       const kwType = (kw && kw.type) || 'keyword'
       m.productContext  = (kw && kw.productContext) || monitor.productContext || ''
       m.keywordType     = kwType
       m.matchedKeyword  = m.keyword
       if (!passesRelevanceCheck(m, m.keyword, kwType)) { _feedGated++; continue }
+      const _meetsMinComments = m.comments >= (monitor.minComments || 0)
+      if (!_meetsMinComments) { _feedGated++; continue }
       allMatches.push(m)
     }
     const _feedKept = feedMatches.length - _feedGated
