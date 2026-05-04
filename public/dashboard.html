@@ -614,7 +614,37 @@ function ProductTour({ onClose, onGoFind }) {
           </div>
         </div>
       </div>
-    </div>
+
+      <nav className="sb-nav">
+        <div className="sb-section">Product</div>
+        {items.map(({id,icon,label,count})=>(
+          <button key={id} className={`sb-item${tab===id?' active':''}`} onClick={()=>setTab(id)}>
+            <i className={`ph-bold ${icon}`}></i>
+            <span>{label}</span>
+            {count != null && <span className="badge-count">{count}</span>}
+          </button>
+        ))}
+
+        <div className="sb-section" style={{marginTop:8}}>Account</div>
+        <button className={`sb-item${tab==='settings'?' active':''}`} onClick={()=>setTab('settings')}>
+          <i className="ph-bold ph-gear"></i>
+          <span>Settings</span>
+        </button>
+      </nav>
+
+      <div className="sb-footer">
+        <div className="sb-user">
+          <div className="sb-avatar">{initial}</div>
+          <div className="sb-user-info">
+            <div className="sb-user-email">{userEmail||'—'}</div>
+            <div style={{marginTop:3}}><span className="sb-plan">{planLabel}</span></div>
+          </div>
+          <button onClick={onSignOut} title="Sign out" style={{background:'none',border:'none',color:'#475569',cursor:'pointer',padding:4,borderRadius:5,flexShrink:0,display:'flex',alignItems:'center'}}>
+            <i className="ph ph-sign-out" style={{fontSize:16}}></i>
+          </button>
+        </div>
+      </div>
+    </aside>
   );
 }
 
@@ -3260,6 +3290,14 @@ function EditMonitorModal({ apiKey, monitor, corridors, onClose, onSaved }) {
       .join(', ')
   )
   const [productCtxInput,        setProductCtxInput]        = useState(monitor.product_context     || '')
+  const [editRssFeeds,       setEditRssFeeds]       = useState(monitor.rssFeeds || [])
+  const [editTelegramChannels, setEditTelegramChannels] = useState(monitor.telegramChannels || [])
+  const [rssFeedInput,       setRssFeedInput]       = useState('')
+  const [telegramInput,      setTelegramInput]      = useState('')
+  const [discoveringFeed,    setDiscoveringFeed]    = useState(false)
+  const [discoveredFeeds,    setDiscoveredFeeds]    = useState([])
+  const [feedDiscoverError,  setFeedDiscoverError]  = useState('')
+  const [telegramInputError, setTelegramInputError] = useState('')
   const [saving, setSaving] = useState(false)
   const [err, setErr]       = useState('')
   const [availablePlatforms, setAvailablePlatforms] = useState([])
@@ -3320,6 +3358,11 @@ function EditMonitorModal({ apiKey, monitor, corridors, onClose, onSaved }) {
     const _savedBlocked = (monitor.blocked_subreddits || monitor.blockedSubreddits || []).join(',')
     if (_curBlocked !== _savedBlocked) body.blockedSubreddits = parseCommaSeparated(blockedSubredditsInput).map(s => s.replace(/^r\//, ''))
 
+    const _rssFeedsChanged = JSON.stringify(editRssFeeds) !== JSON.stringify(monitor.rssFeeds || [])
+    if (_rssFeedsChanged) body.rssFeeds = editRssFeeds
+    const _telChansChanged = JSON.stringify(editTelegramChannels) !== JSON.stringify(monitor.telegramChannels || [])
+    if (_telChansChanged) body.telegramChannels = editTelegramChannels
+
     if (Object.keys(body).length === 0) {
       setErr('Nothing changed.')
       setSaving(false)
@@ -3335,6 +3378,57 @@ function EditMonitorModal({ apiKey, monitor, corridors, onClose, onSaved }) {
   }
 
   const isBuilder = monitor.mode === 'builder_tracker'
+
+  const handleAddFeed = async () => {
+    const url = rssFeedInput.trim()
+    if (!url) return
+    setDiscoveringFeed(true)
+    setFeedDiscoverError('')
+    setDiscoveredFeeds([])
+    try {
+      const r = await apiFetch(`/v1/feeds/discover?url=${encodeURIComponent(url)}`, {}, apiKey)
+      if (r.ok && r.data.feeds.length > 0) {
+        setDiscoveredFeeds(r.data.feeds)
+        setRssFeedInput('')
+      } else if (r.ok && r.data.feeds.length === 0) {
+        if (/^https?:\/\//.test(url)) {
+          confirmFeed(url)
+        } else {
+          setFeedDiscoverError('No feed detected — try pasting the direct feed URL')
+        }
+      } else {
+        setFeedDiscoverError('Could not check URL — try again')
+      }
+    } catch {
+      setFeedDiscoverError('Network error — try again')
+    }
+    setDiscoveringFeed(false)
+  }
+
+  const confirmFeed = (url) => {
+    setEditRssFeeds(prev => {
+      if (prev.includes(url) || prev.length >= 5) return prev
+      return [...prev, url]
+    })
+    setDiscoveredFeeds([])
+    setRssFeedInput('')
+  }
+
+  const handleAddChannel = () => {
+    setTelegramInputError('')
+    const raw = telegramInput.trim().replace(/^@/, '')
+    if (!raw) return
+    if (!/^[a-zA-Z0-9_]{5,32}$/.test(raw)) {
+      setTelegramInputError('Handle must be 5–32 characters: letters, numbers, underscore')
+      return
+    }
+    setEditTelegramChannels(prev => {
+      if (prev.length >= 5) { setTelegramInputError('Maximum 5 channels'); return prev }
+      if (prev.includes(raw)) return prev
+      return [...prev, raw]
+    })
+    setTelegramInput('')
+  }
 
   return (
     <div onClick={onClose} style={{position:'fixed',inset:0,background:'rgba(15,23,42,.55)',display:'flex',alignItems:'flex-start',justifyContent:'center',zIndex:200,overflowY:'auto',padding:'40px 16px'}}>
@@ -3505,6 +3599,80 @@ function EditMonitorModal({ apiKey, monitor, corridors, onClose, onSaved }) {
               <div style={{fontSize:12,color:'#6b7280',marginTop:4}}>Posts from these subreddits never appear in your feed or alerts.</div>
             </div>
           </>
+        )}
+
+        {!isBuilder && (
+          React.createElement(React.Fragment, null,
+            React.createElement('div', {style:{fontSize:11,fontWeight:600,color:'#94A3B8',letterSpacing:'0.06em',textTransform:'uppercase',margin:'4px 0 10px'}}, 'Custom Sources'),
+
+            React.createElement('div', {className:'field', style:{marginBottom:14}},
+              React.createElement('label', {className:'label'},
+                'RSS Feeds ',
+                React.createElement('span', {style:{fontSize:11,fontWeight:400,color:'#94A3B8'}}, '· up to 5')
+              ),
+              React.createElement('div', {style:{display:'flex',gap:8,marginBottom:6}},
+                React.createElement('input', {
+                  className:'inp', style:{flex:1},
+                  type:'text',
+                  placeholder:'https://blog.example.com or paste any page URL',
+                  value:rssFeedInput,
+                  onChange:e=>setRssFeedInput(e.target.value),
+                  onKeyDown:e=>e.key==='Enter'&&handleAddFeed()
+                }),
+                React.createElement('button', {
+                  className:'btn btn-white btn-sm',
+                  onClick:handleAddFeed,
+                  disabled:discoveringFeed||!rssFeedInput.trim()||editRssFeeds.length>=5
+                }, discoveringFeed ? 'Detecting…' : 'Add')
+              ),
+              feedDiscoverError && React.createElement('div', {style:{fontSize:12,color:'#EF4444',marginBottom:6}}, feedDiscoverError),
+              discoveredFeeds.length > 0 && React.createElement('div', {style:{marginBottom:8}},
+                React.createElement('div', {style:{fontSize:12,color:'#64748B',marginBottom:4}}, 'Feed detected — confirm to add:'),
+                discoveredFeeds.map(f =>
+                  React.createElement('div', {key:f.url, style:{display:'flex',gap:6,alignItems:'center',marginBottom:4}},
+                    React.createElement('span', {style:{flex:1,fontSize:12,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',color:'#475569',background:'#F8FAFC',border:'1px solid #E2E8F0',borderRadius:4,padding:'3px 8px'}}, f.url),
+                    React.createElement('button', {className:'btn btn-primary btn-sm', onClick:()=>confirmFeed(f.url)}, 'Add'),
+                    React.createElement('button', {className:'btn btn-ghost btn-sm', onClick:()=>setDiscoveredFeeds([])}, '✕')
+                  )
+                )
+              ),
+              editRssFeeds.map(url =>
+                React.createElement('div', {key:url, style:{display:'flex',alignItems:'center',gap:6,marginBottom:4}},
+                  React.createElement('span', {style:{flex:1,fontSize:12,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',color:'#475569',background:'#F8FAFC',border:'1px solid #E2E8F0',borderRadius:4,padding:'3px 8px'}}, url),
+                  React.createElement('button', {className:'btn btn-ghost btn-sm', onClick:()=>setEditRssFeeds(editRssFeeds.filter(u=>u!==url))}, '×')
+                )
+              )
+            ),
+
+            React.createElement('div', {className:'field', style:{marginBottom:14}},
+              React.createElement('label', {className:'label'},
+                'Telegram Channels ',
+                React.createElement('span', {style:{fontSize:11,fontWeight:400,color:'#94A3B8'}}, '· up to 5')
+              ),
+              React.createElement('div', {style:{display:'flex',gap:8,marginBottom:6}},
+                React.createElement('input', {
+                  className:'inp', style:{flex:1},
+                  type:'text',
+                  placeholder:'@channel',
+                  value:telegramInput,
+                  onChange:e=>setTelegramInput(e.target.value),
+                  onKeyDown:e=>e.key==='Enter'&&handleAddChannel()
+                }),
+                React.createElement('button', {
+                  className:'btn btn-white btn-sm',
+                  onClick:handleAddChannel,
+                  disabled:!telegramInput.trim()
+                }, 'Add')
+              ),
+              telegramInputError && React.createElement('div', {style:{fontSize:12,color:'#EF4444',marginBottom:6}}, telegramInputError),
+              editTelegramChannels.map(ch =>
+                React.createElement('div', {key:ch, style:{display:'flex',alignItems:'center',gap:6,marginBottom:4}},
+                  React.createElement('span', {style:{flex:1,fontSize:12,color:'#475569',background:'#F8FAFC',border:'1px solid #E2E8F0',borderRadius:4,padding:'3px 8px'}}, '@'+ch),
+                  React.createElement('button', {className:'btn btn-ghost btn-sm', onClick:()=>setEditTelegramChannels(editTelegramChannels.filter(c=>c!==ch))}, '×')
+                )
+              )
+            )
+          )
         )}
 
         {err && <div className="alert alert-error" style={{marginBottom:14}}><i className="ph ph-warning-circle"></i>{err}</div>}
