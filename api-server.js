@@ -240,6 +240,29 @@ function validateWebhookUrl(input) {
   return { ok: true, value: u.toString() }
 }
 
+function validateRssFeeds(value) {
+  if (!Array.isArray(value)) return { ok: false, error: '`rssFeeds` must be an array' }
+  if (value.length > 5)     return { ok: false, error: '`rssFeeds` cannot exceed 5 items' }
+  for (const url of value) {
+    if (typeof url !== 'string' || !/^https?:\/\//i.test(url.trim())) {
+      return { ok: false, error: `invalid URL in rssFeeds: "${url}"` }
+    }
+  }
+  return { ok: true, value: value.map(u => u.trim()) }
+}
+
+function validateTelegramChannels(value) {
+  if (!Array.isArray(value)) return { ok: false, error: '`telegramChannels` must be an array' }
+  if (value.length > 5)     return { ok: false, error: '`telegramChannels` cannot exceed 5 items' }
+  for (const ch of value) {
+    const handle = (typeof ch === 'string') ? ch.replace(/^@/, '') : ''
+    if (!/^[a-zA-Z0-9_]{5,32}$/.test(handle)) {
+      return { ok: false, error: `invalid Telegram handle: "${ch}"` }
+    }
+  }
+  return { ok: true, value: value.map(c => (typeof c === 'string' ? c.replace(/^@/, '') : c)) }
+}
+
 // ── App ────────────────────────────────────────────────────────────────────
 const app = express()
 
@@ -1036,8 +1059,26 @@ app.patch('/v1/monitors/:id', async (req, res) => {
       updates.productContext = (body.productContext || '').trim().slice(0, 2000)
     }
 
+    // Field 20: rssFeeds — up to 5 https?:// URLs for RSS/Atom feeds.
+    if (Object.prototype.hasOwnProperty.call(body, 'rssFeeds')) {
+      const v = validateRssFeeds(body.rssFeeds)
+      if (!v.ok) {
+        return res.status(400).json({ success: false, error: { code: 'INVALID_RSS_FEEDS', message: v.error } })
+      }
+      updates.rssFeeds = v.value
+    }
+
+    // Field 21: telegramChannels — up to 5 public Telegram channel handles.
+    if (Object.prototype.hasOwnProperty.call(body, 'telegramChannels')) {
+      const v = validateTelegramChannels(body.telegramChannels)
+      if (!v.ok) {
+        return res.status(400).json({ success: false, error: { code: 'INVALID_TELEGRAM_CHANNELS', message: v.error } })
+      }
+      updates.telegramChannels = v.value
+    }
+
     if (Object.keys(updates).length === 0) {
-      return res.status(400).json({ success: false, error: { code: 'NO_UPDATES', message: 'No supported fields in body. Patchable: name, platforms, emailEnabled, productUrl, utmSource, utmMedium, utmCampaign, webhookUrl, slackWebhookUrl, replyTone, mode, minConsistency, brandName, diasporaCorridor, excludeTerms, blockedSubreddits, keywords, productContext' } })
+      return res.status(400).json({ success: false, error: { code: 'NO_UPDATES', message: 'No supported fields in body. Patchable: name, platforms, emailEnabled, productUrl, utmSource, utmMedium, utmCampaign, webhookUrl, slackWebhookUrl, replyTone, mode, minConsistency, brandName, diasporaCorridor, excludeTerms, blockedSubreddits, keywords, productContext, rssFeeds, telegramChannels' } })
     }
     const next = { ...m, ...updates }
     await redis.set(`insights:monitor:${id}`, JSON.stringify(next))
@@ -1058,10 +1099,70 @@ app.patch('/v1/monitors/:id', async (req, res) => {
     if (updates.replyTone        !== undefined) echo.reply_tone        = next.replyTone
     if (updates.name             !== undefined) echo.name              = next.name
     if (updates.dealValue        !== undefined) echo.deal_value        = next.dealValue
+    if (updates.rssFeeds         !== undefined) echo.rss_feeds          = next.rssFeeds
+    if (updates.telegramChannels !== undefined) echo.telegram_channels  = next.telegramChannels
     res.json(echo)
   } catch (err) {
     serverError(res, err)
   }
+})
+
+// ── GET /v1/feeds/discover ────────────────────────────────────────────────
+// Auto-detects RSS/Atom feed URLs from a website URL.
+// 1. Fetches the URL and looks for <link rel="alternate" type="application/rss+xml">
+// 2. If none found, probes common feed paths.
+// Returns { feeds: [{ url, title }] } — empty array on no results, never an error.
+app.get('/v1/feeds/discover', async (req, res) => {
+  const auth = await authenticate(req)
+  if (!auth.ok) return res.status(auth.status).json({ success: false, error: auth.error })
+
+  const rawUrl = (req.query.url || '').trim()
+  if (!rawUrl) return res.status(400).json({ success: false, error: { code: 'MISSING_URL', message: '`url` query param required' } })
+
+  let baseUrl
+  try { baseUrl = new URL(rawUrl) } catch {
+    return res.status(400).json({ success: false, error: { code: 'INVALID_URL', message: 'Not a valid URL' } })
+  }
+
+  const UA = 'Mozilla/5.0 (compatible; EbenovaBot/2.0; +https://ebenova.dev)'
+  const feeds = []
+
+  try {
+    const html = await fetch(rawUrl, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(10_000) })
+      .then(r => r.ok ? r.text() : '')
+      .catch(() => '')
+
+    if (html) {
+      const linkPattern = /<link[^>]+type="application\/(?:rss|atom)\+xml"[^>]*>/gi
+      let lm
+      while ((lm = linkPattern.exec(html)) !== null) {
+        const hrefMatch = lm[0].match(/href="([^"]+)"/)
+        const titleMatch = lm[0].match(/title="([^"]+)"/)
+        if (!hrefMatch) continue
+        const feedUrl = new URL(hrefMatch[1], rawUrl).toString()
+        feeds.push({ url: feedUrl, title: titleMatch?.[1] || feedUrl })
+      }
+    }
+  } catch {}
+
+  if (feeds.length === 0) {
+    const PROBE_PATHS = ['/feed', '/rss', '/feed.xml', '/atom.xml']
+    for (const path of PROBE_PATHS) {
+      const probeUrl = `${baseUrl.origin}${path}`
+      try {
+        const r = await fetch(probeUrl, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(5_000) })
+        if (r.ok) {
+          const ct = r.headers.get('content-type') || ''
+          if (ct.includes('xml') || ct.includes('rss') || ct.includes('atom')) {
+            feeds.push({ url: probeUrl, title: probeUrl })
+            break
+          }
+        }
+      } catch {}
+    }
+  }
+
+  res.json({ feeds })
 })
 
 // ── GET /v1/monitors/:id/share-link ────────────────────────────────────────
