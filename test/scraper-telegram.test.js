@@ -25,6 +25,17 @@ test('telegram: parseTelegramHTML extracts message fields', () => {
   assert.ok(results[0].id.startsWith('telegram_'))
 })
 
+test('telegram: parseTelegramHTML handles extra CSS classes on wrapper div', () => {
+  const html = `
+  <div class="tgme_widget_message tgme_widget_message_rounded" data-post="startups/9999">
+    <div class="tgme_widget_message_text js-message_text" dir="auto">Best CRM tool ever</div>
+    <time datetime="2026-05-04T10:00:00+00:00">May 4</time>
+  </div></div>`
+  const results = parseTelegramHTML(html, 'startups', ['CRM'], seenIds(), null)
+  assert.equal(results.length, 1)
+  assert.equal(results[0].url, 'https://t.me/startups/9999')
+})
+
 // ── parseTelegramHTML: keyword matching ──────────────────────────────────────
 
 test('telegram: parseTelegramHTML discards messages matching no keyword', () => {
