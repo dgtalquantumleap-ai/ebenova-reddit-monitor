@@ -707,7 +707,10 @@ async function runBuilderTrackerMonitor(monitor) {
   console.log(`${label} ${allMatches.length} candidate matches gathered`)
 
   // Cheap heuristic filter — drops complaint / help-seeking posts.
-  const builderMatches = allMatches.filter(isBuilderPost)
+  const _minComments = monitor.minComments || 0
+  const builderMatches = allMatches.filter(m =>
+    isBuilderPost(m) && m.comments >= _minComments
+  )
   console.log(`${label} ${builderMatches.length} pass builder filter`)
 
   // Extract topics and record profiles. Best-effort: per-match failures
@@ -897,7 +900,9 @@ async function runMonitor(monitor) {
         // ── Relevance gate ─────────────────────────────────────────────
         if (!passesRelevanceCheck(m, kw.keyword, kwType)) { _redditIrrelevant++; continue }
         // ── Engagement gate ────────────────────────────────────────────
+        const _minComments = monitor.minComments || 0
         const _hasEngagement = (m.score >= 1 || m.comments >= 1)
+        const _meetsMinComments = m.comments >= _minComments
         const _isFreshUnanswered = (() => {
           const _ageMs = Date.now() - new Date(m.createdAt || 0).getTime()
           return _ageMs < 2 * 60 * 60 * 1000
@@ -912,6 +917,7 @@ async function runMonitor(monitor) {
         )
         if (!_isFirstPoll && !_hasEngagement && !_isFreshUnanswered &&
             !_isHighTrustSource && !_isHumanGithub) continue
+        if (!_meetsMinComments) continue
         // ── End engagement gate ─────────────────────────────────────────
         allMatches.push(m)
       }
@@ -988,7 +994,9 @@ async function runMonitor(monitor) {
         // ── Relevance gate ───────────────────────────────────────────────
         if (!passesRelevanceCheck(m, kw.keyword, kwType)) { _gated++; continue }
         // ── Engagement gate ──────────────────────────────────────────────
+        const _minComments = monitor.minComments || 0
         const _hasEngagement = (m.score >= 1 || m.comments >= 1)
+        const _meetsMinComments = m.comments >= _minComments
         const _isFreshUnanswered = (() => {
           const _ageMs = Date.now() - new Date(m.createdAt || 0).getTime()
           return _ageMs < 2 * 60 * 60 * 1000
@@ -1003,6 +1011,7 @@ async function runMonitor(monitor) {
         )
         if (!_hasEngagement && !_isFreshUnanswered &&
             !_isHighTrustSource && !_isHumanGithub) { _gated++; continue }
+        if (!_meetsMinComments) { _gated++; continue }
         // ── End engagement gate ───────────────────────────────────────────
         allMatches.push(m)
       }
