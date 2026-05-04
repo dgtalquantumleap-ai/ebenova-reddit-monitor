@@ -28,67 +28,65 @@ test('PR #28: competitor-mode prompt addendum exists and matches the spec', () =
 })
 
 test('PR #28: competitorMode=true appends the addendum to the prompt sent to providers', async () => {
-  // Capture what prompt the provider receives by injecting a mock provider
   process.env.GROQ_API_KEY = 'k'
   delete process.env.DEEPSEEK_API_KEY
-  delete process.env.DRAFT_PRIMARY
+  delete process.env.ANTHROPIC_API_KEY
   const captured = { promptCompetitor: null, promptNormal: null }
-  const origGroq = _internals.PROVIDERS.groq
-  _internals.PROVIDERS.groq = {
-    name: 'groq',
-    available: () => true,
-    call: async ({ prompt }) => {
-      // Stash whichever flavor we got and return a clean draft so validateDraft passes
-      if (prompt.includes('unhappy with or evaluating a competitor product')) captured.promptCompetitor = prompt
-      else captured.promptNormal = prompt
-      return 'A short helpful reply with no banned phrases or markdown formatting.'
-    },
+  const originalFetch = global.fetch
+  let callIndex = 0
+  global.fetch = async (_url, opts) => {
+    const body = JSON.parse(opts.body)
+    const userMsg = body.messages.find(m => m.role === 'user')?.content ?? ''
+    if (callIndex === 0) captured.promptCompetitor = userMsg
+    else if (callIndex === 1) captured.promptNormal = userMsg
+    callIndex++
+    return {
+      ok: true, status: 200,
+      json: async () => ({ choices: [{ message: { content: 'A short helpful reply with no banned phrases or markdown formatting.' } }] }),
+    }
   }
   try {
     await draftCall({ ...SAMPLE, competitorMode: true })
     await draftCall({ ...SAMPLE, competitorMode: false })
     assert.ok(captured.promptCompetitor, 'competitor-mode call should reach the provider')
     assert.ok(captured.promptNormal,     'non-competitor call should also reach the provider')
-    // Same SAMPLE input — the only differing slice should be the addendum.
     assert.equal(captured.promptCompetitor.startsWith(captured.promptNormal), true,
       'competitor prompt should be the normal prompt + the addendum suffix')
     assert.match(captured.promptCompetitor, /Maximum 3 sentences/)
     assert.equal(/Maximum 3 sentences/.test(captured.promptNormal), false)
   } finally {
-    _internals.PROVIDERS.groq = origGroq
+    global.fetch = originalFetch
     delete process.env.GROQ_API_KEY
   }
 })
 
-test('buildChain respects DRAFT_PRIMARY=groq (default)', () => {
+test('buildChain returns GROQ_QUALITY, GROQ_FAST, DEEPSEEK when all keys set', () => {
   process.env.GROQ_API_KEY = 'k1'
   process.env.DEEPSEEK_API_KEY = 'k2'
-  delete process.env.DRAFT_PRIMARY
   const chain = _internals.buildChain()
-  assert.equal(chain[0].name, 'groq')
-  assert.equal(chain[1].name, 'deepseek')
+  assert.equal(chain[0].name, 'groq-quality')
+  assert.equal(chain[1].name, 'groq-fast')
+  assert.equal(chain[2].name, 'deepseek')
   delete process.env.GROQ_API_KEY
   delete process.env.DEEPSEEK_API_KEY
 })
 
-test('buildChain swaps order when DRAFT_PRIMARY=deepseek', () => {
-  process.env.GROQ_API_KEY = 'k1'
-  process.env.DEEPSEEK_API_KEY = 'k2'
-  process.env.DRAFT_PRIMARY = 'deepseek'
-  const chain = _internals.buildChain()
-  assert.equal(chain[0].name, 'deepseek')
-  assert.equal(chain[1].name, 'groq')
+test('buildChain returns only DEEPSEEK when only DEEPSEEK_API_KEY is set', () => {
   delete process.env.GROQ_API_KEY
+  process.env.DEEPSEEK_API_KEY = 'k'
+  const chain = _internals.buildChain()
+  assert.equal(chain.length, 1)
+  assert.equal(chain[0].name, 'deepseek')
   delete process.env.DEEPSEEK_API_KEY
-  delete process.env.DRAFT_PRIMARY
 })
 
 test('buildChain skips providers without env keys', () => {
   process.env.GROQ_API_KEY = 'k1'
   delete process.env.DEEPSEEK_API_KEY
   const chain = _internals.buildChain()
-  assert.equal(chain.length, 1)
-  assert.equal(chain[0].name, 'groq')
+  assert.equal(chain.length, 2)
+  assert.equal(chain[0].name, 'groq-quality')
+  assert.equal(chain[1].name, 'groq-fast')
   delete process.env.GROQ_API_KEY
 })
 
@@ -102,7 +100,7 @@ test('returns successful draft tagged with model name', async () => {
   })
   try {
     const r = await draftCall(SAMPLE)
-    assert.equal(r.model, 'groq')
+    assert.equal(r.model, 'groq-quality')
     assert.ok(r.draft && r.draft.length > 10)
   } finally {
     global.fetch = originalFetch
@@ -113,7 +111,6 @@ test('returns successful draft tagged with model name', async () => {
 test('falls through to peer when primary returns SKIP', async () => {
   process.env.GROQ_API_KEY = 'test'
   process.env.DEEPSEEK_API_KEY = 'test'
-  delete process.env.DRAFT_PRIMARY
   const originalFetch = global.fetch
   global.fetch = async (url) => {
     if (url.includes('groq.com')) {
@@ -135,7 +132,6 @@ test('falls through to peer when primary returns SKIP', async () => {
 test('falls through to peer when primary throws', async () => {
   process.env.GROQ_API_KEY = 'test'
   process.env.DEEPSEEK_API_KEY = 'test'
-  delete process.env.DRAFT_PRIMARY
   const originalFetch = global.fetch
   global.fetch = async (url) => {
     if (url.includes('groq.com')) return { ok: false, status: 503, text: async () => 'down' }
@@ -154,7 +150,6 @@ test('falls through to peer when primary throws', async () => {
 test('returns null when all providers fail', async () => {
   process.env.GROQ_API_KEY = 'test'
   process.env.DEEPSEEK_API_KEY = 'test'
-  delete process.env.DRAFT_PRIMARY
   const originalFetch = global.fetch
   global.fetch = async () => ({ ok: false, status: 500, text: async () => 'down' })
   try {
@@ -171,21 +166,20 @@ test('returns null when all providers fail', async () => {
 test('regenerates with stricter nudge on AI tell, falls through if regen also fails', async () => {
   process.env.GROQ_API_KEY = 'test'
   process.env.DEEPSEEK_API_KEY = 'test'
-  delete process.env.DRAFT_PRIMARY
   const originalFetch = global.fetch
   let groqCalls = 0
   global.fetch = async (url) => {
     if (url.includes('groq.com')) {
       groqCalls++
-      // First call: AI-tell. Second (regen): same AI-tell.
+      // Both initial and regen attempts return an AI-tell
       return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: 'Great question, I hope this helps you out today.' } }] }) }
     }
     return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: 'Backup wrote this without the AI tells. Specific and short.' } }] }) }
   }
   try {
     const r = await draftCall(SAMPLE)
-    // Groq tries twice (initial + regen), both fail validation, falls to deepseek
-    assert.equal(groqCalls, 2)
+    // groq-quality tries twice (initial + regen), groq-fast tries twice (initial + regen)
+    assert.equal(groqCalls, 4)
     assert.equal(r.model, 'deepseek')
   } finally {
     global.fetch = originalFetch
