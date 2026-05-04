@@ -614,37 +614,7 @@ function ProductTour({ onClose, onGoFind }) {
           </div>
         </div>
       </div>
-
-      <nav className="sb-nav">
-        <div className="sb-section">Product</div>
-        {items.map(({id,icon,label,count})=>(
-          <button key={id} className={`sb-item${tab===id?' active':''}`} onClick={()=>setTab(id)}>
-            <i className={`ph-bold ${icon}`}></i>
-            <span>{label}</span>
-            {count != null && <span className="badge-count">{count}</span>}
-          </button>
-        ))}
-
-        <div className="sb-section" style={{marginTop:8}}>Account</div>
-        <button className={`sb-item${tab==='settings'?' active':''}`} onClick={()=>setTab('settings')}>
-          <i className="ph-bold ph-gear"></i>
-          <span>Settings</span>
-        </button>
-      </nav>
-
-      <div className="sb-footer">
-        <div className="sb-user">
-          <div className="sb-avatar">{initial}</div>
-          <div className="sb-user-info">
-            <div className="sb-user-email">{userEmail||'—'}</div>
-            <div style={{marginTop:3}}><span className="sb-plan">{planLabel}</span></div>
-          </div>
-          <button onClick={onSignOut} title="Sign out" style={{background:'none',border:'none',color:'#475569',cursor:'pointer',padding:4,borderRadius:5,flexShrink:0,display:'flex',alignItems:'center'}}>
-            <i className="ph ph-sign-out" style={{fontSize:16}}></i>
-          </button>
-        </div>
-      </div>
-    </aside>
+    </div>
   );
 }
 
