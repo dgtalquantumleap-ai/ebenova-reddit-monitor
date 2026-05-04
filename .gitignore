@@ -5,3 +5,4 @@ node_modules/
 # Real tester contact lists — never commit
 scripts/testers.csv
 scripts/testers-*.csv
+.worktrees/
