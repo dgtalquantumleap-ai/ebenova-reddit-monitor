@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import { strict as assert } from 'node:assert'
-import searchRSS, { parseRSSFeed, CURATED_FEEDS, _internals } from '../lib/scrapers/rss.js'
+import searchRSS, { parseRSSFeed, CURATED_FEEDS } from '../lib/scrapers/rss.js'
 
 const seenIds = () => ({ has: () => false, add: () => {} })
 
