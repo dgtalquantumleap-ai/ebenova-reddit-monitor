@@ -325,9 +325,9 @@ async function searchReddit(monitorId, keywordEntry) {
   const urls = subreddits.length > 0
     ? subreddits.map(sr => buildRedditSearchUrl(keyword, sr, { type: kwType }))
     : [buildRedditSearchUrl(keyword, null, { type: kwType })]
-  // Monitors with many subreddits (>5 per keyword) hit 429s more frequently.
-  // Widen the inter-fetch gap to 3 s to stay within Reddit's anonymous rate limit.
-  const interDelay = subreddits.length > 5 ? 3000 : 2000
+  // Monitors with many subreddits hit 429s more frequently.
+  // Wider base gap keeps us inside Reddit's anonymous rate limit.
+  const interDelay = subreddits.length > 5 ? 4000 : 2500
 
   // Plain headers — no Bearer, no client_id. UA is still polite to send;
   // Reddit's RSS endpoints don't gate on it the way the JSON API does.
@@ -342,7 +342,10 @@ async function searchReddit(monitorId, keywordEntry) {
       if (!res.ok) {
         const retryAfter = parseRetryAfter(res.headers)
         console.warn(`[v2][reddit:rss] ${res.status} for "${keyword}" → ${url.slice(0, 100)}…${retryAfter ? ` (Retry-After: ${retryAfter}s)` : ''}`)
-        await delay((retryAfter || 3) * 1000)
+        // Always wait at least interDelay after a non-2xx so the next URL in the
+        // loop doesn't fire immediately. The continue below skips the interDelay
+        // at the bottom, so we must apply it here.
+        await delay(Math.max((retryAfter || 5) * 1000, interDelay))
         continue
       }
       const xml = await res.text()
