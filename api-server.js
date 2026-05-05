@@ -780,6 +780,20 @@ app.post('/v1/monitors', async (req, res) => {
     await redis.expire(`report:token:${shareToken}`, ONE_YEAR_SECONDS).catch(() => {})
     await redis.sadd('insights:active_monitors', id)
 
+    // Fire-and-forget keyword expansion (non-blocking)
+    ;(async () => {
+      try {
+        const { expandKeywords } = await import('./lib/keyword-expander.js')
+        const expanded = await expandKeywords(cleanKws, monitor.productContext)
+        if (expanded.length > 0) {
+          await redis.setex(`monitor:${id}:expanded_keywords`, 86400 * 7, JSON.stringify(expanded))
+          console.log(`[keyword-expander] Generated ${expanded.length} variants for ${id}`)
+        }
+      } catch (err) {
+        console.warn(`[keyword-expander] failed for ${id}: ${err.message}`)
+      }
+    })()
+
     // Fire-and-forget "your monitor is scanning" email — sets expectations
     // before the first alert lands. Required unsubscribe footer per CASL/NDPR.
     ;(async () => {

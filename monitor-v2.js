@@ -943,6 +943,22 @@ async function runMonitor(monitor) {
   // includeXxx flags. See lib/platforms.js for the rules.
   const platforms = migrateLegacyPlatforms(monitor)
   console.log(`${label} Starting — ${monitor.keywords.length} keywords, ${platforms.length} platforms: ${platforms.join(', ')}`)
+
+  // Load expanded keywords from Redis and append to search (source: 'expanded')
+  let expandedKeywords = []
+  if (redis) {
+    try {
+      const _raw = await redis.get(`monitor:${monitor.id}:expanded_keywords`)
+      if (_raw) {
+        const _arr = typeof _raw === 'string' ? JSON.parse(_raw) : _raw
+        if (Array.isArray(_arr)) {
+          expandedKeywords = _arr.map(k => ({ keyword: k, type: 'keyword', subreddits: [], source: 'expanded', productContext: monitor.productContext || '' }))
+        }
+      }
+    } catch (_) {}
+  }
+  const effectiveKeywords = [...monitor.keywords, ...expandedKeywords]
+
   const allMatches = []
   const seenIds = { has: (id) => hasSeen(monitor.id, id), add: (id) => markSeen(monitor.id, id) }
   const maxAgeMs = 24 * 60 * 60 * 1000 // 24h for v2 monitors
@@ -952,7 +968,7 @@ async function runMonitor(monitor) {
 
   // Reddit — explicitly opt-in per platforms array. No longer always-on.
   if (platforms.includes('reddit')) {
-    for (const kw of monitor.keywords) {
+    for (const kw of effectiveKeywords) {
       const ctx = kw.productContext || monitor.productContext || ''
       const kwType = kw.type || 'keyword'
       const redditMatches = await searchReddit(monitor.id, kw)
@@ -987,7 +1003,7 @@ async function runMonitor(monitor) {
       }
       if (redditMatches.length > 0) {
         const _redditKept = redditMatches.length - _redditIrrelevant
-        console.log(`${label} Reddit "${kw.keyword}"${kwType === 'competitor' ? ' [competitor]' : ''}${kwType === 'phrase' ? ' [phrase]' : ''}: ${_redditKept} relevant${_redditIrrelevant ? ` (${_redditIrrelevant} irrelevant dropped)` : ''}`)
+        console.log(`${label} Reddit "${kw.keyword}"${kw.source === 'expanded' ? ' [expanded]' : ''}${kwType === 'competitor' ? ' [competitor]' : ''}${kwType === 'phrase' ? ' [phrase]' : ''}: ${_redditKept} relevant${_redditIrrelevant ? ` (${_redditIrrelevant} irrelevant dropped)` : ''}`)
       }
       await delay(2000)
 
@@ -1048,7 +1064,7 @@ async function runMonitor(monitor) {
 
   for (const { key, scraper, delayMs } of platformRunners) {
     if (!platforms.includes(key)) continue
-    for (const kw of monitor.keywords) {
+    for (const kw of effectiveKeywords) {
       const ctx = kw.productContext || monitor.productContext || ''
       const kwType = kw.type || 'keyword'   // PR #28
       const matches = await scraper(kw, { seenIds, delay, MAX_AGE_MS: maxAgeMs })
@@ -1088,7 +1104,7 @@ async function runMonitor(monitor) {
   // ── Feed-based sources (run once per cycle, not per keyword) ─────────────
   // RSS and Telegram ingest full feeds and filter client-side against all
   // monitor keywords, so they are called once here instead of per-keyword.
-  const allKeywordStrings = monitor.keywords.map(resolveKeyword)
+  const allKeywordStrings = effectiveKeywords.map(resolveKeyword)
   const feedCtx = {
     seenIds,
     delay,
