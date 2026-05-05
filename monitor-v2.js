@@ -740,7 +740,26 @@ async function runBuilderTrackerMonitor(monitor) {
   const redisClient = getRedis()
   for (const match of _builderCandidates) {
     if (!PLATFORMS_WITH_REAL_USERNAMES.includes(match.source)) continue
-    const topics = await extractTopics(match)
+
+    // Cache check — skip AI call if topics already extracted for this match ID.
+    // Key: builder:topic:{match.id}, TTL 7 days. Failure is silently ignored.
+    const _topicCacheKey = `builder:topic:${match.id}`
+    let topics
+    const _cachedRaw = redisClient
+      ? await redisClient.get(_topicCacheKey).catch(() => null)
+      : null
+    if (_cachedRaw !== null && _cachedRaw !== undefined) {
+      try {
+        topics = typeof _cachedRaw === 'string' ? JSON.parse(_cachedRaw) : _cachedRaw
+        if (!Array.isArray(topics)) topics = []
+      } catch (_) { topics = [] }
+    } else {
+      topics = await extractTopics(match)
+      if (Array.isArray(topics) && topics.length && redisClient) {
+        redisClient.setex(_topicCacheKey, 604800, JSON.stringify(topics)).catch(() => {})
+      }
+    }
+
     const r = await recordBuilderProfile({ redis: redisClient, monitorId: monitor.id, match, topics })
     if (r?.recorded) {
       recorded++
