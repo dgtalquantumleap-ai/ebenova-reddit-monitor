@@ -60,13 +60,13 @@ test('PR #28: competitorMode=true appends the addendum to the prompt sent to pro
   }
 })
 
-test('buildChain returns GROQ_QUALITY, GROQ_FAST, DEEPSEEK when all keys set', () => {
+test('buildChain returns DEEPSEEK, GROQ_FAST when all keys set', () => {
   process.env.GROQ_API_KEY = 'k1'
   process.env.DEEPSEEK_API_KEY = 'k2'
   const chain = _internals.buildChain()
-  assert.equal(chain[0].name, 'groq-quality')
+  assert.equal(chain.length, 2)
+  assert.equal(chain[0].name, 'deepseek')
   assert.equal(chain[1].name, 'groq-fast')
-  assert.equal(chain[2].name, 'deepseek')
   delete process.env.GROQ_API_KEY
   delete process.env.DEEPSEEK_API_KEY
 })
@@ -84,9 +84,8 @@ test('buildChain skips providers without env keys', () => {
   process.env.GROQ_API_KEY = 'k1'
   delete process.env.DEEPSEEK_API_KEY
   const chain = _internals.buildChain()
-  assert.equal(chain.length, 2)
-  assert.equal(chain[0].name, 'groq-quality')
-  assert.equal(chain[1].name, 'groq-fast')
+  assert.equal(chain.length, 1)
+  assert.equal(chain[0].name, 'groq-fast')
   delete process.env.GROQ_API_KEY
 })
 
@@ -100,7 +99,7 @@ test('returns successful draft tagged with model name', async () => {
   })
   try {
     const r = await draftCall(SAMPLE)
-    assert.equal(r.model, 'groq-quality')
+    assert.equal(r.model, 'groq-fast')
     assert.ok(r.draft && r.draft.length > 10)
   } finally {
     global.fetch = originalFetch
@@ -167,10 +166,10 @@ test('regenerates with stricter nudge on AI tell, falls through if regen also fa
   process.env.GROQ_API_KEY = 'test'
   process.env.DEEPSEEK_API_KEY = 'test'
   const originalFetch = global.fetch
-  let groqCalls = 0
+  let deepseekCalls = 0
   global.fetch = async (url) => {
-    if (url.includes('groq.com')) {
-      groqCalls++
+    if (url.includes('deepseek')) {
+      deepseekCalls++
       // Both initial and regen attempts return an AI-tell
       return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: 'Great question, I hope this helps you out today.' } }] }) }
     }
@@ -178,9 +177,9 @@ test('regenerates with stricter nudge on AI tell, falls through if regen also fa
   }
   try {
     const r = await draftCall(SAMPLE)
-    // groq-quality tries twice (initial + regen), groq-fast tries twice (initial + regen)
-    assert.equal(groqCalls, 4)
-    assert.equal(r.model, 'deepseek')
+    // deepseek tries twice (initial + regen), groq-fast then returns good response
+    assert.equal(deepseekCalls, 2)
+    assert.equal(r.model, 'groq-fast')
   } finally {
     global.fetch = originalFetch
     delete process.env.GROQ_API_KEY
