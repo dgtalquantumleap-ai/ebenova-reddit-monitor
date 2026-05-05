@@ -98,6 +98,7 @@ const FROM_EMAIL       = process.env.FROM_EMAIL || 'insights@ebenova.org'
 const POLL_MINUTES     = parseInt(process.env.POLL_INTERVAL_MINUTES || '15')
 const MAX_SEEN         = 50_000
 const SEMANTIC_ENABLED = !!(OPENAI_API_KEY || VOYAGE_API_KEY)
+if (SEMANTIC_ENABLED) console.log(`[v2] Semantic V2: ON (${VOYAGE_API_KEY ? 'Voyage AI' : 'OpenAI'})`)
 
 // F11: max age for Reddit semantic-search posts. Was hardcoded 60 min.
 // Defaults to 3h (matches monitor.js default). Tune via POST_MAX_AGE_HOURS env.
@@ -204,6 +205,21 @@ async function getEmbedding(text) {
   const key = embeddingCacheKey(text)  // F12: hash full text, not slice(0, 100)
   if (embeddingCache.has(key)) return embeddingCache.get(key)
 
+  // Redis embedding cache — 24h TTL, cross-restart persistence
+  if (redis) {
+    try {
+      const redisKey = `embed:${key}`
+      const cached = await redis.get(redisKey)
+      if (cached) {
+        const vec = typeof cached === 'string' ? JSON.parse(cached) : cached
+        if (Array.isArray(vec)) {
+          setCacheWithSoftCap(key, vec)
+          return vec
+        }
+      }
+    } catch (_) {}
+  }
+
   // F14: daily embedding cost cap — return null (caller falls back to keyword-only)
   const ecap = getEmbedCap()
   if (ecap) {
@@ -224,7 +240,10 @@ async function getEmbedding(text) {
       if (!res.ok) return null
       const data = await res.json()
       const vec = data?.data?.[0]?.embedding || null
-      if (vec) setCacheWithSoftCap(key, vec)
+      if (vec) {
+        setCacheWithSoftCap(key, vec)
+        if (redis) redis.setex(`embed:${key}`, 86400, JSON.stringify(vec)).catch(() => {})
+      }
       return vec
     }
 
@@ -232,12 +251,15 @@ async function getEmbedding(text) {
       const res = await fetch('https://api.voyageai.com/v1/embeddings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.VOYAGE_API_KEY}` },
-        body: JSON.stringify({ model: 'voyage-lite-02-instruct', input: [text.slice(0, 2000)] }),
+        body: JSON.stringify({ model: 'voyage-3-lite', input: [text.slice(0, 2000)] }),
       })
       if (!res.ok) return null
       const data = await res.json()
       const vec = data?.data?.[0]?.embedding || null
-      if (vec) setCacheWithSoftCap(key, vec)
+      if (vec) {
+        setCacheWithSoftCap(key, vec)
+        if (redis) redis.setex(`embed:${key}`, 86400, JSON.stringify(vec)).catch(() => {})
+      }
       return vec
     }
   } catch (err) {
@@ -469,10 +491,13 @@ function buildAlertEmail(monitor, matches) {
       const highPriBadge   = isHighPriority(p)
         ? `<span style="display:inline-block;padding:2px 8px;margin-left:6px;background:#fee2e2;color:#991b1b;border-radius:10px;font-size:10px;font-weight:800;letter-spacing:.3px;">🔥 HIGH PRIORITY</span>`
         : ''
+      const scoreBadge = typeof p.intentScore === 'number'
+        ? `<span style="display:inline-block;padding:2px 8px;margin-left:6px;background:#f0f9ff;color:#0369a1;border-radius:10px;font-size:10px;font-weight:700;">[Score: ${p.intentScore}]</span>`
+        : ''
       return `
       <div style="margin-bottom:18px;padding:14px;background:#f9f9f9;border-left:4px solid #FF6B35;border-radius:4px;">
         <div style="font-size:12px;color:#888;margin-bottom:5px;">
-          ${sourceLabel} · u/${escapeHtml(p.author)} · ${escapeHtml(p.score)} upvotes${sentimentBadge}${intentBadge}${highPriBadge}
+          ${sourceLabel} · u/${escapeHtml(p.author)} · ${escapeHtml(p.score)} upvotes${sentimentBadge}${intentBadge}${highPriBadge}${scoreBadge}
         </div>
         <a href="${escapeHtml(p.url)}" style="font-size:15px;font-weight:600;color:#1a1a1a;text-decoration:none;">${escapeHtml(p.title)}</a>
         ${p.body ? `<p style="font-size:13px;color:#555;margin:7px 0 0;line-height:1.5;">${escapeHtml(p.body)}${p.body.length >= 300 ? '…' : ''}</p>` : ''}
@@ -918,6 +943,22 @@ async function runMonitor(monitor) {
   // includeXxx flags. See lib/platforms.js for the rules.
   const platforms = migrateLegacyPlatforms(monitor)
   console.log(`${label} Starting — ${monitor.keywords.length} keywords, ${platforms.length} platforms: ${platforms.join(', ')}`)
+
+  // Load expanded keywords from Redis and append to search (source: 'expanded')
+  let expandedKeywords = []
+  if (redis) {
+    try {
+      const _raw = await redis.get(`monitor:${monitor.id}:expanded_keywords`)
+      if (_raw) {
+        const _arr = typeof _raw === 'string' ? JSON.parse(_raw) : _raw
+        if (Array.isArray(_arr)) {
+          expandedKeywords = _arr.map(k => ({ keyword: k, type: 'keyword', subreddits: [], source: 'expanded', productContext: monitor.productContext || '' }))
+        }
+      }
+    } catch (_) {}
+  }
+  const effectiveKeywords = [...monitor.keywords, ...expandedKeywords]
+
   const allMatches = []
   const seenIds = { has: (id) => hasSeen(monitor.id, id), add: (id) => markSeen(monitor.id, id) }
   const maxAgeMs = 24 * 60 * 60 * 1000 // 24h for v2 monitors
@@ -927,7 +968,7 @@ async function runMonitor(monitor) {
 
   // Reddit — explicitly opt-in per platforms array. No longer always-on.
   if (platforms.includes('reddit')) {
-    for (const kw of monitor.keywords) {
+    for (const kw of effectiveKeywords) {
       const ctx = kw.productContext || monitor.productContext || ''
       const kwType = kw.type || 'keyword'
       const redditMatches = await searchReddit(monitor.id, kw)
@@ -962,7 +1003,7 @@ async function runMonitor(monitor) {
       }
       if (redditMatches.length > 0) {
         const _redditKept = redditMatches.length - _redditIrrelevant
-        console.log(`${label} Reddit "${kw.keyword}"${kwType === 'competitor' ? ' [competitor]' : ''}${kwType === 'phrase' ? ' [phrase]' : ''}: ${_redditKept} relevant${_redditIrrelevant ? ` (${_redditIrrelevant} irrelevant dropped)` : ''}`)
+        console.log(`${label} Reddit "${kw.keyword}"${kw.source === 'expanded' ? ' [expanded]' : ''}${kwType === 'competitor' ? ' [competitor]' : ''}${kwType === 'phrase' ? ' [phrase]' : ''}: ${_redditKept} relevant${_redditIrrelevant ? ` (${_redditIrrelevant} irrelevant dropped)` : ''}`)
       }
       await delay(2000)
 
@@ -1023,7 +1064,7 @@ async function runMonitor(monitor) {
 
   for (const { key, scraper, delayMs } of platformRunners) {
     if (!platforms.includes(key)) continue
-    for (const kw of monitor.keywords) {
+    for (const kw of effectiveKeywords) {
       const ctx = kw.productContext || monitor.productContext || ''
       const kwType = kw.type || 'keyword'   // PR #28
       const matches = await scraper(kw, { seenIds, delay, MAX_AGE_MS: maxAgeMs })
@@ -1063,7 +1104,7 @@ async function runMonitor(monitor) {
   // ── Feed-based sources (run once per cycle, not per keyword) ─────────────
   // RSS and Telegram ingest full feeds and filter client-side against all
   // monitor keywords, so they are called once here instead of per-keyword.
-  const allKeywordStrings = monitor.keywords.map(resolveKeyword)
+  const allKeywordStrings = effectiveKeywords.map(resolveKeyword)
   const feedCtx = {
     seenIds,
     delay,
@@ -1141,6 +1182,8 @@ async function runMonitor(monitor) {
         m.sentiment = result.sentiment
         m.intent = result.intent
         m.intentConfidence = result.confidence
+        m.intentScore = result.intent_score     // ← intent scoring 0-100
+        m.intentReasoning = result.reasoning    // ← one-sentence reasoning
       }
     }))
     if (i + CLASSIFY_CONCURRENCY < allMatches.length) await delay(300)
@@ -1150,6 +1193,18 @@ async function runMonitor(monitor) {
   const complaining = allMatches.filter(m => m.intent === 'complaining').length
   const otherClassified = allMatches.filter(m => m.intent && m.intent !== 'asking_for_tool' && m.intent !== 'buying' && m.intent !== 'complaining').length
   console.log(`${label} Classified ${allMatches.length} matches: ${highValue} buying/asking_for_tool, ${complaining} complaining, ${otherClassified} other`)
+
+  // minIntentScore filter — drop low-signal matches before drafting/emailing
+  const _minScore = typeof monitor.minIntentScore === 'number' ? monitor.minIntentScore : 40
+  const _beforeFilter = allMatches.length
+  allMatches.splice(0, allMatches.length, ...allMatches.filter(m => {
+    if (m.matchType === 'competitor') return true  // competitor matches always pass
+    if (typeof m.intentScore === 'number') return m.intentScore >= _minScore
+    return true  // unclassified passes through
+  }))
+  if (allMatches.length < _beforeFilter) {
+    console.log(`${label} Intent filter: kept ${allMatches.length}/${_beforeFilter} (minIntentScore=${_minScore})`)
+  }
 
   console.log(`${label} ${allMatches.length} total matches — generating drafts…`)
 

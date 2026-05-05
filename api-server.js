@@ -637,6 +637,7 @@ app.post('/v1/monitors', async (req, res) => {
     brandName,
     diasporaCorridor,
     dealValue,
+    minIntentScore,
     includeMedium, includeSubstack, includeQuora, includeUpworkForum, includeFiverrForum } = req.body
 
   // PR #36 — diaspora corridor (optional). When set, the worker overrides
@@ -769,6 +770,7 @@ app.post('/v1/monitors', async (req, res) => {
       brandName:          (brandName || '').toString().trim().slice(0, 80),
       diasporaCorridor:   resolvedCorridor,
       dealValue: (typeof dealValue === 'number' && dealValue > 0) ? Math.round(dealValue) : 0,
+      minIntentScore: (typeof minIntentScore === 'number' && minIntentScore >= 0 && minIntentScore <= 100) ? Math.round(minIntentScore) : 40,
       active: true, plan, createdAt: now, lastPollAt: null, totalMatchesFound: 0 }
     await redis.set(`insights:monitor:${id}`, JSON.stringify(monitor))
     await redis.expire(`insights:monitor:${id}`, ONE_YEAR_SECONDS).catch(() => {})
@@ -777,6 +779,20 @@ app.post('/v1/monitors', async (req, res) => {
     await redis.set(`report:token:${shareToken}`, id)
     await redis.expire(`report:token:${shareToken}`, ONE_YEAR_SECONDS).catch(() => {})
     await redis.sadd('insights:active_monitors', id)
+
+    // Fire-and-forget keyword expansion (non-blocking)
+    ;(async () => {
+      try {
+        const { expandKeywords } = await import('./lib/keyword-expander.js')
+        const expanded = await expandKeywords(cleanKws, monitor.productContext)
+        if (expanded.length > 0) {
+          await redis.setex(`monitor:${id}:expanded_keywords`, 86400 * 7, JSON.stringify(expanded))
+          console.log(`[keyword-expander] Generated ${expanded.length} variants for ${id}`)
+        }
+      } catch (err) {
+        console.warn(`[keyword-expander] failed for ${id}: ${err.message}`)
+      }
+    })()
 
     // Fire-and-forget "your monitor is scanning" email — sets expectations
     // before the first alert lands. Required unsubscribe footer per CASL/NDPR.
