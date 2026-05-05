@@ -638,6 +638,7 @@ app.post('/v1/monitors', async (req, res) => {
     diasporaCorridor,
     dealValue,
     minIntentScore,
+    competitors,
     includeMedium, includeSubstack, includeQuora, includeUpworkForum, includeFiverrForum } = req.body
 
   // PR #36 — diaspora corridor (optional). When set, the worker overrides
@@ -771,6 +772,9 @@ app.post('/v1/monitors', async (req, res) => {
       diasporaCorridor:   resolvedCorridor,
       dealValue: (typeof dealValue === 'number' && dealValue > 0) ? Math.round(dealValue) : 0,
       minIntentScore: (typeof minIntentScore === 'number' && minIntentScore >= 0 && minIntentScore <= 100) ? Math.round(minIntentScore) : 40,
+      competitors: Array.isArray(competitors)
+        ? competitors.filter(c => typeof c === 'string' && c.trim()).map(c => c.trim().slice(0, 60)).slice(0, 10)
+        : [],
       active: true, plan, createdAt: now, lastPollAt: null, totalMatchesFound: 0 }
     await redis.set(`insights:monitor:${id}`, JSON.stringify(monitor))
     await redis.expire(`insights:monitor:${id}`, ONE_YEAR_SECONDS).catch(() => {})
@@ -791,6 +795,20 @@ app.post('/v1/monitors', async (req, res) => {
         }
       } catch (err) {
         console.warn(`[keyword-expander] failed for ${id}: ${err.message}`)
+      }
+    })()
+
+    // Fire-and-forget subreddit suggestion (non-blocking)
+    ;(async () => {
+      try {
+        const { suggestSubreddits } = await import('./lib/subreddit-suggester.js')
+        const suggested = await suggestSubreddits(monitor.productContext, cleanKws)
+        if (suggested.length > 0) {
+          await redis.setex(`monitor:${id}:suggested_subreddits`, 86400 * 7, JSON.stringify(suggested))
+          console.log(`[subreddit-suggester] Suggested ${suggested.length} subreddits for ${id}`)
+        }
+      } catch (err) {
+        console.warn(`[subreddit-suggester] failed for ${id}: ${err.message}`)
       }
     })()
 
@@ -1632,6 +1650,27 @@ app.get('/v1/monitors/:id/outcomes', async (req, res) => {
       topPerforming:  o.topPerforming,
       recentOutcomes: o.recent,
     })
+  } catch (err) {
+    serverError(res, err)
+  }
+})
+
+// ── GET /v1/monitors/:id/subreddits ────────────────────────────────────────
+// Returns AI-suggested subreddits for the monitor. Generated async on monitor
+// creation and cached in Redis for 7 days. Returns [] if not yet generated.
+app.get('/v1/monitors/:id/subreddits', async (req, res) => {
+  const auth = await authenticate(req)
+  if (!auth.ok) return res.status(auth.status).json({ success: false, error: auth.error })
+  const { id } = req.params
+  try {
+    const redis = getRedis()
+    const monRaw = await redis.get(`insights:monitor:${id}`)
+    if (!monRaw) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Monitor not found' } })
+    const monitor = typeof monRaw === 'string' ? JSON.parse(monRaw) : monRaw
+    if (monitor.owner !== auth.owner) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Monitor not found' } })
+    const raw = await redis.get(`monitor:${id}:suggested_subreddits`)
+    const subreddits = raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : []
+    res.json({ success: true, subreddits: Array.isArray(subreddits) ? subreddits : [] })
   } catch (err) {
     serverError(res, err)
   }

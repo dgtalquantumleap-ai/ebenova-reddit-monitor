@@ -951,6 +951,13 @@ function MatchCard({ match, monitorId, apiKey, onAction }) {
           const [cls, label] = s >= 10 ? ['demand-gold','⚡ PEAK'] : s >= 8 ? ['demand-orange',`🔥 ${s}/10`] : s >= 5 ? ['demand-blue',`${s}/10`] : ['demand-grey',`${s}/10`];
           return <span className={`demand-pill ${cls}`} title="Demand score: how urgently this person wants a solution. 8–10 = act now. 5–7 = warm lead. Below 5 = low priority.">{label}</span>;
         })()}
+        {typeof match.intentScore === 'number' && (() => {
+          const s = match.intentScore;
+          const bg = s >= 80 ? '#fef3c7' : s >= 60 ? '#eff6ff' : '#f1f5f9';
+          const color = s >= 80 ? '#92400e' : s >= 60 ? '#1d4ed8' : '#64748b';
+          return <span style={{padding:'2px 7px',borderRadius:10,background:bg,color,fontSize:10,fontWeight:700,letterSpacing:.2}} title={`Intent score: ${s}/100`}>{s}</span>;
+        })()}
+        {match.keywordType === 'competitor' && <span style={{padding:'2px 7px',borderRadius:10,background:'#FEF2F2',color:'#991B1B',fontSize:10,fontWeight:700,letterSpacing:.2}}>⚔️ Competitor</span>}
         {match.isUnanswered && <span className="unanswered-badge">🟢 No replies yet</span>}
         <span style={{marginLeft:'auto',fontSize:11,color:'#94A3B8'}}>{timeAgo(match.createdAt)}</span>
       </div>
@@ -2072,6 +2079,8 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
   // Batch A — brand name (powers the AI Visibility query "what does Claude
   // say about <brand>?"). Optional; falls back to first keyword at run time.
   const [brandName, setBrandName] = useState('')
+  const [competitors, setCompetitors] = useState([])
+  const [competitorInput, setCompetitorInput] = useState('')
   // Batch A — Slack webhook URL. Sends per-match alert to a Slack channel
   // alongside the email alert. Optional. Server validates https://.
   const [slackWebhookUrl, setSlackWebhookUrl] = useState('')
@@ -2200,6 +2209,7 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
       // Batch A — Slack webhook URL. Optional second alert channel
       // alongside email. Server validates https:// on its end.
       slackWebhookUrl: slackWebhookUrl.trim() || null,
+      competitors: competitors.length > 0 ? competitors : undefined,
     };
     const m = await apiFetch('/v1/monitors', { method:'POST', body: JSON.stringify(body) }, apiKey);
     if (!m.ok) { setErr(m.data?.error?.message || 'Could not create monitor.'); setLoading(false); setStep(3); return; }
@@ -2666,6 +2676,42 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
                 <div style={{fontSize:11,color:'#94A3B8',marginTop:4,lineHeight:1.5}}>
                   Each week we ask Claude what it knows about this brand and surface the result on the Monitor Feed. Leave blank to use your first keyword.
                 </div>
+              </div>
+            )}
+            {/* Competitor tracking — optional brand names to monitor */}
+            {mode !== 'builder_tracker' && (
+              <div className="field" style={{marginBottom:14}}>
+                <label className="label">Competitors to track <span style={{fontSize:11,fontWeight:400,color:'#94A3B8'}}>· optional · monitors complaint + comparison threads</span></label>
+                <div style={{display:'flex',gap:6,marginTop:4}}>
+                  <input className="inp" placeholder="e.g. Notion" value={competitorInput}
+                    onChange={e=>setCompetitorInput(e.target.value)}
+                    onKeyDown={e=>{
+                      if ((e.key==='Enter'||e.key===',')&&competitorInput.trim()&&competitors.length<10) {
+                        e.preventDefault()
+                        setCompetitors(prev=>[...prev,competitorInput.trim()])
+                        setCompetitorInput('')
+                      }
+                    }}
+                    style={{flex:1}}
+                  />
+                  <button type="button" onClick={()=>{
+                    if(competitorInput.trim()&&competitors.length<10){
+                      setCompetitors(prev=>[...prev,competitorInput.trim()])
+                      setCompetitorInput('')
+                    }
+                  }} style={{padding:'0 14px',borderRadius:6,border:'1px solid #E2E8F0',background:'#F8FAFC',fontSize:12.5,cursor:'pointer',fontFamily:'inherit',color:'#475569',whiteSpace:'nowrap'}}>Add</button>
+                </div>
+                {competitors.length > 0 && (
+                  <div style={{display:'flex',flexWrap:'wrap',gap:6,marginTop:8}}>
+                    {competitors.map(c=>(
+                      <span key={c} style={{display:'inline-flex',alignItems:'center',gap:4,padding:'2px 8px',background:'#FEF2F2',border:'1px solid #FECACA',color:'#991B1B',borderRadius:4,fontSize:12,fontFamily:"'JetBrains Mono',monospace"}}>
+                        {c}
+                        <button type="button" onClick={()=>setCompetitors(prev=>prev.filter(x=>x!==c))} style={{background:'none',border:'none',cursor:'pointer',padding:0,color:'#991B1B',fontSize:13,lineHeight:1}}>×</button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <div style={{fontSize:11,color:'#94A3B8',marginTop:4}}>We search for "Competitor alternative", "switching from Competitor", etc. and tag those matches separately. Max 10.</div>
               </div>
             )}
             {/* Reply tone is irrelevant for Builder Tracker (no drafts generated). */}

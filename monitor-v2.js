@@ -69,6 +69,7 @@ import { isBuilderPost, extractTopics, recordBuilderProfile, getBuilderProfiles,
 import { getCorridor } from './lib/diaspora-corridors.js'
 import { passesRelevanceCheck } from './lib/relevance.js'
 import { updateKeywordHealth } from './lib/keyword-health.js'
+import { buildCompetitorKeywords } from './lib/competitor-tracker.js'
 import { buildBulkEmailExtras } from './lib/email-headers.js'
 
 // F14: lazy daily cost caps. Soft-fail so the worker degrades gracefully
@@ -957,7 +958,24 @@ async function runMonitor(monitor) {
       }
     } catch (_) {}
   }
-  const effectiveKeywords = [...monitor.keywords, ...expandedKeywords]
+  // Load suggested subreddits and attach to keywords that have none
+  let suggestedSubreddits = []
+  if (redis) {
+    try {
+      const _raw = await redis.get(`monitor:${monitor.id}:suggested_subreddits`)
+      if (_raw) {
+        const _arr = typeof _raw === 'string' ? JSON.parse(_raw) : _raw
+        if (Array.isArray(_arr)) suggestedSubreddits = _arr
+      }
+    } catch (_) {}
+  }
+  const kwWithSubs = suggestedSubreddits.length > 0
+    ? monitor.keywords.map(kw => (kw.subreddits?.length > 0 ? kw : { ...kw, subreddits: suggestedSubreddits }))
+    : monitor.keywords
+  const effectiveKeywords = [...kwWithSubs, ...expandedKeywords]
+
+  // Competitor keywords — generated from monitor.competitors[] brand names
+  const competitorKeywords = buildCompetitorKeywords(monitor.competitors || [], monitor.productContext || '')
 
   const allMatches = []
   const seenIds = { has: (id) => hasSeen(monitor.id, id), add: (id) => markSeen(monitor.id, id) }
@@ -1063,7 +1081,9 @@ async function runMonitor(monitor) {
   ]
 
   for (const { key, scraper, delayMs } of platformRunners) {
-    if (!platforms.includes(key)) continue
+    // HN is always-on: ask_hn posts are high-intent (founders asking for tools)
+    // and the Algolia endpoint is free/fast. Skip the platforms check for it.
+    if (key !== 'hackernews' && !platforms.includes(key)) continue
     for (const kw of effectiveKeywords) {
       const ctx = kw.productContext || monitor.productContext || ''
       const kwType = kw.type || 'keyword'   // PR #28
@@ -1134,6 +1154,27 @@ async function runMonitor(monitor) {
     if (feedMatches.length) await delay(1500)
   }
 
+  // ── Competitor keyword searches ──────────────────────────────────────────
+  // Runs after regular keyword searches. Competitor matches bypass the
+  // minIntentScore filter (people complaining about competitors are leads).
+  if (competitorKeywords.length > 0) {
+    for (const kw of competitorKeywords) {
+      const redditMatches = await searchReddit(monitor.id, kw)
+      for (const m of redditMatches) {
+        m.productContext = kw.productContext
+        m.keywordType = 'competitor'
+        m.matchedKeyword = kw.keyword
+        m.competitorName = kw.competitorName
+        allMatches.push(m)
+      }
+      if (redditMatches.length) {
+        console.log(`${label} Competitor Reddit "${kw.keyword}": ${redditMatches.length} matches`)
+      }
+      await delay(2000)
+    }
+  }
+  // ── End competitor searches ───────────────────────────────────────────────
+
   // ── Feed filters: excludeTerms + blockedSubreddits ───────────────────────
   // Applied before classify to avoid spending Groq tokens on posts that will
   // never reach the user's feed.
@@ -1194,11 +1235,20 @@ async function runMonitor(monitor) {
   const otherClassified = allMatches.filter(m => m.intent && m.intent !== 'asking_for_tool' && m.intent !== 'buying' && m.intent !== 'complaining').length
   console.log(`${label} Classified ${allMatches.length} matches: ${highValue} buying/asking_for_tool, ${complaining} complaining, ${otherClassified} other`)
 
+  // ask_hn boost: Ask HN posts are founders explicitly asking for tools —
+  // classify scores these lower because they lack urgency language, but
+  // they are high-value leads. Floor their intentScore at 60.
+  for (const m of allMatches) {
+    if (m.source === 'hackernews' && m.type === 'ask_hn') {
+      if (typeof m.intentScore !== 'number' || m.intentScore < 60) m.intentScore = 60
+    }
+  }
+
   // minIntentScore filter — drop low-signal matches before drafting/emailing
   const _minScore = typeof monitor.minIntentScore === 'number' ? monitor.minIntentScore : 40
   const _beforeFilter = allMatches.length
   allMatches.splice(0, allMatches.length, ...allMatches.filter(m => {
-    if (m.matchType === 'competitor') return true  // competitor matches always pass
+    if (m.matchType === 'competitor' || m.keywordType === 'competitor') return true  // competitor matches always pass
     if (typeof m.intentScore === 'number') return m.intentScore >= _minScore
     return true  // unclassified passes through
   }))
