@@ -725,12 +725,20 @@ async function runBuilderTrackerMonitor(monitor) {
   )
   console.log(`${label} ${builderMatches.length} pass builder filter`)
 
+  // Cap AI calls to top 10 by score — prevents burning groq-quality TPD
+  // (100k/day) in a single cycle when 50+ builder posts arrive at once.
+  const _builderCandidates = builderMatches
+    .slice()
+    .sort((a, b) => (b.score || 0) - (a.score || 0))
+    .slice(0, 10)
+  console.log(`${label} Builder: processing top ${_builderCandidates.length} of ${builderMatches.length} candidates (capped at 10)`)
+
   // Extract topics and record profiles. Best-effort: per-match failures
   // log inside the helpers but don't abort the cycle.
   const newProfiles = []
   let recorded = 0
   const redisClient = getRedis()
-  for (const match of builderMatches) {
+  for (const match of _builderCandidates) {
     if (!PLATFORMS_WITH_REAL_USERNAMES.includes(match.source)) continue
     const topics = await extractTopics(match)
     const r = await recordBuilderProfile({ redis: redisClient, monitorId: monitor.id, match, topics })
