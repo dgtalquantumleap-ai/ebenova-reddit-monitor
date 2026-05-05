@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import { strict as assert } from 'node:assert'
 import { createMockRedis } from './helpers/mock-redis.js'
 import { makeEmailFeedbackHandler, buildThanksPage, _internals } from '../lib/email-feedback.js'
+import { getKeywordHealth } from '../lib/keyword-health.js'
 
 const { MATCH_TTL, FEEDBACK_TTL } = _internals
 
@@ -87,6 +88,30 @@ test('returns 👎 emoji page for v=no', async () => {
 test('buildThanksPage escapes appUrl for HTML safety', () => {
   const page = buildThanksPage('yes', 'https://app.example.com/"><script>alert(1)</script>')
   assert.ok(!page.includes('<script>alert(1)</script>'))
+})
+
+test('updates keyword health feedbackYes when match has a keyword', async () => {
+  const { redis, handler } = makeCtx()
+  await redis.set('insights:match:m1:p10', JSON.stringify({ id: 'p10', keyword: 'saas tool' }))
+  await call(handler, { match_id: 'p10', monitor_id: 'm1', v: 'yes' })
+  const health = await getKeywordHealth(redis, 'm1')
+  assert.equal(health['saas tool'].feedbackYes, 1)
+})
+
+test('updates keyword health feedbackNo when match has a keyword', async () => {
+  const { redis, handler } = makeCtx()
+  await redis.set('insights:match:m1:p11', JSON.stringify({ id: 'p11', keyword: 'saas tool' }))
+  await call(handler, { match_id: 'p11', monitor_id: 'm1', v: 'no' })
+  const health = await getKeywordHealth(redis, 'm1')
+  assert.equal(health['saas tool'].feedbackNo, 1)
+})
+
+test('skips keyword health update when match has no keyword field', async () => {
+  const { redis, handler } = makeCtx()
+  await redis.set('insights:match:m1:p12', JSON.stringify({ id: 'p12' }))
+  await call(handler, { match_id: 'p12', monitor_id: 'm1', v: 'yes' })
+  const health = await getKeywordHealth(redis, 'm1')
+  assert.deepEqual(health, {})
 })
 
 test('soft-fails on Redis error and still returns HTML', async () => {

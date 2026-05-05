@@ -90,7 +90,7 @@ import { getRecentReports, topCompetitorsAcross, computeTrend } from './lib/ai-v
 import { listPresets, getPreset } from './lib/keyword-presets.js'
 import { scheduleEngagementCheck, getRecentOutcomes } from './lib/reply-tracker.js'
 import { listCorridors, getCorridor, isValidCorridorId } from './lib/diaspora-corridors.js'
-import { getKeywordHealth, getStaleKeywords } from './lib/keyword-health.js'
+import { getKeywordHealth, getStaleKeywords, getNoiseKeywords } from './lib/keyword-health.js'
 import { buildHealthReport } from './lib/platform-health.js'
 import searchHackerNews    from './lib/scrapers/hackernews.js'
 import searchStackOverflow from './lib/scrapers/stackoverflow.js'
@@ -564,6 +564,7 @@ app.get('/v1/monitors', async (req, res) => {
         const kwStrings = m.keywords?.map(k => k.keyword) || []
         const health = await getKeywordHealth(redis, m.id)
         const staleKws = getStaleKeywords(health, kwStrings)
+        const noiseKws = getNoiseKeywords(health, kwStrings)
         monitors.push({
           id: m.id, name: m.name, active: m.active,
           keyword_count: m.keywords?.length || 0,
@@ -612,6 +613,7 @@ app.get('/v1/monitors', async (req, res) => {
           deal_value:           m.dealValue          || 0,
           product_context:      m.productContext     || '',
           stale_keywords:       staleKws,
+          noise_keywords:       noiseKws,
           keyword_health:       health,
           // RSS + Telegram custom sources (PR rss-telegram).
           rssFeeds:             m.rssFeeds         || [],

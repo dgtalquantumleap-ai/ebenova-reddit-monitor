@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import { strict as assert } from 'node:assert'
-import { updateKeywordHealth, getKeywordHealth, getStaleKeywords } from '../lib/keyword-health.js'
+import { updateKeywordHealth, getKeywordHealth, getStaleKeywords, recordEmailFeedback, getNoiseKeywords } from '../lib/keyword-health.js'
 
 // ── getStaleKeywords (pure function, no Redis needed) ─────────────────────────
 
@@ -90,4 +90,87 @@ test('getKeywordHealth: returns {} when no data exists', async () => {
   const redis = makeFakeRedis()
   const h = await getKeywordHealth(redis, 'nonexistent')
   assert.deepEqual(h, {})
+})
+
+// ── recordEmailFeedback ────────────────────────────────────────────────────────
+
+test('recordEmailFeedback: initialises entry and increments feedbackYes', async () => {
+  const redis = makeFakeRedis()
+  await recordEmailFeedback(redis, 'mon1', 'saas tool', 'yes')
+  const h = await getKeywordHealth(redis, 'mon1')
+  assert.equal(h['saas tool'].feedbackYes, 1)
+  assert.equal(h['saas tool'].feedbackNo, undefined)
+})
+
+test('recordEmailFeedback: increments feedbackNo', async () => {
+  const redis = makeFakeRedis()
+  await recordEmailFeedback(redis, 'mon1', 'saas tool', 'no')
+  const h = await getKeywordHealth(redis, 'mon1')
+  assert.equal(h['saas tool'].feedbackNo, 1)
+})
+
+test('recordEmailFeedback: accumulates across multiple calls', async () => {
+  const redis = makeFakeRedis()
+  await recordEmailFeedback(redis, 'mon1', 'kw', 'yes')
+  await recordEmailFeedback(redis, 'mon1', 'kw', 'yes')
+  await recordEmailFeedback(redis, 'mon1', 'kw', 'no')
+  const h = await getKeywordHealth(redis, 'mon1')
+  assert.equal(h['kw'].feedbackYes, 2)
+  assert.equal(h['kw'].feedbackNo, 1)
+})
+
+test('recordEmailFeedback: ignores invalid vote values', async () => {
+  const redis = makeFakeRedis()
+  await recordEmailFeedback(redis, 'mon1', 'kw', 'maybe')
+  const h = await getKeywordHealth(redis, 'mon1')
+  assert.deepEqual(h, {})
+})
+
+test('recordEmailFeedback: preserves existing totalMatches', async () => {
+  const redis = makeFakeRedis()
+  await updateKeywordHealth(redis, 'mon1', new Map([['kw', 4]]))
+  await recordEmailFeedback(redis, 'mon1', 'kw', 'yes')
+  const h = await getKeywordHealth(redis, 'mon1')
+  assert.equal(h['kw'].totalMatches, 4)
+  assert.equal(h['kw'].feedbackYes, 1)
+})
+
+// ── getNoiseKeywords ───────────────────────────────────────────────────────────
+
+test('getNoiseKeywords: keyword not in health → not flagged', () => {
+  assert.deepEqual(getNoiseKeywords({}, ['unknown']), [])
+})
+
+test('getNoiseKeywords: fewer than minFeedback signals → not flagged', () => {
+  const health = { kw: { feedbackYes: 1, feedbackNo: 3 } }
+  assert.deepEqual(getNoiseKeywords(health, ['kw']), [])
+})
+
+test('getNoiseKeywords: ≥5 signals, ≤30% yes → flagged', () => {
+  const health = { kw: { feedbackYes: 1, feedbackNo: 4 } }  // 20% yes
+  assert.deepEqual(getNoiseKeywords(health, ['kw']), ['kw'])
+})
+
+test('getNoiseKeywords: ≥5 signals, exactly 30% yes → flagged', () => {
+  const health = { kw: { feedbackYes: 3, feedbackNo: 7 } }  // 30% yes
+  assert.deepEqual(getNoiseKeywords(health, ['kw']), ['kw'])
+})
+
+test('getNoiseKeywords: ≥5 signals, >30% yes → not flagged', () => {
+  const health = { kw: { feedbackYes: 4, feedbackNo: 6 } }  // 40% yes
+  assert.deepEqual(getNoiseKeywords(health, ['kw']), [])
+})
+
+test('getNoiseKeywords: custom minFeedback threshold', () => {
+  const health = { kw: { feedbackYes: 0, feedbackNo: 3 } }
+  assert.deepEqual(getNoiseKeywords(health, ['kw'], { minFeedback: 3 }), ['kw'])
+  assert.deepEqual(getNoiseKeywords(health, ['kw'], { minFeedback: 4 }), [])
+})
+
+test('getNoiseKeywords: only checks keywords in the supplied list', () => {
+  const health = {
+    'kw-a': { feedbackYes: 0, feedbackNo: 5 },
+    'kw-b': { feedbackYes: 0, feedbackNo: 5 },
+  }
+  assert.deepEqual(getNoiseKeywords(health, ['kw-a']), ['kw-a'])
 })
