@@ -468,7 +468,7 @@ function renderBadge(spec) {
 }
 
 // ── Email builder — per-monitor, minimal ─────────────────────────────────────
-function buildAlertEmail(monitor, matches) {
+function buildAlertEmail(monitor, matches, appUrl = 'https://ebenova.org') {
   const compMatches = matches.filter(m => m.matchType === 'competitor')
   const regularMatches = matches.filter(m => m.matchType !== 'competitor')
 
@@ -481,14 +481,17 @@ function buildAlertEmail(monitor, matches) {
   const competitorSection = compMatches.length > 0 ? `
   <div style="margin-bottom:28px;padding:20px;background:#1a0a0a;border:2px solid #ff4444;border-radius:8px;">
     <div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:2px;color:#ff6666;margin-bottom:14px;">🎯 Competitor Activity (${compMatches.length})</div>
-    ${compMatches.map(p => `
+    ${compMatches.map(p => {
+      const _cfbBase = `${appUrl}/v1/email-feedback?match_id=${encodeURIComponent(p.id)}&monitor_id=${encodeURIComponent(monitor.id)}`
+      return `
       <div style="margin-bottom:12px;padding:12px;background:#2a1010;border-left:3px solid #ff4444;border-radius:4px;">
         <div style="font-size:11px;color:#ff8888;margin-bottom:4px;">via "${escapeHtml(p.competitorKeyword || p.keyword)}"</div>
         <a href="${escapeHtml(p.url)}" style="font-size:14px;font-weight:600;color:#ffcccc;text-decoration:none;">${escapeHtml(p.title)}</a>
         ${p.body ? `<p style="font-size:12px;color:#cc9999;margin:5px 0 0;">${escapeHtml(p.body.slice(0, 200))}${p.body.length > 200 ? '…' : ''}</p>` : ''}
         <a href="${escapeHtml(p.url)}" style="display:inline-block;margin-top:6px;font-size:11px;color:#ff8888;">Open thread →</a>
-      </div>
-    `).join('')}
+        <div style="margin-top:8px;padding-top:6px;border-top:1px solid #3a1515;font-size:11px;color:#996666;">Was this match useful?&nbsp;<a href="${_cfbBase}&v=yes" style="color:#4ade80;font-weight:700;text-decoration:none;">👍 Yes</a>&nbsp;·&nbsp;<a href="${_cfbBase}&v=no" style="color:#f87171;font-weight:700;text-decoration:none;">👎 No</a></div>
+      </div>`
+    }).join('')}
   </div>` : ''
 
   const keywordSections = Object.entries(byKeyword).map(([kw, posts]) => {
@@ -511,6 +514,7 @@ function buildAlertEmail(monitor, matches) {
       const scoreBadge = typeof p.intentScore === 'number'
         ? `<span style="display:inline-block;padding:2px 8px;margin-left:6px;background:#f0f9ff;color:#0369a1;border-radius:10px;font-size:10px;font-weight:700;">[Score: ${p.intentScore}]</span>`
         : ''
+      const _fbBase = `${appUrl}/v1/email-feedback?match_id=${encodeURIComponent(p.id)}&monitor_id=${encodeURIComponent(monitor.id)}`
       return `
       <div style="margin-bottom:18px;padding:14px;background:#f9f9f9;border-left:4px solid #FF6B35;border-radius:4px;">
         <div style="font-size:12px;color:#888;margin-bottom:5px;">
@@ -528,6 +532,7 @@ function buildAlertEmail(monitor, matches) {
           <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#a08c00;margin-bottom:6px;">✏️ Suggested reply</div>
           <div style="font-size:13px;color:#333;line-height:1.6;white-space:pre-wrap;">${escapeHtml(p.draft)}</div>
         </div>` : ''}
+        <div style="margin-top:10px;padding-top:8px;border-top:1px solid #eaeaea;font-size:12px;color:#999;">Was this match useful?&nbsp;<a href="${_fbBase}&v=yes" style="color:#16a34a;font-weight:700;text-decoration:none;">👍 Yes</a>&nbsp;·&nbsp;<a href="${_fbBase}&v=no" style="color:#dc2626;font-weight:700;text-decoration:none;">👎 No</a></div>
       </div>`
     }).join('')
     return `
@@ -671,8 +676,8 @@ async function sendMonitorAlert(monitor, matches) {
     return
   }
   try {
-    const html = buildAlertEmail(monitor, matches)
     const appUrl = process.env.APP_URL
+    const html = buildAlertEmail(monitor, matches, appUrl)
     const unsubUrl = monitor.unsubscribeToken
       ? `${appUrl}/unsubscribe?token=${encodeURIComponent(monitor.unsubscribeToken)}`
       : `${appUrl}/`

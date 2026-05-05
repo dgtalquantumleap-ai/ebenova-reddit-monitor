@@ -24,6 +24,7 @@ import { dirname } from 'path'
 import stripeRoutes, { webhookHandler } from './routes/stripe.js'
 import { createRouter as createFindRouter } from './routes/find.js'
 import { createRouter as createFeedbackRouter } from './routes/feedback.js'
+import { makeEmailFeedbackHandler }              from './lib/email-feedback.js'
 import {
   generateUnsubscribeToken,
   resolveUnsubscribeToken,
@@ -1175,6 +1176,20 @@ app.get('/v1/monitors/:id/subreddits', async (req, res) => {
     console.error('[subreddit-intel] GET error:', err.message)
     return res.status(500).json({ success: false, error: { code: 'INTERNAL' } })
   }
+})
+
+// ── GET /v1/email-feedback ────────────────────────────────────────────────
+// Unauthenticated one-click feedback from alert emails. Returns HTML so the
+// browser shows a thank-you page when the user clicks 👍 / 👎 in their inbox.
+let _emailFbHandler
+app.get('/v1/email-feedback', (req, res) => {
+  if (!_emailFbHandler) {
+    _emailFbHandler = makeEmailFeedbackHandler({
+      redis: getRedis(),
+      appUrl: process.env.APP_URL || 'https://ebenova.org',
+    })
+  }
+  return _emailFbHandler(req, res)
 })
 
 // ── GET /v1/feeds/discover ────────────────────────────────────────────────
