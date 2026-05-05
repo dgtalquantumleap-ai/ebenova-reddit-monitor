@@ -98,6 +98,7 @@ const FROM_EMAIL       = process.env.FROM_EMAIL || 'insights@ebenova.org'
 const POLL_MINUTES     = parseInt(process.env.POLL_INTERVAL_MINUTES || '15')
 const MAX_SEEN         = 50_000
 const SEMANTIC_ENABLED = !!(OPENAI_API_KEY || VOYAGE_API_KEY)
+if (SEMANTIC_ENABLED) console.log(`[v2] Semantic V2: ON (${VOYAGE_API_KEY ? 'Voyage AI' : 'OpenAI'})`)
 
 // F11: max age for Reddit semantic-search posts. Was hardcoded 60 min.
 // Defaults to 3h (matches monitor.js default). Tune via POST_MAX_AGE_HOURS env.
@@ -204,6 +205,21 @@ async function getEmbedding(text) {
   const key = embeddingCacheKey(text)  // F12: hash full text, not slice(0, 100)
   if (embeddingCache.has(key)) return embeddingCache.get(key)
 
+  // Redis embedding cache — 24h TTL, cross-restart persistence
+  if (redis) {
+    try {
+      const redisKey = `embed:${key}`
+      const cached = await redis.get(redisKey)
+      if (cached) {
+        const vec = typeof cached === 'string' ? JSON.parse(cached) : cached
+        if (Array.isArray(vec)) {
+          setCacheWithSoftCap(key, vec)
+          return vec
+        }
+      }
+    } catch (_) {}
+  }
+
   // F14: daily embedding cost cap — return null (caller falls back to keyword-only)
   const ecap = getEmbedCap()
   if (ecap) {
@@ -224,7 +240,10 @@ async function getEmbedding(text) {
       if (!res.ok) return null
       const data = await res.json()
       const vec = data?.data?.[0]?.embedding || null
-      if (vec) setCacheWithSoftCap(key, vec)
+      if (vec) {
+        setCacheWithSoftCap(key, vec)
+        if (redis) redis.setex(`embed:${key}`, 86400, JSON.stringify(vec)).catch(() => {})
+      }
       return vec
     }
 
@@ -232,12 +251,15 @@ async function getEmbedding(text) {
       const res = await fetch('https://api.voyageai.com/v1/embeddings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.VOYAGE_API_KEY}` },
-        body: JSON.stringify({ model: 'voyage-lite-02-instruct', input: [text.slice(0, 2000)] }),
+        body: JSON.stringify({ model: 'voyage-3-lite', input: [text.slice(0, 2000)] }),
       })
       if (!res.ok) return null
       const data = await res.json()
       const vec = data?.data?.[0]?.embedding || null
-      if (vec) setCacheWithSoftCap(key, vec)
+      if (vec) {
+        setCacheWithSoftCap(key, vec)
+        if (redis) redis.setex(`embed:${key}`, 86400, JSON.stringify(vec)).catch(() => {})
+      }
       return vec
     }
   } catch (err) {
