@@ -794,6 +794,20 @@ app.post('/v1/monitors', async (req, res) => {
       }
     })()
 
+    // Fire-and-forget subreddit suggestion (non-blocking)
+    ;(async () => {
+      try {
+        const { suggestSubreddits } = await import('./lib/subreddit-suggester.js')
+        const suggested = await suggestSubreddits(monitor.productContext, cleanKws)
+        if (suggested.length > 0) {
+          await redis.setex(`monitor:${id}:suggested_subreddits`, 86400 * 7, JSON.stringify(suggested))
+          console.log(`[subreddit-intel] Generated ${suggested.length} subreddit suggestions for ${id}`)
+        }
+      } catch (err) {
+        console.warn(`[subreddit-intel] failed for ${id}: ${err.message}`)
+      }
+    })()
+
     // Fire-and-forget "your monitor is scanning" email — sets expectations
     // before the first alert lands. Required unsubscribe footer per CASL/NDPR.
     ;(async () => {
@@ -1125,6 +1139,26 @@ app.patch('/v1/monitors/:id', async (req, res) => {
     res.json(echo)
   } catch (err) {
     serverError(res, err)
+  }
+})
+
+// ── GET /v1/monitors/:id/subreddits ──────────────────────────────────────────
+app.get('/v1/monitors/:id/subreddits', async (req, res) => {
+  const auth = await authenticate(req)
+  if (!auth.ok) return res.status(auth.status).json({ success: false, error: auth.error })
+  const monitorId = req.params.id
+  try {
+    const redis = getRedis()
+    const monRaw = await redis.get(`insights:monitor:${monitorId}`)
+    if (!monRaw) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Monitor not found' } })
+    const mon = typeof monRaw === 'string' ? JSON.parse(monRaw) : monRaw
+    if (mon.owner !== auth.owner) return res.status(403).json({ success: false, error: { code: 'FORBIDDEN' } })
+    const raw = await redis.get(`monitor:${monitorId}:suggested_subreddits`)
+    const subreddits = raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : []
+    return res.json({ success: true, subreddits: Array.isArray(subreddits) ? subreddits : [] })
+  } catch (err) {
+    console.error('[subreddit-intel] GET error:', err.message)
+    return res.status(500).json({ success: false, error: { code: 'INTERNAL' } })
   }
 })
 

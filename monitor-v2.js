@@ -959,6 +959,18 @@ async function runMonitor(monitor) {
   }
   const effectiveKeywords = [...monitor.keywords, ...expandedKeywords]
 
+  // Load suggested subreddits from Redis for use when keywords have no explicit subreddits
+  let suggestedSubreddits = []
+  if (redis) {
+    try {
+      const _srRaw = await redis.get(`monitor:${monitor.id}:suggested_subreddits`)
+      if (_srRaw) {
+        const _srArr = typeof _srRaw === 'string' ? JSON.parse(_srRaw) : _srRaw
+        if (Array.isArray(_srArr)) suggestedSubreddits = _srArr
+      }
+    } catch (_) {}
+  }
+
   const allMatches = []
   const seenIds = { has: (id) => hasSeen(monitor.id, id), add: (id) => markSeen(monitor.id, id) }
   const maxAgeMs = 24 * 60 * 60 * 1000 // 24h for v2 monitors
@@ -971,7 +983,14 @@ async function runMonitor(monitor) {
     for (const kw of effectiveKeywords) {
       const ctx = kw.productContext || monitor.productContext || ''
       const kwType = kw.type || 'keyword'
-      const redditMatches = await searchReddit(monitor.id, kw)
+      // If keyword has no explicit subreddits but we have AI-suggested ones, use them
+      const kwWithSubs = (!kw.subreddits || kw.subreddits.length === 0) && suggestedSubreddits.length > 0
+        ? { ...kw, subreddits: suggestedSubreddits }
+        : kw
+      if ((!kw.subreddits || kw.subreddits.length === 0) && suggestedSubreddits.length > 0) {
+        console.log(`${label} [subreddit-intel] Using ${suggestedSubreddits.length} suggested subreddits for "${kw.keyword}"`)
+      }
+      const redditMatches = await searchReddit(monitor.id, kwWithSubs)
       let _redditIrrelevant = 0
       for (const m of redditMatches) {
         m.productContext = ctx
