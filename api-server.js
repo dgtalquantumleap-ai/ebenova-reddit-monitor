@@ -637,6 +637,7 @@ app.post('/v1/monitors', async (req, res) => {
     brandName,
     diasporaCorridor,
     dealValue,
+    minIntentScore,
     includeMedium, includeSubstack, includeQuora, includeUpworkForum, includeFiverrForum } = req.body
 
   // PR #36 — diaspora corridor (optional). When set, the worker overrides
@@ -769,6 +770,7 @@ app.post('/v1/monitors', async (req, res) => {
       brandName:          (brandName || '').toString().trim().slice(0, 80),
       diasporaCorridor:   resolvedCorridor,
       dealValue: (typeof dealValue === 'number' && dealValue > 0) ? Math.round(dealValue) : 0,
+      minIntentScore: (typeof minIntentScore === 'number' && minIntentScore >= 0 && minIntentScore <= 100) ? Math.round(minIntentScore) : 40,
       active: true, plan, createdAt: now, lastPollAt: null, totalMatchesFound: 0 }
     await redis.set(`insights:monitor:${id}`, JSON.stringify(monitor))
     await redis.expire(`insights:monitor:${id}`, ONE_YEAR_SECONDS).catch(() => {})

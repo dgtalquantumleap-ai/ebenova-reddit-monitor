@@ -41,7 +41,7 @@ test('1. classifyMatch returns valid sentiment + intent for a clear buying-inten
   _resetCache()
   setGroqEnv()
   const restore = mockGroqResponse({
-    content: '{"sentiment":"questioning","intent":"asking_for_tool","confidence":"high"}',
+    content: '{"sentiment":"questioning","intent":"asking_for_tool","confidence":"high","intent_score":90,"reasoning":"direct ask for tool"}',
   })
   try {
     const r = await classifyMatch({
@@ -49,7 +49,11 @@ test('1. classifyMatch returns valid sentiment + intent for a clear buying-inten
       body: 'Need something with API access. Currently looking at HubSpot vs Pipedrive.',
       source: 'reddit',
     })
-    assert.deepEqual(r, { sentiment: 'questioning', intent: 'asking_for_tool', confidence: 'high' })
+    assert.equal(r.sentiment, 'questioning')
+    assert.equal(r.intent, 'asking_for_tool')
+    assert.equal(r.confidence, 'high')
+    assert.equal(typeof r.intent_score, 'number')
+    assert.ok(r.intent_score >= 0 && r.intent_score <= 100)
   } finally { restore(); clearGroqEnv() }
 })
 
@@ -137,11 +141,14 @@ test('5e. classifyMatch handles confidence omission with medium fallback', async
   setGroqEnv()
   // Confidence is missing — spec is lenient: default to 'medium' rather than reject
   const restore = mockGroqResponse({
-    content: '{"sentiment":"positive","intent":"recommending"}',
+    content: '{"sentiment":"positive","intent":"recommending","intent_score":35,"reasoning":"recommending a tool"}',
   })
   try {
     const r = await classifyMatch({ title: 't', body: 'b', source: 'reddit' })
-    assert.deepEqual(r, { sentiment: 'positive', intent: 'recommending', confidence: 'medium' })
+    assert.equal(r.sentiment, 'positive')
+    assert.equal(r.intent, 'recommending')
+    assert.equal(r.confidence, 'medium')
+    assert.equal(typeof r.intent_score, 'number')
   } finally { restore(); clearGroqEnv() }
 })
 

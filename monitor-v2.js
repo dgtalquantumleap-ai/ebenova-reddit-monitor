@@ -491,10 +491,13 @@ function buildAlertEmail(monitor, matches) {
       const highPriBadge   = isHighPriority(p)
         ? `<span style="display:inline-block;padding:2px 8px;margin-left:6px;background:#fee2e2;color:#991b1b;border-radius:10px;font-size:10px;font-weight:800;letter-spacing:.3px;">🔥 HIGH PRIORITY</span>`
         : ''
+      const scoreBadge = typeof p.intentScore === 'number'
+        ? `<span style="display:inline-block;padding:2px 8px;margin-left:6px;background:#f0f9ff;color:#0369a1;border-radius:10px;font-size:10px;font-weight:700;">[Score: ${p.intentScore}]</span>`
+        : ''
       return `
       <div style="margin-bottom:18px;padding:14px;background:#f9f9f9;border-left:4px solid #FF6B35;border-radius:4px;">
         <div style="font-size:12px;color:#888;margin-bottom:5px;">
-          ${sourceLabel} · u/${escapeHtml(p.author)} · ${escapeHtml(p.score)} upvotes${sentimentBadge}${intentBadge}${highPriBadge}
+          ${sourceLabel} · u/${escapeHtml(p.author)} · ${escapeHtml(p.score)} upvotes${sentimentBadge}${intentBadge}${highPriBadge}${scoreBadge}
         </div>
         <a href="${escapeHtml(p.url)}" style="font-size:15px;font-weight:600;color:#1a1a1a;text-decoration:none;">${escapeHtml(p.title)}</a>
         ${p.body ? `<p style="font-size:13px;color:#555;margin:7px 0 0;line-height:1.5;">${escapeHtml(p.body)}${p.body.length >= 300 ? '…' : ''}</p>` : ''}
@@ -1163,6 +1166,8 @@ async function runMonitor(monitor) {
         m.sentiment = result.sentiment
         m.intent = result.intent
         m.intentConfidence = result.confidence
+        m.intentScore = result.intent_score     // ← intent scoring 0-100
+        m.intentReasoning = result.reasoning    // ← one-sentence reasoning
       }
     }))
     if (i + CLASSIFY_CONCURRENCY < allMatches.length) await delay(300)
@@ -1172,6 +1177,18 @@ async function runMonitor(monitor) {
   const complaining = allMatches.filter(m => m.intent === 'complaining').length
   const otherClassified = allMatches.filter(m => m.intent && m.intent !== 'asking_for_tool' && m.intent !== 'buying' && m.intent !== 'complaining').length
   console.log(`${label} Classified ${allMatches.length} matches: ${highValue} buying/asking_for_tool, ${complaining} complaining, ${otherClassified} other`)
+
+  // minIntentScore filter — drop low-signal matches before drafting/emailing
+  const _minScore = typeof monitor.minIntentScore === 'number' ? monitor.minIntentScore : 40
+  const _beforeFilter = allMatches.length
+  allMatches.splice(0, allMatches.length, ...allMatches.filter(m => {
+    if (m.matchType === 'competitor') return true  // competitor matches always pass
+    if (typeof m.intentScore === 'number') return m.intentScore >= _minScore
+    return true  // unclassified passes through
+  }))
+  if (allMatches.length < _beforeFilter) {
+    console.log(`${label} Intent filter: kept ${allMatches.length}/${_beforeFilter} (minIntentScore=${_minScore})`)
+  }
 
   console.log(`${label} ${allMatches.length} total matches — generating drafts…`)
 
