@@ -1146,6 +1146,26 @@ app.patch('/v1/monitors/:id', async (req, res) => {
   }
 })
 
+// ── GET /v1/monitors/:id/subreddits ──────────────────────────────────────────
+app.get('/v1/monitors/:id/subreddits', async (req, res) => {
+  const auth = await authenticate(req)
+  if (!auth.ok) return res.status(auth.status).json({ success: false, error: auth.error })
+  const monitorId = req.params.id
+  try {
+    const redis = getRedis()
+    const monRaw = await redis.get(`insights:monitor:${monitorId}`)
+    if (!monRaw) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Monitor not found' } })
+    const mon = typeof monRaw === 'string' ? JSON.parse(monRaw) : monRaw
+    if (mon.owner !== auth.owner) return res.status(403).json({ success: false, error: { code: 'FORBIDDEN' } })
+    const raw = await redis.get(`monitor:${monitorId}:suggested_subreddits`)
+    const subreddits = raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : []
+    return res.json({ success: true, subreddits: Array.isArray(subreddits) ? subreddits : [] })
+  } catch (err) {
+    console.error('[subreddit-intel] GET error:', err.message)
+    return res.status(500).json({ success: false, error: { code: 'INTERNAL' } })
+  }
+})
+
 // ── GET /v1/feeds/discover ────────────────────────────────────────────────
 // Auto-detects RSS/Atom feed URLs from a website URL.
 // 1. Fetches the URL and looks for <link rel="alternate" type="application/rss+xml">

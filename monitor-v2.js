@@ -469,11 +469,27 @@ function renderBadge(spec) {
 
 // ── Email builder — per-monitor, minimal ─────────────────────────────────────
 function buildAlertEmail(monitor, matches) {
+  const compMatches = matches.filter(m => m.matchType === 'competitor')
+  const regularMatches = matches.filter(m => m.matchType !== 'competitor')
+
   const byKeyword = {}
-  for (const m of matches) {
+  for (const m of regularMatches) {
     if (!byKeyword[m.keyword]) byKeyword[m.keyword] = []
     byKeyword[m.keyword].push(m)
   }
+
+  const competitorSection = compMatches.length > 0 ? `
+  <div style="margin-bottom:28px;padding:20px;background:#1a0a0a;border:2px solid #ff4444;border-radius:8px;">
+    <div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:2px;color:#ff6666;margin-bottom:14px;">🎯 Competitor Activity (${compMatches.length})</div>
+    ${compMatches.map(p => `
+      <div style="margin-bottom:12px;padding:12px;background:#2a1010;border-left:3px solid #ff4444;border-radius:4px;">
+        <div style="font-size:11px;color:#ff8888;margin-bottom:4px;">via "${escapeHtml(p.competitorKeyword || p.keyword)}"</div>
+        <a href="${escapeHtml(p.url)}" style="font-size:14px;font-weight:600;color:#ffcccc;text-decoration:none;">${escapeHtml(p.title)}</a>
+        ${p.body ? `<p style="font-size:12px;color:#cc9999;margin:5px 0 0;">${escapeHtml(p.body.slice(0, 200))}${p.body.length > 200 ? '…' : ''}</p>` : ''}
+        <a href="${escapeHtml(p.url)}" style="display:inline-block;margin-top:6px;font-size:11px;color:#ff8888;">Open thread →</a>
+      </div>
+    `).join('')}
+  </div>` : ''
 
   const keywordSections = Object.entries(byKeyword).map(([kw, posts]) => {
     const items = posts.map(p => {
@@ -561,6 +577,7 @@ function buildAlertEmail(monitor, matches) {
       ">${escapeHtml(monitor._opportunitySummary)}</div>
     </div>
     ` : ''}
+    ${competitorSection}
     ${keywordSections}
     ${buildEmailFooter(monitor.unsubscribeToken)}
   </body></html>`
@@ -977,6 +994,18 @@ async function runMonitor(monitor) {
   // Competitor keywords — generated from monitor.competitors[] brand names
   const competitorKeywords = buildCompetitorKeywords(monitor.competitors || [], monitor.productContext || '')
 
+  // Load suggested subreddits from Redis for use when keywords have no explicit subreddits
+  let suggestedSubreddits = []
+  if (redis) {
+    try {
+      const _srRaw = await redis.get(`monitor:${monitor.id}:suggested_subreddits`)
+      if (_srRaw) {
+        const _srArr = typeof _srRaw === 'string' ? JSON.parse(_srRaw) : _srRaw
+        if (Array.isArray(_srArr)) suggestedSubreddits = _srArr
+      }
+    } catch (_) {}
+  }
+
   const allMatches = []
   const seenIds = { has: (id) => hasSeen(monitor.id, id), add: (id) => markSeen(monitor.id, id) }
   const maxAgeMs = 24 * 60 * 60 * 1000 // 24h for v2 monitors
@@ -984,12 +1013,63 @@ async function runMonitor(monitor) {
   // immediately. After that, the engagement gate removes low-signal noise.
   const _isFirstPoll = (monitor.totalMatchesFound || 0) === 0
 
+  // ── Competitor mention tracking ─────────────────────────────────────────────
+  const competitorMatches = []
+  if ((monitor.competitors || []).length > 0) {
+    const { buildCompetitorKeywords } = await import('./lib/competitor-tracker.js')
+    const compPhrases = buildCompetitorKeywords(monitor.competitors)
+    if (platforms.includes('reddit')) {
+      for (const phrase of compPhrases) {
+        const compKw = { keyword: phrase, type: 'competitor', subreddits: [], productContext: monitor.productContext || '' }
+        const matches = await searchReddit(monitor.id, compKw)
+        for (const m of matches) {
+          m.matchType = 'competitor'
+          m.competitorKeyword = phrase
+          m.keywordType = 'competitor'
+          m.productContext = monitor.productContext || ''
+          competitorMatches.push(m)
+        }
+        console.log(`[competitor] "${phrase}" → ${matches.length} new`)
+        await delay(2000)
+      }
+    }
+    // Also search HN for competitor keywords
+    if (platforms.includes('hackernews') || true) { // always search HN for competitor mentions
+      const seenIdsCopy = seenIds
+      for (const phrase of compPhrases) {
+        const compKw = { keyword: phrase, type: 'competitor', subreddits: [] }
+        const matches = await searchHackerNews(compKw, { seenIds: seenIdsCopy, delay, MAX_AGE_MS: maxAgeMs })
+        for (const m of matches) {
+          m.matchType = 'competitor'
+          m.competitorKeyword = phrase
+          m.keywordType = 'competitor'
+          competitorMatches.push(m)
+        }
+        if (matches.length) console.log(`[competitor] HN "${phrase}" → ${matches.length} new`)
+        await delay(1500)
+      }
+    }
+    if (competitorMatches.length) {
+      console.log(`${label} Competitor tracking: ${competitorMatches.length} total matches from ${monitor.competitors.length} competitors`)
+    }
+  }
+  // Merge competitor matches into allMatches (they bypass intent score filter below)
+  for (const m of competitorMatches) allMatches.push(m)
+  // ── End competitor tracking ──────────────────────────────────────────────────
+
   // Reddit — explicitly opt-in per platforms array. No longer always-on.
   if (platforms.includes('reddit')) {
     for (const kw of effectiveKeywords) {
       const ctx = kw.productContext || monitor.productContext || ''
       const kwType = kw.type || 'keyword'
-      const redditMatches = await searchReddit(monitor.id, kw)
+      // If keyword has no explicit subreddits but we have AI-suggested ones, use them
+      const kwWithSubs = (!kw.subreddits || kw.subreddits.length === 0) && suggestedSubreddits.length > 0
+        ? { ...kw, subreddits: suggestedSubreddits }
+        : kw
+      if ((!kw.subreddits || kw.subreddits.length === 0) && suggestedSubreddits.length > 0) {
+        console.log(`${label} [subreddit-intel] Using ${suggestedSubreddits.length} suggested subreddits for "${kw.keyword}"`)
+      }
+      const redditMatches = await searchReddit(monitor.id, kwWithSubs)
       let _redditIrrelevant = 0
       for (const m of redditMatches) {
         m.productContext = ctx
