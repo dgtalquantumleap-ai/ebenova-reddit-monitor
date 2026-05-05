@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import { strict as assert } from 'node:assert'
 import { routeAIWithProviders, _internals, DEFAULT_PROVIDERS } from '../lib/ai-router.js'
 
-const { TASK_ROUTING, FALLBACK_CHAIN, buildTryOrder } = _internals
+const { TASK_ROUTING, FALLBACK_CHAIN, TASK_FALLBACK_OVERRIDES, buildTryOrder } = _internals
 
 // ── Routing table sanity ───────────────────────────────────────────────────
 
@@ -22,7 +22,7 @@ test('TASK_ROUTING has the 8 spec\'d tasks mapped to a known provider key', () =
 test('per-spec routing assignments', () => {
   // Spec-locked: changing these is a behavior change, not a refactor.
   assert.equal(TASK_ROUTING.classify_match,               'GROQ_FAST')
-  assert.equal(TASK_ROUTING.extract_builder_topics,       'GROQ_FAST')
+  assert.equal(TASK_ROUTING.extract_builder_topics,       'GROQ_QUALITY')
   assert.equal(TASK_ROUTING.generate_reply_draft,         'GROQ_QUALITY')
   assert.equal(TASK_ROUTING.generate_premium_reply,       'CLAUDE')
   assert.equal(TASK_ROUTING.weekly_pattern_summary,       'DEEPSEEK')
@@ -48,6 +48,21 @@ test('buildTryOrder: preferred=GROQ_QUALITY does not duplicate', () => {
 
 test('buildTryOrder: preferred=GROQ_FAST does not duplicate', () => {
   assert.deepEqual(buildTryOrder('GROQ_FAST'), ['GROQ_FAST', 'GROQ_QUALITY', 'DEEPSEEK'])
+})
+
+test('extract_builder_topics fallback override excludes GROQ_FAST', () => {
+  const override = TASK_FALLBACK_OVERRIDES.extract_builder_topics
+  assert.ok(Array.isArray(override), 'override must exist')
+  assert.ok(!override.includes('GROQ_FAST'), 'GROQ_FAST must not appear in fallback')
+  assert.deepEqual(buildTryOrder('GROQ_QUALITY', override), ['GROQ_QUALITY', 'DEEPSEEK'])
+})
+
+test('extract_builder_topics routes to GROQ_QUALITY and falls back to DEEPSEEK, never GROQ_FAST', async () => {
+  const { catalog, calls } = mockProviders({ GROQ_QUALITY: 'throw' })
+  const r = await routeAIWithProviders(catalog, { task: 'extract_builder_topics', prompt: 'x' })
+  assert.equal(r.ok, true)
+  assert.equal(r.providerKey, 'DEEPSEEK')
+  assert.ok(!calls.some(c => c.provider === 'groq-fast'), 'groq-fast must not be called')
 })
 
 // ── Mock provider helpers ──────────────────────────────────────────────────
