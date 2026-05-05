@@ -999,18 +999,6 @@ async function runMonitor(monitor) {
   // Competitor keywords — generated from monitor.competitors[] brand names
   const competitorKeywords = buildCompetitorKeywords(monitor.competitors || [], monitor.productContext || '')
 
-  // Load suggested subreddits from Redis for use when keywords have no explicit subreddits
-  let suggestedSubreddits = []
-  if (redis) {
-    try {
-      const _srRaw = await redis.get(`monitor:${monitor.id}:suggested_subreddits`)
-      if (_srRaw) {
-        const _srArr = typeof _srRaw === 'string' ? JSON.parse(_srRaw) : _srRaw
-        if (Array.isArray(_srArr)) suggestedSubreddits = _srArr
-      }
-    } catch (_) {}
-  }
-
   const allMatches = []
   const seenIds = { has: (id) => hasSeen(monitor.id, id), add: (id) => markSeen(monitor.id, id) }
   const maxAgeMs = 24 * 60 * 60 * 1000 // 24h for v2 monitors
