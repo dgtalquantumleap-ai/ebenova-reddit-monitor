@@ -1116,8 +1116,18 @@ app.patch('/v1/monitors/:id', async (req, res) => {
       updates.telegramChannels = v.value
     }
 
+    // Field 22: minIntentScore — matches below this threshold are dropped
+    // before storage (0-100). Competitor matches always bypass this filter.
+    if (Object.prototype.hasOwnProperty.call(body, 'minIntentScore')) {
+      const s = body.minIntentScore
+      if (typeof s !== 'number' || s < 0 || s > 100) {
+        return res.status(400).json({ success: false, error: { code: 'INVALID_MIN_INTENT_SCORE', message: '`minIntentScore` must be a number 0-100' } })
+      }
+      updates.minIntentScore = Math.round(s)
+    }
+
     if (Object.keys(updates).length === 0) {
-      return res.status(400).json({ success: false, error: { code: 'NO_UPDATES', message: 'No supported fields in body. Patchable: name, platforms, emailEnabled, productUrl, utmSource, utmMedium, utmCampaign, webhookUrl, slackWebhookUrl, replyTone, mode, minConsistency, brandName, diasporaCorridor, excludeTerms, blockedSubreddits, keywords, productContext, rssFeeds, telegramChannels' } })
+      return res.status(400).json({ success: false, error: { code: 'NO_UPDATES', message: 'No supported fields in body. Patchable: name, platforms, emailEnabled, productUrl, utmSource, utmMedium, utmCampaign, webhookUrl, slackWebhookUrl, replyTone, mode, minConsistency, brandName, diasporaCorridor, excludeTerms, blockedSubreddits, keywords, productContext, rssFeeds, telegramChannels, minIntentScore' } })
     }
     const next = { ...m, ...updates }
     await redis.set(`insights:monitor:${id}`, JSON.stringify(next))
@@ -1140,6 +1150,7 @@ app.patch('/v1/monitors/:id', async (req, res) => {
     if (updates.dealValue        !== undefined) echo.deal_value        = next.dealValue
     if (updates.rssFeeds         !== undefined) echo.rss_feeds          = next.rssFeeds
     if (updates.telegramChannels !== undefined) echo.telegram_channels  = next.telegramChannels
+    if (updates.minIntentScore   !== undefined) echo.min_intent_score   = next.minIntentScore
     res.json(echo)
   } catch (err) {
     serverError(res, err)

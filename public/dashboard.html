@@ -503,12 +503,14 @@ const TOUR_STEPS = [
     icon: '⚡',
     label: 'STEP 5 · READING SIGNALS',
     title: 'Know which leads to act on first.',
-    text: 'Every match card shows four signals that tell you what priority to assign it.',
+    text: 'Every match card shows signals that tell you what priority to assign it.',
     chips: [
       { emoji: '⚡ PEAK', label: 'Demand score 8–10 — reply immediately' },
       { emoji: '🎯 BUYING', label: 'Ready to pay — highest conversion rate' },
       { emoji: '🟢 No replies', label: 'Nobody has answered yet — first-mover advantage' },
       { emoji: '🔥 High priority', label: 'Multiple strong signals combined' },
+      { emoji: '80', label: 'Intent score 0–100 — amber ≥80, blue ≥60, grey below' },
+      { emoji: '⚔️ Competitor', label: 'Matched via a competitor keyword — someone switching away' },
     ],
   },
   {
@@ -687,7 +689,7 @@ function HelpGuide({ onClose }) {
                 <div className="hg-item"><span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,fontWeight:700,color:'#FF6B35',flexShrink:0,marginTop:1}}>①</span><div className="hg-item-body"><div className="hg-item-label">Describe what you sell</div><div className="hg-item-desc">Write 2–3 sentences about your product or service. Optionally paste your website URL — the AI reads your actual page copy to generate sharper keywords.</div></div></div>
                 <div className="hg-item"><span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,fontWeight:700,color:'#FF6B35',flexShrink:0,marginTop:1}}>②</span><div className="hg-item-body"><div className="hg-item-label">Review keywords</div><div className="hg-item-desc">AI suggests 12–20 keywords tagged by intent. Volume bars show how many posts each keyword has right now. Select high-volume keywords. Add your own. Deselect irrelevant ones.</div></div></div>
                 <div className="hg-item"><span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,fontWeight:700,color:'#FF6B35',flexShrink:0,marginTop:1}}>③</span><div className="hg-item-body"><div className="hg-item-label">Choose platforms</div><div className="hg-item-desc">Pick which platforms to scan. Defaults are pre-selected based on your product type. Each chip toggles a platform on/off.</div></div></div>
-                <div className="hg-item"><span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,fontWeight:700,color:'#FF6B35',flexShrink:0,marginTop:1}}>④</span><div className="hg-item-body"><div className="hg-item-label">Confirm and launch</div><div className="hg-item-desc">Name your monitor, set an alert email, and save. First scan starts within seconds. You'll receive a confirmation email.</div></div></div>
+                <div className="hg-item"><span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,fontWeight:700,color:'#FF6B35',flexShrink:0,marginTop:1}}>④</span><div className="hg-item-body"><div className="hg-item-label">Confirm and launch</div><div className="hg-item-desc">Name your monitor, set an alert email, and optionally add competitor names (e.g. "Acme", "Rival Co") — Ebenova watches for people switching away from them. Then save. First scan starts within seconds.</div></div></div>
               </div>
             </div>
             <div className="hg-section">
@@ -708,6 +710,8 @@ function HelpGuide({ onClose }) {
                 <div className="hg-item"><i className="ph-fill ph-chart-line-up hg-item-icon"></i><div className="hg-item-body"><div className="hg-item-label">Demand score (1–10)</div><div className="hg-item-desc">How urgently the person wants a solution. ⚡ PEAK (8–10) = reply immediately. 5–7 = warm lead. Below 5 = low priority.</div></div></div>
                 <div className="hg-item"><i className="ph ph-target hg-item-icon"></i><div className="hg-item-body"><div className="hg-item-label">Intent badge</div><div className="hg-item-desc">🎯 BUYING = ready to pay. 🔧 ASKING FOR TOOL = looking for a product. 📊 RESEARCHING = comparing options. 😤 COMPLAINING = frustrated with a competitor. 😩 VENTING = emotional, lower value.</div></div></div>
                 <div className="hg-item"><i className="ph ph-chat-circle hg-item-icon"></i><div className="hg-item-body"><div className="hg-item-label">🟢 No replies yet</div><div className="hg-item-desc">Post has zero replies. First-mover advantage — reply before competitors do.</div></div></div>
+                <div className="hg-item"><i className="ph ph-gauge hg-item-icon"></i><div className="hg-item-body"><div className="hg-item-label">Intent score pill (0–100)</div><div className="hg-item-desc">AI-assigned buying intent. Amber (≥80) = strong signal. Blue (≥60) = moderate. Grey = low. You can set a per-monitor minimum in Settings to hide low-score matches.</div></div></div>
+                <div className="hg-item"><i className="ph ph-sword hg-item-icon"></i><div className="hg-item-body"><div className="hg-item-label">⚔️ Competitor badge</div><div className="hg-item-desc">Matched via a competitor keyword — someone is switching away from a rival. These bypass the intent score filter so you never miss them.</div></div></div>
               </div>
             </div>
             <div className="hg-section">
@@ -761,6 +765,7 @@ function HelpGuide({ onClose }) {
                 <div className="hg-item"><i className="ph ph-prohibit hg-item-icon"></i><div className="hg-item-body"><div className="hg-item-label">Exclude terms</div><div className="hg-item-desc">Comma-separated words that filter out irrelevant matches. E.g. exclude "gaming" if you sell a business tool.</div></div></div>
                 <div className="hg-item"><i className="ph ph-currency-dollar hg-item-icon"></i><div className="hg-item-body"><div className="hg-item-label">Deal value</div><div className="hg-item-desc">Your average revenue per customer. Powers the revenue opportunity estimate — shows what unreplied high-intent leads cost you.</div></div></div>
                 <div className="hg-item"><i className="ph ph-webhooks-logo hg-item-icon"></i><div className="hg-item-body"><div className="hg-item-label">Webhook</div><div className="hg-item-desc">Sends a JSON payload to your URL every time a new match is found. Use it to pipe matches into Slack, Notion, a CRM, or any automation tool.</div></div></div>
+                <div className="hg-item"><i className="ph ph-sliders-horizontal hg-item-icon"></i><div className="hg-item-body"><div className="hg-item-label">Min intent score (Feed Filters)</div><div className="hg-item-desc">Slider from 0–100. Matches with an intent score below this threshold are hidden from the feed. Default is 40. Competitor matches always show regardless of this setting.</div></div></div>
               </div>
             </div>
           </>}
@@ -2081,6 +2086,12 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
   const [brandName, setBrandName] = useState('')
   const [competitors, setCompetitors] = useState([])
   const [competitorInput, setCompetitorInput] = useState('')
+  // Pre-fill competitors from AI-detected ones in the keyword review step
+  useEffect(() => {
+    if (step === 4 && competitors.length === 0 && suggestion?.profile?.competitors?.length > 0) {
+      setCompetitors(suggestion.profile.competitors.slice(0, 10))
+    }
+  }, [step])
   // Batch A — Slack webhook URL. Sends per-match alert to a Slack channel
   // alongside the email alert. Optional. Server validates https://.
   const [slackWebhookUrl, setSlackWebhookUrl] = useState('')
@@ -3306,6 +3317,7 @@ function EditMonitorModal({ apiKey, monitor, corridors, onClose, onSaved }) {
       .join(', ')
   )
   const [productCtxInput,        setProductCtxInput]        = useState(monitor.product_context     || '')
+  const [minIntentScore, setMinIntentScore] = useState(typeof monitor.minIntentScore === 'number' ? monitor.minIntentScore : 40)
   const [editRssFeeds,       setEditRssFeeds]       = useState(monitor.rssFeeds || [])
   const [editTelegramChannels, setEditTelegramChannels] = useState(monitor.telegramChannels || [])
   const [rssFeedInput,       setRssFeedInput]       = useState('')
@@ -3373,6 +3385,9 @@ function EditMonitorModal({ apiKey, monitor, corridors, onClose, onSaved }) {
     const _curBlocked  = parseCommaSeparated(blockedSubredditsInput).map(s => s.replace(/^r\//, '')).join(',')
     const _savedBlocked = (monitor.blocked_subreddits || monitor.blockedSubreddits || []).join(',')
     if (_curBlocked !== _savedBlocked) body.blockedSubreddits = parseCommaSeparated(blockedSubredditsInput).map(s => s.replace(/^r\//, ''))
+
+    const _savedMinScore = typeof monitor.minIntentScore === 'number' ? monitor.minIntentScore : 40
+    if (minIntentScore !== _savedMinScore) body.minIntentScore = minIntentScore
 
     const _rssFeedsChanged = JSON.stringify(editRssFeeds) !== JSON.stringify(monitor.rssFeeds || [])
     if (_rssFeedsChanged) body.rssFeeds = editRssFeeds
@@ -3602,6 +3617,16 @@ function EditMonitorModal({ apiKey, monitor, corridors, onClose, onSaved }) {
         {!isBuilder && (
           <>
             <div style={{fontSize:11,fontWeight:600,color:'#94A3B8',letterSpacing:'0.06em',textTransform:'uppercase',margin:'4px 0 10px'}}>Feed Filters</div>
+            <div className="field" style={{marginBottom:14}}>
+              <label className="label">Min intent score <span style={{fontSize:11,fontWeight:400,color:'#94A3B8'}}>· {minIntentScore}/100 · filters low-signal matches</span></label>
+              <input type="range" min={0} max={100} step={5} value={minIntentScore} onChange={e=>setMinIntentScore(Number(e.target.value))}
+                style={{width:'100%',accentColor:'#FF6B35',cursor:'pointer'}} />
+              <div style={{display:'flex',justifyContent:'space-between',fontSize:11,color:'#94A3B8',marginTop:2}}>
+                <span>0 — let everything through</span>
+                <span>100 — only top signal</span>
+              </div>
+              <div style={{fontSize:12,color:'#64748B',marginTop:4}}>Matches scoring below this are dropped before your feed and alerts. Competitor matches always pass. Default: 40.</div>
+            </div>
             <div className="field" style={{marginBottom:14}}>
               <label className="label">Exclude terms</label>
               <input className="inp" placeholder="minecraft, gaming, pregnancy (comma-separated)"
