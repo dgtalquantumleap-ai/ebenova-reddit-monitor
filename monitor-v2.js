@@ -1143,7 +1143,7 @@ async function runMonitor(monitor) {
   ]
 
   for (const { key, scraper, delayMs } of platformRunners) {
-    if (!platforms.includes(key)) continue
+    if (key !== 'hackernews' && !platforms.includes(key)) continue
     for (const kw of effectiveKeywords) {
       const ctx = kw.productContext || monitor.productContext || ''
       const kwType = kw.type || 'keyword'   // PR #28
@@ -1273,6 +1273,15 @@ async function runMonitor(monitor) {
   const complaining = allMatches.filter(m => m.intent === 'complaining').length
   const otherClassified = allMatches.filter(m => m.intent && m.intent !== 'asking_for_tool' && m.intent !== 'buying' && m.intent !== 'complaining').length
   console.log(`${label} Classified ${allMatches.length} matches: ${highValue} buying/asking_for_tool, ${complaining} complaining, ${otherClassified} other`)
+
+  // Boost Ask HN posts to minimum intentScore 60 — they're explicit "Ask HN: who does X?" posts
+  for (const m of allMatches) {
+    if (m.source === 'hackernews' && m.type === 'ask_hn') {
+      if (typeof m.intentScore !== 'number' || m.intentScore < 60) {
+        m.intentScore = 60
+      }
+    }
+  }
 
   // minIntentScore filter — drop low-signal matches before drafting/emailing
   const _minScore = typeof monitor.minIntentScore === 'number' ? monitor.minIntentScore : 40
