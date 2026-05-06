@@ -2213,6 +2213,16 @@ app.post('/v1/auth/signup', async (req, res) => {
     // New email — provision key
     const key = `ins_${randomBytes(16).toString('hex')}`
     const now = new Date().toISOString()
+    // Capture signup IP + any country header the platform/CDN passed through.
+    // Railway doesn't inject country headers natively, but we check the
+    // common ones (cf-ipcountry from Cloudflare, x-vercel-ip-country from
+    // Vercel proxies, etc.) so future infra changes auto-populate.
+    const country =
+      (req.headers['cf-ipcountry']
+       || req.headers['x-vercel-ip-country']
+       || req.headers['x-country-code']
+       || req.headers['cloudfront-viewer-country']
+       || '').toString().toUpperCase().slice(0, 2) || null
     let keyData = {
       owner: norm,
       email: norm,
@@ -2221,6 +2231,12 @@ app.post('/v1/auth/signup', async (req, res) => {
       insightsPlan: 'starter',
       createdAt: now,
       source: 'self-signup',
+      // Operator visibility — IP captured at signup for usage stats
+      // (geo-resolution happens out-of-band in bin/usage-stats.js).
+      // Country is best-effort; null when no CDN header is present.
+      signupIp:      ip,
+      signupCountry: country,
+      signupUa:      (req.headers['user-agent'] || '').toString().slice(0, 200),
     }
     if (inviteCode) {
       keyData = applyInviteToUser(keyData, inviteCode)
