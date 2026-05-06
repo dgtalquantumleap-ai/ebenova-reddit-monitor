@@ -1,0 +1,197 @@
+/* =============================================================
+   EBENOVA — mobile.css
+   Overrides for ≤768px (phones) and ≤480px (small phones)
+   Applies to both index.html and dashboard.html
+   ============================================================= */
+
+/* ── Dashboard-only elements (hidden on desktop via these rules) ── */
+.mob-top-bar    { display: none; }
+.mob-bottom-nav { display: none; }
+
+/* ── 768px breakpoint ── */
+@media (max-width: 768px) {
+
+  /* LANDING -------------------------------------------------- */
+
+  /* Hero title too large at narrow widths (base is clamp(48px,...)) */
+  .hero-title { font-size: clamp(32px, 9vw, 52px) !important; }
+
+  /* Footer: stack logo + links vertically */
+  footer { flex-direction: column; gap: 16px; text-align: center; }
+  footer .right { justify-content: center; }
+
+  /* Ticker: clip overflow so it never causes horizontal scroll */
+  .ticker-bar { overflow: hidden; }
+
+  /* DASHBOARD ----------------------------------------------- */
+
+  /* Hide desktop sidebar */
+  .sidebar { display: none !important; }
+
+  /* Main content: remove left margin left by sidebar */
+  .main { margin-left: 0 !important; padding-bottom: 72px; }
+
+  /* Mobile top bar (rendered by MobileTopBar component) */
+  .mob-top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    height: 48px;
+    background: #0F172A;
+    position: -webkit-sticky;
+    position: sticky;
+    top: 0;
+    z-index: 90;
+    flex-shrink: 0;
+    border-bottom: 1px solid #1E293B;
+  }
+  .mob-top-title {
+    color: #F8FAFC;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+  }
+
+  /* Mobile bottom nav (rendered by MobileBottomNav component) */
+  .mob-bottom-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    background: #0F172A;
+    border-top: 1px solid #1E293B;
+    z-index: 200;
+    justify-content: space-around;
+    align-items: stretch;
+  }
+  .mob-tab {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #64748B;
+    font-size: 10px;
+    font-weight: 600;
+    font-family: inherit;
+    min-height: 44px;
+    transition: color 0.15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .mob-tab i { font-size: 18px; }
+  .mob-tab.active { color: #FF6B35; }
+
+  /* More sheet overlay + panel */
+  .mob-more-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.6);
+    z-index: 300;
+    display: flex;
+    align-items: flex-end;
+  }
+  .mob-more-sheet {
+    background: #fff;
+    border-radius: 16px 16px 0 0;
+    padding: 0 0 32px;
+    width: 100%;
+    max-height: 60vh;
+    overflow-y: auto;
+  }
+  .mob-more-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid #F1F5F9;
+    font-size: 15px;
+    font-weight: 700;
+    color: #0F172A;
+  }
+  .mob-more-close {
+    background: none;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    color: #94A3B8;
+    padding: 4px 8px;
+    border-radius: 6px;
+    line-height: 1;
+  }
+  .mob-more-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+    padding: 16px 20px;
+    background: none;
+    border: none;
+    border-bottom: 1px solid #F8FAFC;
+    cursor: pointer;
+    font-size: 15px;
+    font-weight: 500;
+    color: #0F172A;
+    font-family: inherit;
+    text-align: left;
+    min-height: 52px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .mob-more-item i { font-size: 18px; color: #64748B; }
+  .mob-more-item:active { background: #F8FAFC; }
+
+  /* Content padding */
+  .page-header { padding: 14px 16px !important; }
+  .page-body   { padding: 14px 16px !important; }
+
+  /* Full-width cards */
+  .card { width: 100% !important; max-width: 100% !important; }
+
+  /* Match/result cards: wrap badge rows, full-width action buttons */
+  .result-card { padding: 14px 14px; }
+  .result-card > div[style*="flex"] { flex-wrap: wrap; }
+
+  /* Inputs: font-size 16px prevents iOS auto-zoom on focus */
+  input.inp, select.inp, textarea.inp { font-size: 16px !important; min-height: 44px; }
+  .btn { min-height: 44px; }
+  .btn-sm { min-height: 38px; }
+
+  /* Tables: horizontal scroll instead of breaking layout */
+  .card table, table.data-table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* ── 480px breakpoint (small phones) ── */
+@media (max-width: 480px) {
+
+  /* LANDING */
+  section          { padding: 40px 16px !important; }
+  .hero            { padding: 32px 16px !important; }
+  .hero-title      { font-size: clamp(28px, 9vw, 38px) !important; }
+  .hero-sub        { font-size: 15px; }
+  .price-card      { padding: 22px 16px; }
+  .compare-col     { padding: 22px 16px; }
+  .pricing-grid    { gap: 10px; }
+  #dispatch        { padding: 40px 16px !important; }
+  .cta-banner      { padding: 32px 16px; }
+
+  /* Terminal feed rows: tighten columns for very small screens */
+  .feed-row {
+    grid-template-columns: 56px 48px 1fr auto;
+    font-size: 10.5px;
+    gap: 8px;
+  }
+
+  /* DASHBOARD */
+  .page-header { padding: 12px 14px !important; }
+  .page-body   { padding: 12px 14px !important; }
+}
