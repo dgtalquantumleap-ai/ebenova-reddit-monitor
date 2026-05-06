@@ -16,7 +16,10 @@
     "test:mcp": "node test-apify-actor.js",
     "test:scrapers": "node scripts/test-new-scrapers.js",
     "provision": "node scripts/provision-client.js",
-    "provision:dry": "node scripts/provision-client.js --dry-run"
+    "provision:dry": "node scripts/provision-client.js --dry-run",
+    "stats": "node bin/usage-stats.js",
+    "stats:geo": "node bin/usage-stats.js --geo",
+    "stats:json": "node bin/usage-stats.js --json"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.91.1",
