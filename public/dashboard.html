@@ -777,6 +777,74 @@ function HelpGuide({ onClose }) {
   );
 }
 
+function MobileTopBar({ tab }) {
+  const titles = {
+    find: 'Find Customers',
+    feed: 'Monitor Feed',
+    drafts: 'Drafts',
+    settings: 'Settings',
+  };
+  return (
+    <div className="mob-top-bar">
+      <span className="mob-top-title">{titles[tab] || 'Ebenova'}</span>
+    </div>
+  );
+}
+
+function MobileBottomNav({ tab, setTab, onHelp, onSignOut }) {
+  const [showMore, setShowMore] = React.useState(false);
+  const tabs = [
+    { id: 'find',     icon: 'ph-magnifying-glass-plus', label: 'Monitors' },
+    { id: 'feed',     icon: 'ph-newspaper',             label: 'Feed'     },
+    { id: 'settings', icon: 'ph-gear',                  label: 'Settings' },
+  ];
+  return (
+    <>
+      <nav className="mob-bottom-nav">
+        {tabs.map(({ id, icon, label }) => (
+          <button
+            key={id}
+            className={`mob-tab${tab === id ? ' active' : ''}`}
+            onClick={() => { setTab(id); setShowMore(false); }}
+          >
+            <i className={`ph-bold ${icon}`}></i>
+            <span>{label}</span>
+          </button>
+        ))}
+        <button
+          className={`mob-tab${showMore ? ' active' : ''}`}
+          onClick={() => setShowMore(s => !s)}
+        >
+          <i className="ph-bold ph-dots-three-outline"></i>
+          <span>More</span>
+        </button>
+      </nav>
+      {showMore && (
+        <div className="mob-more-overlay" onClick={() => setShowMore(false)}>
+          <div className="mob-more-sheet" onClick={e => e.stopPropagation()}>
+            <div className="mob-more-header">
+              <span>More</span>
+              <button className="mob-more-close" onClick={() => setShowMore(false)}>✕</button>
+            </div>
+            <button className="mob-more-item" onClick={() => { setTab('drafts'); setShowMore(false); }}>
+              <i className="ph-bold ph-pencil-line"></i>
+              Drafts
+            </button>
+            <button className="mob-more-item" onClick={() => { onHelp(); setShowMore(false); }}>
+              <i className="ph-bold ph-question"></i>
+              Help Guide
+            </button>
+            <button className="mob-more-item" onClick={onSignOut}>
+              <i className="ph-bold ph-sign-out"></i>
+              Sign Out
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 function Sidebar({ tab, setTab, userEmail, plan, monitorCount, draftCount, onSignOut, onHelp, onTour }) {
   const planLabel = {starter:'Starter',growth:'Growth',scale:'Scale'}[plan]||'Starter';
   const initial = (userEmail||'?')[0].toUpperCase();
@@ -4071,6 +4139,9 @@ function App() {
     return localStorage.getItem('ebi_key') || '';
   });
   const [tab, setTab] = useState('find');
+  useEffect(() => {
+    if (window.innerWidth <= 768) setTab('feed');
+  }, []);
   const [monitors, setMonitors] = useState([]);
   const [draftCount, setDraftCount] = useState(null);
   const [userEmail, setUserEmail] = useState('');
@@ -4120,6 +4191,7 @@ function App() {
       )}
       {showHelp && <HelpGuide onClose={() => setShowHelp(false)} />}
       {showTour && <ProductTour onClose={() => setShowTour(false)} onGoFind={() => { setShowTour(false); setTab('find'); }} />}
+      <MobileTopBar tab={tab} />
       <Sidebar tab={tab} setTab={setTab} userEmail={userEmail} plan={plan} monitorCount={monitors.length} draftCount={draftCount} onSignOut={signOut} onHelp={() => setShowHelp(true)} onTour={() => setShowTour(true)} />
       <FeedbackWidget apiKey={apiKey} />
       <div className="main">
@@ -4128,6 +4200,7 @@ function App() {
         {tab==='drafts'   && <DraftsFeed apiKey={apiKey} monitors={monitors} onDraftCount={setDraftCount} />}
         {tab==='settings' && <Settings apiKey={apiKey} userEmail={userEmail} plan={plan} onSignOut={signOut} monitors={monitors} onRefresh={loadMonitors} />}
       </div>
+      <MobileBottomNav tab={tab} setTab={setTab} onHelp={() => setShowHelp(true)} onSignOut={signOut} />
     </div>
   );
 }
