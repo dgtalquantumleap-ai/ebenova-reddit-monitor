@@ -342,17 +342,22 @@ async function semanticSearchSubreddit(monitorId, subreddit, keywordEntry, query
 async function searchReddit(monitorId, keywordEntry) {
   const keyword = resolveKeyword(keywordEntry)
   const { subreddits = [] } = keywordEntry
+  const _isDynamic = !!keywordEntry._dynamicSubreddits
   const results = []
 
   // One URL per named subreddit, or a single global search if none are set.
   // Pass keyword type so phrase keywords get force-quoted in the Reddit query.
+  // Pair each URL with its subreddit so 404 handling can blacklist the bad name.
   const kwType = keywordEntry.type || 'keyword'
-  const urls = subreddits.length > 0
-    ? subreddits.map(sr => buildRedditSearchUrl(keyword, sr, { type: kwType }))
-    : [buildRedditSearchUrl(keyword, null, { type: kwType })]
+  const urlPairs = subreddits.length > 0
+    ? subreddits.map(sr => [sr, buildRedditSearchUrl(keyword, sr, { type: kwType })])
+    : [[null, buildRedditSearchUrl(keyword, null, { type: kwType })]]
   // Monitors with many subreddits hit 429s more frequently.
   // Wider base gap keeps us inside Reddit's anonymous rate limit.
-  const interDelay = subreddits.length > 5 ? 4000 : 2500
+  // Dynamically suggested (subreddit-intel) calls get a floor of 3000ms because
+  // those URLs hit a fresh, unwarmed CDN edge and 429 sooner than approved subs.
+  const _baseDelay = subreddits.length > 5 ? 4000 : 2500
+  const interDelay = _isDynamic ? Math.max(_baseDelay, 3000) : _baseDelay
 
   // Plain headers — no Bearer, no client_id. UA is still polite to send;
   // Reddit's RSS endpoints don't gate on it the way the JSON API does.
@@ -361,12 +366,16 @@ async function searchReddit(monitorId, keywordEntry) {
     'Accept': 'application/atom+xml,application/rss+xml,application/xml;q=0.9,text/xml;q=0.8',
   }
 
-  for (const url of urls) {
+  for (const [sr, url] of urlPairs) {
     try {
       const res = await fetch(url, { headers })
       if (!res.ok) {
         const retryAfter = parseRetryAfter(res.headers)
         console.warn(`[v2][reddit:rss] ${res.status} for "${keyword}" → ${url.slice(0, 100)}…${retryAfter ? ` (Retry-After: ${retryAfter}s)` : ''}`)
+        if (res.status === 404 && _isDynamic && sr && redis) {
+          const _badSubKey = `subreddit:404:${String(sr).toLowerCase().replace(/^r\//, '')}`
+          await redis.set(_badSubKey, '1', { ex: 2592000 }).catch(() => {})
+        }
         // Always wait at least interDelay after a non-2xx so the next URL in the
         // loop doesn't fire immediately. The continue below skips the interDelay
         // at the bottom, so we must apply it here.
@@ -980,14 +989,16 @@ async function runMonitor(monitor) {
       }
     } catch (_) {}
   }
-  // Load suggested subreddits and attach to keywords that have none
+  // Load suggested subreddits and attach to keywords that have none.
+  // Capped at 5 — Reddit rate-limits aggressive RSS fan-out, and returns
+  // diminish past the top-ranked few suggestions per keyword.
   let suggestedSubreddits = []
   if (redis) {
     try {
       const _raw = await redis.get(`monitor:${monitor.id}:suggested_subreddits`)
       if (_raw) {
         const _arr = typeof _raw === 'string' ? JSON.parse(_raw) : _raw
-        if (Array.isArray(_arr)) suggestedSubreddits = _arr
+        if (Array.isArray(_arr)) suggestedSubreddits = _arr.slice(0, 5)
       }
     } catch (_) {}
   }
@@ -1055,12 +1066,29 @@ async function runMonitor(monitor) {
     for (const kw of effectiveKeywords) {
       const ctx = kw.productContext || monitor.productContext || ''
       const kwType = kw.type || 'keyword'
-      // If keyword has no explicit subreddits but we have AI-suggested ones, use them
-      const kwWithSubs = (!kw.subreddits || kw.subreddits.length === 0) && suggestedSubreddits.length > 0
-        ? { ...kw, subreddits: suggestedSubreddits }
+      // If keyword has no explicit subreddits but we have AI-suggested ones, use them.
+      // AI-suggested lists are filtered against the 404 blacklist so subreddits Reddit
+      // has confirmed don't exist (e.g. r/identityverification) aren't retried for 30d.
+      const _useSuggested = (!kw.subreddits || kw.subreddits.length === 0) && suggestedSubreddits.length > 0
+      let _kwSubs = _useSuggested ? suggestedSubreddits : kw.subreddits
+      if (_useSuggested && redis && _kwSubs?.length) {
+        const _filtered = []
+        for (const _sr of _kwSubs) {
+          const _subName = String(_sr).toLowerCase().replace(/^r\//, '')
+          const _isBad = await redis.get(`subreddit:404:${_subName}`).catch(() => null)
+          if (_isBad) {
+            console.log(`${label} [subreddit-intel] Skipping blacklisted subreddit r/${_subName}`)
+            continue
+          }
+          _filtered.push(_sr)
+        }
+        _kwSubs = _filtered
+      }
+      const kwWithSubs = _useSuggested
+        ? { ...kw, subreddits: _kwSubs, _dynamicSubreddits: true }
         : kw
-      if ((!kw.subreddits || kw.subreddits.length === 0) && suggestedSubreddits.length > 0) {
-        console.log(`${label} [subreddit-intel] Using ${suggestedSubreddits.length} suggested subreddits for "${kw.keyword}"`)
+      if (_useSuggested) {
+        console.log(`${label} [subreddit-intel] Using ${_kwSubs.length} suggested subreddits for "${kw.keyword}"`)
       }
       const redditMatches = await searchReddit(monitor.id, kwWithSubs)
       let _redditIrrelevant = 0
