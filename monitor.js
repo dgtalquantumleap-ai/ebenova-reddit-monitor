@@ -17,6 +17,7 @@ import searchSubstack from './lib/scrapers/substack.js'
 import searchQuora    from './lib/scrapers/quora.js'
 import searchUpwork   from './lib/scrapers/upwork.js'
 import searchFiverr   from './lib/scrapers/fiverr.js'
+import { isPlatformDisabled } from './lib/platforms.js'
 import { parseRedditRSS, buildRedditSearchUrl, parseRetryAfter } from './lib/reddit-rss.js'
 import { sendSlackAlert } from './lib/slack.js'
 import { escapeHtml } from './lib/html-escape.js'
@@ -787,8 +788,10 @@ async function poll() {
       }
     }
 
-    // Upwork Community
-    if (process.env.INCLUDE_UPWORK_FORUM !== 'false') {
+    // Upwork Community — gated by PLATFORM_DISABLED so v1 doesn't waste a
+    // 3s delay × keyword-count on a scraper that's 100%-failing upstream.
+    // See lib/platforms.js for the re-enable requirements.
+    if (process.env.INCLUDE_UPWORK_FORUM !== 'false' && !isPlatformDisabled('upwork')) {
       for (const kw of KEYWORDS) {
         const matches = await searchUpwork(kw, { seenIds, delay, MAX_AGE_MS: POST_MAX_AGE_HOURS * 3600000 })
         if (matches.length > 0) {
