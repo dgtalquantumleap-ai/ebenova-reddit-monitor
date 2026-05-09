@@ -1321,9 +1321,17 @@ async function runMonitor(monitor) {
   // failure must never block storage or email. Cap-aware via shared groq cap.
   // FIX 8 — concurrency dropped from 5 to 2. Five concurrent Groq calls per
   // batch × 2 monitors-in-parallel = 10 concurrent Groq requests, which
-  // bursts past Groq's free-tier 30/min ceiling. 2 × 2 = 4 keeps us safely
-  // under and lets the cost-cap layer absorb the rest.
-  const CLASSIFY_CONCURRENCY = 2
+  // bursts past Groq's free-tier 30/min ceiling.
+  // FIX (May 2026) — concurrency dropped further from 2 → 1 and inter-call
+  // delay tightened to a configurable 200ms. The previous 2-concurrent +
+  // 300ms-between-batches pattern produced 2-call bursts back-to-back, which
+  // hit llama-3.1-8b-instant's 6000 TPM ceiling on monitors that found 10+
+  // matches. Sequential + 200ms gap caps us at ≤5 RPS = ≤300 RPM, well under
+  // Groq's 30 RPM account-level limit. Tune via CLASSIFY_DELAY_MS env if the
+  // TPM math turns out to need an even slower drip — see lib/ai-router.js
+  // TASK_ROUTING.classify_match for the routing context.
+  const CLASSIFY_CONCURRENCY = parseInt(process.env.CLASSIFY_CONCURRENCY || '1')
+  const CLASSIFY_DELAY_MS    = parseInt(process.env.CLASSIFY_DELAY_MS    || '200')
   const groqCapForClassify = getGroqCap()
   for (let i = 0; i < allMatches.length; i += CLASSIFY_CONCURRENCY) {
     const batch = allMatches.slice(i, i + CLASSIFY_CONCURRENCY)
@@ -1342,7 +1350,7 @@ async function runMonitor(monitor) {
         m.intentReasoning = result.reasoning    // ← one-sentence reasoning
       }
     }))
-    if (i + CLASSIFY_CONCURRENCY < allMatches.length) await delay(300)
+    if (i + CLASSIFY_CONCURRENCY < allMatches.length) await delay(CLASSIFY_DELAY_MS)
   }
   // Cycle summary so operator can see the intent mix at a glance
   const highValue = allMatches.filter(m => m.intent === 'asking_for_tool' || m.intent === 'buying').length
