@@ -490,7 +490,7 @@ const TOUR_STEPS = [
     icon: '🌐',
     label: 'STEP 3 · PLATFORMS',
     title: 'Choose where to listen.',
-    text: 'Pick which of the 13 platforms to scan. Reddit, HN, Twitter/X, YouTube, GitHub, Upwork, Fiverr, Medium, Quora, Product Hunt, Substack, Jiji.ng, and Amazon Reviews. Defaults are pre-selected based on your product type.',
+    text: 'Pick which platforms to scan. Reddit, HN, GitHub, Fiverr, Medium, Substack, Product Hunt, and Amazon Reviews are typical defaults; Twitter/X, YouTube, Upwork, Quora, and Jiji.ng appear greyed-out when temporarily unavailable upstream. Defaults are pre-selected based on your product type.',
     tip: { icon: 'ph-info', text: 'You can change platforms anytime in Monitor Settings. Start with fewer platforms and expand as you get results.' },
   },
   {
@@ -643,6 +643,18 @@ const HELP_TABS = [
 
 function HelpGuide({ onClose }) {
   const [activeTab, setActiveTab] = useState('overview');
+  // Reactive platform list — drives the "Platforms scanned" badge row in
+  // the overview tab. Single source of truth = /v1/platforms (which reads
+  // PLATFORM_DISABLED from lib/platforms.js), so disabled platforms are
+  // visually muted automatically when ops takes one offline.
+  const [platforms, setPlatforms] = useState([]);
+  useEffect(() => {
+    fetch('/v1/platforms')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.platforms?.length) setPlatforms(d.platforms) })
+      .catch(() => {})
+  }, []);
+  const activeCount = platforms.filter(p => !p.disabled).length;
   return (
     <div className="hg-bg" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="hg-modal">
@@ -663,7 +675,7 @@ function HelpGuide({ onClose }) {
           {activeTab==='overview' && <>
             <div className="hg-section">
               <div className="hg-sh"><i className="ph-fill ph-broadcast" style={{color:'#FF6B35'}}></i> What Ebenova Insights does</div>
-              <div className="hg-p">Ebenova scans 13 platforms every 10 minutes for people publicly asking for what you sell. When it finds one, it surfaces the post and generates a ready-to-send reply draft. You review, edit, and post it directly on the platform.</div>
+              <div className="hg-p">Ebenova scans {activeCount > 0 ? `${activeCount} platforms` : 'multiple platforms'} every 10 minutes for people publicly asking for what you sell. When it finds one, it surfaces the post and generates a ready-to-send reply draft. You review, edit, and post it directly on the platform.</div>
             </div>
             <div className="hg-section">
               <div className="hg-sh">Three sections</div>
@@ -676,10 +688,39 @@ function HelpGuide({ onClose }) {
             <div className="hg-section">
               <div className="hg-sh">Platforms scanned</div>
               <div style={{display:'flex',flexWrap:'wrap',gap:6,marginTop:4}}>
-                {[['🔴','Reddit'],['🟠','HN'],['🐦','Twitter/X'],['▶️','YouTube'],['🐙','GitHub'],['💼','Upwork'],['🟢','Fiverr'],['📰','Medium'],['💬','Quora'],['🚀','PH'],['🇳🇬','Jiji.ng'],['📦','Amazon'],['📧','Substack']].map(([e,l])=>(
-                  <span key={l} style={{display:'inline-flex',alignItems:'center',gap:4,background:'#F8FAFC',border:'1px solid #E2E8F0',borderRadius:6,padding:'3px 9px',fontSize:12,color:'#475569'}}>{e} {l}</span>
+                {(platforms.length ? platforms : [
+                  // Bare-fallback list rendered only if /v1/platforms hasn't
+                  // resolved or failed. Disabled state matches lib/platforms.js
+                  // PLATFORM_DISABLED so the offline window is visually honest.
+                  {id:'reddit',label:'Reddit',emoji:'🔴'},
+                  {id:'hackernews',label:'HN',emoji:'🟠'},
+                  {id:'twitter',label:'Twitter/X',emoji:'🐦',disabled:'Temporarily unavailable'},
+                  {id:'youtube',label:'YouTube',emoji:'▶️',disabled:'Temporarily unavailable'},
+                  {id:'github',label:'GitHub',emoji:'🐙'},
+                  {id:'upwork',label:'Upwork',emoji:'💼',disabled:'Temporarily unavailable'},
+                  {id:'fiverr',label:'Fiverr',emoji:'🟢'},
+                  {id:'medium',label:'Medium',emoji:'📰'},
+                  {id:'quora',label:'Quora',emoji:'💬',disabled:'Temporarily unavailable'},
+                  {id:'producthunt',label:'PH',emoji:'🚀'},
+                  {id:'jijing',label:'Jiji.ng',emoji:'🇳🇬',disabled:'Temporarily unavailable'},
+                  {id:'amazon',label:'Amazon',emoji:'📦'},
+                  {id:'substack',label:'Substack',emoji:'📧'},
+                ]).map(p => (
+                  <span key={p.id || p.label} title={p.disabled || undefined} style={{
+                    display:'inline-flex',alignItems:'center',gap:4,
+                    background:'#F8FAFC',border:'1px solid #E2E8F0',borderRadius:6,
+                    padding:'3px 9px',fontSize:12,
+                    color: p.disabled ? '#94A3B8' : '#475569',
+                    opacity: p.disabled ? 0.6 : 1,
+                    textDecoration: p.disabled ? 'line-through' : 'none',
+                  }}>{p.emoji} {p.label}</span>
                 ))}
               </div>
+              {platforms.some(p => p.disabled) && (
+                <div style={{fontSize:11,color:'#94A3B8',marginTop:8,lineHeight:1.5}}>
+                  Greyed-out platforms are temporarily unavailable upstream. Hover for the specific reason. The remaining {activeCount} platforms run on every cycle.
+                </div>
+              )}
             </div>
           </>}
 
@@ -1277,7 +1318,7 @@ function BuildersFeed({ apiKey, monitor }) {
           <div className="empty">
             <div className="empty-icon"><i className="ph ph-users-three"></i></div>
             <div className="empty-title">No builders found yet</div>
-            <div className="empty-desc">We're scanning Reddit, HN, GitHub, Product Hunt, Twitter, and Substack for posts that look like someone publicly shipping something. First profiles usually appear within a poll cycle (~15 minutes).</div>
+            <div className="empty-desc">We're scanning Reddit, HN, GitHub, Product Hunt, and Substack for posts that look like someone publicly shipping something. First profiles usually appear within a poll cycle (~15 minutes).</div>
           </div>
         </div>
       )}
@@ -2104,19 +2145,24 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
   // truth = lib/platforms.js). Falls back to a hardcoded list if the fetch
   // hasn't resolved yet — matches VALID_PLATFORMS so the chip grid renders
   // identically either way during the brief async window.
+  // Fallback platform list with the same `disabled` reason strings the
+  // backend sends in /v1/platforms (lib/platforms.js#PLATFORM_DISABLED).
+  // Kept in sync manually so the brief async window before the fetch
+  // resolves doesn't render disabled chips as available — if /v1/platforms
+  // returns null, this list still produces the correct UX.
   const [availablePlatforms, setAvailablePlatforms] = useState([
     {id:'reddit',      emoji:'🔴', label:'Reddit'},
     {id:'hackernews',  emoji:'🟠', label:'Hacker News'},
     {id:'medium',      emoji:'📰', label:'Medium'},
     {id:'substack',    emoji:'📧', label:'Substack'},
-    {id:'quora',       emoji:'💬', label:'Quora'},
-    {id:'upwork',      emoji:'💼', label:'Upwork'},
+    {id:'quora',       emoji:'💬', label:'Quora',          disabled:'Temporarily unavailable'},
+    {id:'upwork',      emoji:'💼', label:'Upwork',         disabled:'Upwork Community returns 403 on every request'},
     {id:'fiverr',      emoji:'🟢', label:'Fiverr'},
     {id:'github',      emoji:'🐙', label:'GitHub'},
     {id:'producthunt', emoji:'🚀', label:'Product Hunt'},
-    {id:'twitter',     emoji:'🐦', label:'Twitter/X'},
-    {id:'jijing',      emoji:'🇳🇬', label:'Jiji.ng'},
-    {id:'youtube',     emoji:'▶️', label:'YouTube'},
+    {id:'twitter',     emoji:'🐦', label:'Twitter/X',      disabled:'Twitter/X scraping blocked (code 34 on every request)'},
+    {id:'jijing',      emoji:'🇳🇬', label:'Jiji.ng',        disabled:'Jiji.ng returns 403 (Cloudflare challenge)'},
+    {id:'youtube',     emoji:'▶️', label:'YouTube',        disabled:'YouTube Data API v3 daily quota exhausted'},
     {id:'amazon',      emoji:'📦', label:'Amazon Reviews'},
   ])
   useEffect(() => {
@@ -2184,7 +2230,19 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
           setTimeout(() => setShakeId(''), 400)
           return prev
         }
+        // Always allow deselect — including for disabled platforms, so
+        // users can clean up legacy monitors that were saved before a
+        // platform got marked disabled in lib/platforms.js.
         return prev.filter(p => p !== id)
+      }
+      // Refuse to add a disabled platform. Worker would skip it anyway,
+      // but selecting it is misleading. Animate the chip so the click
+      // feels like it did something.
+      const meta = availablePlatforms.find(p => p.id === id)
+      if (meta?.disabled) {
+        setShakeId(id)
+        setTimeout(() => setShakeId(''), 400)
+        return prev
       }
       return [...prev, id]
     })
@@ -2433,7 +2491,7 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
                 Find people <em style={{fontStyle:'italic',color:'#FF6B35',fontWeight:400}}>building</em> in public.
               </h2>
               <p style={{color:'#475569',fontSize:15,lineHeight:1.65,maxWidth:620,marginBottom:24}}>
-                We track Reddit, HN, GitHub, Product Hunt, Twitter, and Substack for posts that look like someone shipping something. Profiles include topics, post count, and consistency — exportable as CSV.
+                We track Reddit, HN, GitHub, Product Hunt, and Substack for posts that look like someone shipping something. Profiles include topics, post count, and consistency — exportable as CSV.
               </p>
               <div className="field" style={{maxWidth:480,marginBottom:18}}>
                 <label className="label">Monitor name</label>
@@ -2819,31 +2877,46 @@ function FindCustomers({ apiKey, onMonitorCreated }) {
             </div>
             )}
             <div className="field" style={{marginBottom:14}}>
-              <label className="label">Where to scan <span style={{fontSize:11,fontWeight:400,color:'#94A3B8'}}>· {platforms.length} of {availablePlatforms.length} platforms · click chips to toggle</span></label>
+              <label className="label">Where to scan <span style={{fontSize:11,fontWeight:400,color:'#94A3B8'}}>· {platforms.length} of {availablePlatforms.filter(p => !p.disabled || platforms.includes(p.id)).length} platforms · click chips to toggle</span></label>
               <div style={{display:'flex',flexWrap:'wrap',gap:6,marginTop:6}}>
                 {availablePlatforms.map(p => {
                   const selected = platforms.includes(p.id)
+                  // A disabled chip that is NOT already selected is rendered
+                  // greyed-out + un-clickable. A disabled chip that IS already
+                  // selected (legacy monitor saved before disable) stays
+                  // clickable so the user can deselect to clean up.
+                  const dimmed = !!p.disabled && !selected
                   return (
                     <button
                       key={p.id} type="button"
                       onClick={()=>togglePlatform(p.id)}
                       onKeyDown={e=>{ if (e.key==='Enter' || e.key===' ') { e.preventDefault(); togglePlatform(p.id) } }}
                       aria-pressed={selected}
+                      aria-disabled={dimmed}
+                      title={p.disabled || undefined}
                       className={shakeId === p.id ? 'platform-chip-nudge' : ''}
                       style={{
-                        padding:'7px 12px',borderRadius:6,fontSize:12.5,fontWeight:500,fontFamily:'inherit',cursor:'pointer',
+                        padding:'7px 12px',borderRadius:6,fontSize:12.5,fontWeight:500,fontFamily:'inherit',
+                        cursor:     dimmed ? 'not-allowed' : 'pointer',
+                        opacity:    dimmed ? 0.5 : 1,
                         border:     selected ? '1px solid #FF6B35'         : '1px solid #E2E8F0',
                         background: selected ? 'rgba(255,107,53,.10)'      : '#fff',
                         color:      selected ? '#FF6B35'                   : '#94A3B8',
                         display:'inline-flex',alignItems:'center',gap:6,
                       }}>
                       <span style={{fontSize:13}}>{p.emoji}</span>
-                      {' '}{p.label}
-                      {p.disabled && <span title={p.disabled} style={{width:7,height:7,borderRadius:'50%',background:'#F59E0B',display:'inline-block',flexShrink:0,marginLeft:4,verticalAlign:'middle'}} />}
+                      {' '}<span style={{textDecoration: dimmed ? 'line-through' : 'none'}}>{p.label}</span>
+                      {p.disabled && <span title={p.disabled} aria-label={`unavailable: ${p.disabled}`} style={{width:7,height:7,borderRadius:'50%',background:'#F59E0B',display:'inline-block',flexShrink:0,marginLeft:4,verticalAlign:'middle'}} />}
                     </button>
                   )
                 })}
               </div>
+              {availablePlatforms.some(p => p.disabled) && (
+                <div style={{fontSize:11,color:'#94A3B8',marginTop:8,lineHeight:1.5}}>
+                  <span style={{display:'inline-block',width:6,height:6,borderRadius:'50%',background:'#F59E0B',marginRight:6,verticalAlign:'middle'}}></span>
+                  Greyed-out platforms are temporarily unavailable upstream — hover for details. Selecting them is disabled.
+                </div>
+              )}
             </div>
             {/* UTM + outbound webhook are draft-time concerns. Builder Tracker
                 doesn't generate drafts, so these advanced options are hidden.
@@ -3415,8 +3488,15 @@ function EditMonitorModal({ apiKey, monitor, corridors, onClose, onSaved }) {
     setPlatforms(prev => {
       if (prev.includes(id)) {
         if (prev.length === 1) return prev   // refuse to deselect the last chip
+        // Always allow deselect — including for disabled platforms, so
+        // users can clean up legacy monitors that were saved before a
+        // platform got marked disabled in lib/platforms.js.
         return prev.filter(p => p !== id)
       }
+      // Refuse to add a disabled platform — see togglePlatform in the
+      // create flow for the rationale.
+      const meta = availablePlatforms.find(p => p.id === id)
+      if (meta?.disabled) return prev
       return [...prev, id]
     })
   }
@@ -3610,26 +3690,39 @@ function EditMonitorModal({ apiKey, monitor, corridors, onClose, onSaved }) {
         )}
 
         <div className="field" style={{marginBottom:14}}>
-          <label className="label">Where to scan <span style={{fontSize:11,fontWeight:400,color:'#94A3B8'}}>· {platforms.length} of {availablePlatforms.length || platforms.length} platforms</span></label>
+          <label className="label">Where to scan <span style={{fontSize:11,fontWeight:400,color:'#94A3B8'}}>· {platforms.length} of {(availablePlatforms.length ? availablePlatforms : platforms).filter(p => !p?.disabled || platforms.includes(p.id || p)).length || platforms.length} platforms</span></label>
           <div style={{display:'flex',flexWrap:'wrap',gap:6,marginTop:6}}>
             {(availablePlatforms.length ? availablePlatforms : platforms.map(id => ({id, label: id, emoji: '•'}))).map(p => {
               const selected = platforms.includes(p.id)
+              // Same dimmed-but-deselectable rule as the create flow — see
+              // togglePlatform comments above.
+              const dimmed = !!p.disabled && !selected
               return (
                 <button key={p.id} type="button" onClick={()=>togglePlatform(p.id)}
+                  aria-disabled={dimmed}
+                  title={p.disabled || undefined}
                   style={{
-                    padding:'7px 12px',borderRadius:6,fontSize:12.5,fontWeight:500,fontFamily:'inherit',cursor:'pointer',
+                    padding:'7px 12px',borderRadius:6,fontSize:12.5,fontWeight:500,fontFamily:'inherit',
+                    cursor:     dimmed ? 'not-allowed' : 'pointer',
+                    opacity:    dimmed ? 0.5 : 1,
                     border:     selected ? '1px solid #FF6B35'    : '1px solid #E2E8F0',
                     background: selected ? 'rgba(255,107,53,.10)' : '#fff',
                     color:      selected ? '#FF6B35'              : '#94A3B8',
                     display:'inline-flex',alignItems:'center',gap:6,
                   }}>
                   <span style={{fontSize:13}}>{p.emoji}</span>
-                  {' '}{p.label}
-                  {p.disabled && <span title={p.disabled} style={{width:7,height:7,borderRadius:'50%',background:'#F59E0B',display:'inline-block',flexShrink:0,marginLeft:4,verticalAlign:'middle'}} />}
+                  {' '}<span style={{textDecoration: dimmed ? 'line-through' : 'none'}}>{p.label}</span>
+                  {p.disabled && <span title={p.disabled} aria-label={`unavailable: ${p.disabled}`} style={{width:7,height:7,borderRadius:'50%',background:'#F59E0B',display:'inline-block',flexShrink:0,marginLeft:4,verticalAlign:'middle'}} />}
                 </button>
               )
             })}
           </div>
+          {availablePlatforms.some(p => p.disabled) && (
+            <div style={{fontSize:11,color:'#94A3B8',marginTop:8,lineHeight:1.5}}>
+              <span style={{display:'inline-block',width:6,height:6,borderRadius:'50%',background:'#F59E0B',marginRight:6,verticalAlign:'middle'}}></span>
+              Greyed-out platforms are temporarily unavailable. Already-selected ones still appear (worker skips them) so you can deselect to clean up.
+            </div>
+          )}
         </div>
 
         {!isBuilder && corridors && corridors.length > 0 && (
