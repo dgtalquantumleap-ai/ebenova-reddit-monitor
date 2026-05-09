@@ -77,7 +77,7 @@ import { verifyCaptcha } from './lib/captcha.js'
 import { applyInviteToUser } from './lib/invite.js'
 import { draftCall, extractInjectedUtmUrl } from './lib/draft-call.js'
 import { evaluatePost } from './lib/post-evaluator.js'
-import { validatePlatforms, migrateLegacyPlatforms, VALID_PLATFORMS, PLATFORM_LABELS, PLATFORM_EMOJIS, PLATFORM_DISABLED } from './lib/platforms.js'
+import { validatePlatforms, migrateLegacyPlatforms, VALID_PLATFORMS, PLATFORM_LABELS, PLATFORM_EMOJIS, PLATFORM_DISABLED, isPlatformDisabled } from './lib/platforms.js'
 import { classifyMatch, intentPriority } from './lib/classify.js'
 import { generateVariants } from './lib/variants-call.js'
 import { sendOutboundWebhook, buildPayload as buildWebhookPayload } from './lib/outbound-webhook.js'
@@ -2356,15 +2356,19 @@ app.post('/v1/search', async (req, res) => {
       const kwEntry = { keyword: kw }
       const opts = { seenIds: noSeen, delay: null, MAX_AGE_MS }
       const tasks = []
-      if (platformSet.has('reddit'))      tasks.push(searchRedditNow(kw))
-      if (platformSet.has('medium'))      tasks.push(searchMedium(kwEntry, opts).catch(() => []))
-      if (platformSet.has('substack'))    tasks.push(searchSubstack(kwEntry, opts).catch(() => []))
-      if (platformSet.has('quora'))       tasks.push(searchQuora(kwEntry, opts).catch(() => []))
-      if (platformSet.has('upwork'))      tasks.push(searchUpwork(kwEntry, opts).catch(() => []))
-      if (platformSet.has('fiverr'))      tasks.push(searchFiverr(kwEntry, opts).catch(() => []))
-      if (platformSet.has('github'))      tasks.push(searchGitHub(kwEntry, opts).catch(() => []))
-      if (platformSet.has('producthunt')) tasks.push(searchProductHunt(kwEntry, opts).catch(() => []))
-      if (platformSet.has('twitter'))     tasks.push(searchTwitter(kwEntry, opts).catch(() => []))
+      // PLATFORM_DISABLED gate: drop platforms that 100%-fail upstream so
+      // a one-off /v1/search call doesn't waste the user's daily cap on a
+      // scraper that will return [] anyway. See lib/platforms.js.
+      const _allow = (p) => platformSet.has(p) && !isPlatformDisabled(p)
+      if (_allow('reddit'))      tasks.push(searchRedditNow(kw))
+      if (_allow('medium'))      tasks.push(searchMedium(kwEntry, opts).catch(() => []))
+      if (_allow('substack'))    tasks.push(searchSubstack(kwEntry, opts).catch(() => []))
+      if (_allow('quora'))       tasks.push(searchQuora(kwEntry, opts).catch(() => []))
+      if (_allow('upwork'))      tasks.push(searchUpwork(kwEntry, opts).catch(() => []))
+      if (_allow('fiverr'))      tasks.push(searchFiverr(kwEntry, opts).catch(() => []))
+      if (_allow('github'))      tasks.push(searchGitHub(kwEntry, opts).catch(() => []))
+      if (_allow('producthunt')) tasks.push(searchProductHunt(kwEntry, opts).catch(() => []))
+      if (_allow('twitter'))     tasks.push(searchTwitter(kwEntry, opts).catch(() => []))
       const batches = await Promise.all(tasks)
       for (const batch of batches) {
         for (const item of (batch || [])) {

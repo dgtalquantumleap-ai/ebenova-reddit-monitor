@@ -50,7 +50,7 @@ import searchTelegram from './lib/scrapers/telegram.js'
 // reliable open search backend indexes linkedin.com/posts/ from a server.
 // Re-import + re-add to platformRunners and SOURCE_RANK once we wire up
 // a real source.
-import { migrateLegacyPlatforms, PLATFORM_LABELS, PLATFORM_EMOJIS } from './lib/platforms.js'
+import { migrateLegacyPlatforms, PLATFORM_LABELS, PLATFORM_EMOJIS, PLATFORM_DISABLED, isPlatformDisabled } from './lib/platforms.js'
 import { escapeHtml }      from './lib/html-escape.js'
 import { sanitizeForPrompt } from './lib/llm-safe-prompt.js'
 import { embeddingCacheKey } from './lib/embedding-cache.js'
@@ -767,6 +767,12 @@ async function runBuilderTrackerMonitor(monitor) {
   ]
   for (const { key, scraper, delayMs } of builderPlatformRunners) {
     if (!PLATFORMS_WITH_REAL_USERNAMES.includes(key)) continue
+    // Honour PLATFORM_DISABLED so the Builder Tracker doesn't burn cycle time
+    // on platforms that are knocked out upstream (currently: twitter).
+    if (isPlatformDisabled(key)) {
+      console.log(`${label} [builder] Skipping disabled platform: ${key} (${PLATFORM_DISABLED[key]})`)
+      continue
+    }
     for (const kw of builderKws) {
       const matches = await scraper(kw, { seenIds, delay, MAX_AGE_MS: maxAgeMs })
       matches.forEach(m => allMatches.push(m))
@@ -1185,6 +1191,14 @@ async function runMonitor(monitor) {
     // HN is always-on: ask_hn posts are high-intent (founders asking for tools)
     // and the Algolia endpoint is free/fast. Skip the platforms check for it.
     if (key !== 'hackernews' && !platforms.includes(key)) continue
+    // PLATFORM_DISABLED is the single source of truth for "currently broken
+    // upstream" — see lib/platforms.js for per-platform reason + re-enable
+    // requirements. Skipped BEFORE the per-keyword loop so we don't pay
+    // delayMs × keyword-count of dead time on a 100%-failing scraper.
+    if (isPlatformDisabled(key)) {
+      console.log(`${label} Skipping disabled platform: ${key} (${PLATFORM_DISABLED[key]})`)
+      continue
+    }
     for (const kw of effectiveKeywords) {
       const ctx = kw.productContext || monitor.productContext || ''
       const kwType = kw.type || 'keyword'   // PR #28
