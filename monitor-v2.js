@@ -57,6 +57,7 @@ import { embeddingCacheKey } from './lib/embedding-cache.js'
 import { makeCostCap } from './lib/cost-cap.js'
 import { draftCall, extractInjectedUtmUrl } from './lib/draft-call.js'
 import { parseRedditRSS, buildRedditSearchUrl, parseRetryAfter, resolveKeyword } from './lib/reddit-rss.js'
+import { paceRedditRequest } from './lib/reddit-pacer.js'
 import { generateUnsubscribeToken, buildEmailFooter } from './lib/account-deletion.js'
 import { classifyMatch, intentPriority, isHighPriority } from './lib/classify.js'
 import { recordAuthor } from './lib/author-profiles.js'
@@ -285,6 +286,10 @@ async function semanticSearchSubreddit(monitorId, subreddit, keywordEntry, query
   const results = []
   const url = `https://www.reddit.com/r/${subreddit}/new.json?limit=25`
   try {
+    // Global Reddit IP-pacer — see lib/reddit-pacer.js. Prevents two
+    // monitors-in-parallel from cumulatively bursting past the anonymous
+    // ceiling.
+    await paceRedditRequest()
     const res = await fetch(url, {
       headers: { 'User-Agent': 'ebenova-insights/2.0 (semantic)' },
     })
@@ -368,6 +373,11 @@ async function searchReddit(monitorId, keywordEntry) {
 
   for (const [sr, url] of urlPairs) {
     try {
+      // Global Reddit IP-pacer — see lib/reddit-pacer.js. The per-monitor
+      // interDelay above prevents one monitor from bursting; this prevents
+      // multiple monitors-in-parallel from cumulatively bursting against
+      // the same outbound IP.
+      await paceRedditRequest()
       const res = await fetch(url, { headers })
       if (!res.ok) {
         const retryAfter = parseRetryAfter(res.headers)
