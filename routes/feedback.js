@@ -63,25 +63,55 @@ export function makeFeedbackHandler({ redis, slackFn }) {
         submittedAt: new Date().toISOString(),
       }
 
-      // Archive to Redis (best-effort)
+      // Archive to Redis (best-effort) — initial write without slackDelivery,
+      // so even if Slack hangs we still have the submission preserved.
+      const archiveKey = `feedback:${auth.apiKey}:${Date.now()}`
       try {
-        const key = `feedback:${auth.apiKey}:${Date.now()}`
-        await redis.set(key, JSON.stringify(submission))
+        await redis.set(archiveKey, JSON.stringify(submission))
         if (typeof redis.expire === 'function') {
-          await redis.expire(key, FEEDBACK_TTL_SECONDS)
+          await redis.expire(archiveKey, FEEDBACK_TTL_SECONDS)
         }
       } catch (err) {
         console.warn('[feedback] redis archive failed:', err.message)
       }
 
-      // Slack delivery (best-effort, non-blocking from user perspective)
+      // Slack delivery (best-effort, non-blocking from user perspective).
+      // Result is captured into a structured record so the feedback archive
+      // can answer "did this reach Slack?" without needing Railway log access.
+      // Reasons: 'no_webhook' (env unset), 'slack_error' (4xx/5xx from Slack
+      // — captures HTTP status), 'network_error' (fetch threw — captures
+      // err.message), 'exception' (anything the slack fn throws upstream).
+      let slackDelivery
       try {
         const result = await slack(submission)
-        if (!result.delivered) {
-          console.warn(`[feedback] Slack delivery failed: ${result.reason}`)
+        slackDelivery = {
+          delivered:   !!result?.delivered,
+          reason:      result?.reason   || (result?.delivered ? null : 'unknown'),
+          status:      result?.status   || null,
+          error:       result?.error    || null,
+          attemptedAt: new Date().toISOString(),
+        }
+        if (!result?.delivered) {
+          console.warn(`[feedback] Slack delivery failed: ${result?.reason || 'unknown'}`)
         }
       } catch (err) {
         console.warn('[feedback] slack threw:', err.message)
+        slackDelivery = {
+          delivered:   false,
+          reason:      'exception',
+          status:      null,
+          error:       err.message,
+          attemptedAt: new Date().toISOString(),
+        }
+      }
+
+      // Second Redis write — annotate the record with the slack outcome.
+      // Best-effort: if this fails the record from the first write still
+      // exists, just without slackDelivery (same as old behavior).
+      try {
+        await redis.set(archiveKey, JSON.stringify({ ...submission, slackDelivery }))
+      } catch (err) {
+        console.warn('[feedback] redis annotate failed:', err.message)
       }
 
       return res.json({ success: true })
