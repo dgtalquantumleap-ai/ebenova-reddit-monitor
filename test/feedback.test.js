@@ -116,3 +116,59 @@ test('trims message before validation and storage', async () => {
   assert.equal(r.status, 200)
   assert.equal(slackArg.message, 'hello world')
 })
+
+// ── slackDelivery field on the archived feedback record ────────────────────
+// These three tests guarantee that "did this feedback reach Slack?" is
+// answerable from Redis alone — no Railway-log dependency.
+
+async function findArchivedFeedback(redis, apiKey) {
+  // mock-redis exposes its underlying store directly for tests; iterate
+  // it to find the most recent feedback:<apiKey>:<ts> entry.
+  let found = null
+  for (const [k, v] of redis._store.entries()) {
+    if (!k.startsWith(`feedback:${apiKey}:`)) continue
+    if (!found || k > found.key) found = { key: k, value: typeof v === 'string' ? JSON.parse(v) : v }
+  }
+  return found?.value || null
+}
+
+test('archives slackDelivery=true when Slack succeeds', async () => {
+  const redis = createMockRedis()
+  await redis.set('apikey:KEY_A', JSON.stringify({ owner: 'a@x.com', insights: true, insightsPlan: 'growth' }))
+  const h = makeFeedbackHandler({ redis, slackFn: async () => ({ delivered: true }) })
+  const r = await postJSON(h.submit, { npsScore: 9, message: 'works great', category: 'praise' })
+  assert.equal(r.status, 200)
+  const archived = await findArchivedFeedback(redis, 'KEY_A')
+  assert.ok(archived, 'feedback record was archived')
+  assert.ok(archived.slackDelivery, 'slackDelivery field present')
+  assert.equal(archived.slackDelivery.delivered, true)
+  assert.ok(archived.slackDelivery.attemptedAt, 'attemptedAt timestamped')
+})
+
+test('archives slackDelivery with reason when webhook is not configured', async () => {
+  const redis = createMockRedis()
+  await redis.set('apikey:KEY_A', JSON.stringify({ owner: 'a@x.com', insights: true, insightsPlan: 'starter' }))
+  const h = makeFeedbackHandler({ redis, slackFn: async () => ({ delivered: false, reason: 'no_webhook' }) })
+  const r = await postJSON(h.submit, { npsScore: 5, message: 'silent path', category: 'other' })
+  assert.equal(r.status, 200)
+  const archived = await findArchivedFeedback(redis, 'KEY_A')
+  assert.ok(archived?.slackDelivery)
+  assert.equal(archived.slackDelivery.delivered, false)
+  assert.equal(archived.slackDelivery.reason, 'no_webhook')
+})
+
+test('archives slackDelivery with reason="exception" when slackFn throws', async () => {
+  const redis = createMockRedis()
+  await redis.set('apikey:KEY_A', JSON.stringify({ owner: 'a@x.com', insights: true, insightsPlan: 'starter' }))
+  const h = makeFeedbackHandler({
+    redis,
+    slackFn: async () => { throw new Error('connect ETIMEDOUT') },
+  })
+  const r = await postJSON(h.submit, { npsScore: 5, message: 'broken slack', category: 'bug' })
+  assert.equal(r.status, 200)
+  const archived = await findArchivedFeedback(redis, 'KEY_A')
+  assert.ok(archived?.slackDelivery)
+  assert.equal(archived.slackDelivery.delivered, false)
+  assert.equal(archived.slackDelivery.reason, 'exception')
+  assert.match(archived.slackDelivery.error, /ETIMEDOUT/)
+})
