@@ -434,9 +434,23 @@ async function searchReddit(monitorId, keywordEntry) {
 // endpoint and Olumide's own monitor.js — single source of truth for prompt,
 // validation, AI-tell ban list, and stripMarkdown post-processing.
 // Returns { draft, model } so the caller can attach `draftedBy` to the match.
+//
+// May 2026 — the v1-era `!post.approved` gate was removed here. That gate
+// short-circuited drafting for any Reddit match whose subreddit wasn't in
+// the hardcoded APPROVED_SUBREDDITS whitelist, which silently dropped ~77
+// of every 100 undrafted matches in production despite those matches
+// passing intent classification + minIntentScore. The AI-driven subreddit-
+// intel feature (PR #62) routes monitors to subreddits OUTSIDE that
+// whitelist on purpose, so the whitelist gate fought the rest of the
+// pipeline. Quality control is now handled by:
+//   - lib/relevance.js (passesRelevanceCheck) — relevance gate
+//   - minIntentScore (default 40) — drops low-signal matches
+//   - lib/classify.js — intent scoring 0-100
+//   - lib/draft-prompt.js validateDraft + AI-tell ban list — output filter
+// To restore strict whitelist behaviour, gate by APPROVED_SUBREDDITS at
+// the search layer instead.
 async function generateReplyDraft(post, productContext, tone, utmConfig) {
   if (!productContext || !productContext.trim()) return { draft: null, model: null }
-  if (!post.approved) return { draft: null, model: null }
 
   // F14: daily Groq cost cap — skip draft (post still gets through)
   const gcap = getGroqCap()
