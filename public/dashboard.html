@@ -1048,6 +1048,26 @@ function MatchCard({ match, monitorId, apiKey, onAction }) {
     }).catch(() => {});
   };
 
+  // One-click reply workflow. Copies the (edited) draft to clipboard,
+  // flips postedAt on the server (so reply-tracker engagement check fires
+  // 24h later), and opens the original post in a new tab so the user can
+  // paste their reply. Closes the loop that ~99% of users currently leave
+  // open — production data shows only 1 of 603 matches has postedAt set
+  // because copy/post/mark-posted is three separate clicks today.
+  const copyPostAndOpen = async () => {
+    if (!draftText) return;
+    try { await navigator.clipboard.writeText(draftText) } catch (_) {}
+    setCopied(true); setTimeout(() => setCopied(false), 2000);
+    if (match.url) window.open(match.url, '_blank', 'noopener,noreferrer');
+    if (!postedAt && !posting) {
+      setPosting(true);
+      try {
+        const r = await apiFetch('/v1/matches/posted', { method:'PATCH', body:JSON.stringify({ monitor_id: monitorId, match_id: match.id }) }, apiKey);
+        if (r.ok) setPostedAt(r.data.postedAt || new Date().toISOString());
+      } finally { setPosting(false); }
+    }
+  };
+
   if (gone) return null;
 
   const _engHigh  = (match.score||0) >= 10 || (match.comments||0) >= 5;
@@ -1099,18 +1119,25 @@ function MatchCard({ match, monitorId, apiKey, onAction }) {
             onChange={e => setDraftText(e.target.value)}
             placeholder="Edit your reply…"
           />
-          {!postedAt && <div style={{fontSize:11,color:'#9A3412',opacity:.65,marginTop:4}}>Copy → post on the platform → click <strong>Mark posted</strong> below to track your reply.</div>}
+          {!postedAt && <div style={{fontSize:11,color:'#9A3412',opacity:.65,marginTop:4}}>One click: <strong>Copy + Open + Mark posted</strong> below copies your edited draft, opens the post in a new tab, and starts the 24h engagement tracker.</div>}
         </div>
       )}
       <div style={{display:'flex',gap:6,flexWrap:'wrap',alignItems:'center',marginTop:12,paddingTop:12,borderTop:'1px solid #F8FAFC'}}>
-        {match.draft && (
-          <Tip text="Copy the edited draft to your clipboard, then paste it on the platform">
-            <button className="btn btn-primary btn-sm" onClick={copyDraft} disabled={!draftText}>
-              <i className={`ph-bold ph-${copied?'check':'copy'}`}></i> {copied ? 'Copied' : 'Copy'}
+        {match.draft && !postedAt && (
+          <Tip text="Copies the draft, opens the original post in a new tab, and records that you replied — all in one click. Tracks engagement 24h later.">
+            <button className="btn btn-primary btn-sm" onClick={copyPostAndOpen} disabled={!draftText || posting}>
+              <i className={`ph-bold ph-${copied?'check':'arrow-square-out'}`}></i> {copied ? 'Copied & opening…' : (posting ? 'Saving…' : 'Copy + Open + Mark posted')}
             </button>
           </Tip>
         )}
-        <Tip text={postedAt ? 'Undo — mark as not posted' : 'Record that you replied to this post'}>
+        {match.draft && (
+          <Tip text="Copy the draft only (no open / no mark-as-posted)">
+            <button className={`btn btn-sm ${postedAt ? 'btn-primary' : 'btn-ghost'}`} onClick={copyDraft} disabled={!draftText}>
+              <i className={`ph-bold ph-${copied?'check':'copy'}`}></i> {copied ? 'Copied' : 'Copy only'}
+            </button>
+          </Tip>
+        )}
+        <Tip text={postedAt ? 'Undo — mark as not posted' : 'Record that you replied to this post (without copying or opening)'}>
           <button
             className={`btn btn-sm ${postedAt ? 'btn-posted' : 'btn-ghost'}`}
             onClick={togglePosted}
