@@ -1007,30 +1007,70 @@ async function runMonitor(monitor) {
   console.log(`${label} Starting — ${monitor.keywords.length} keywords, ${platforms.length} platforms: ${platforms.join(', ')}`)
 
   // Load expanded keywords from Redis and append to search (source: 'expanded')
+  // Lazy-fill rationale: api-server.js fires expandKeywords + suggestSubreddits
+  // as fire-and-forget at create time. If the AI provider is rate-limited or
+  // briefly unavailable the cache never gets written and the monitor scans
+  // only the user's literal keywords forever. Belt-and-suspenders: if either
+  // cache is missing AND the monitor is more than LAZY_FILL_GRACE_MS old
+  // (i.e. the create-time call had a fair chance), populate the cache here
+  // before reading it. Operator-visible via the [lazy-fill] log lines so we
+  // can see how often the create-time path is failing.
+  const LAZY_FILL_GRACE_MS = 5 * 60 * 1000
+  const monitorAgeMs = monitor.createdAt ? (Date.now() - new Date(monitor.createdAt).getTime()) : Infinity
+  const _eligibleForLazyFill = redis && Number.isFinite(monitorAgeMs) && monitorAgeMs > LAZY_FILL_GRACE_MS
+
   let expandedKeywords = []
   if (redis) {
-    try {
-      const _raw = await redis.get(`monitor:${monitor.id}:expanded_keywords`)
-      if (_raw) {
+    let _raw = null
+    try { _raw = await redis.get(`monitor:${monitor.id}:expanded_keywords`) } catch (_) {}
+    if (!_raw && _eligibleForLazyFill && (monitor.keywords?.length || monitor.productContext)) {
+      try {
+        const { expandKeywords } = await import('./lib/keyword-expander.js')
+        const expanded = await expandKeywords(monitor.keywords || [], monitor.productContext || '')
+        if (expanded.length > 0) {
+          await redis.setex(`monitor:${monitor.id}:expanded_keywords`, 86400 * 7, JSON.stringify(expanded))
+          console.log(`${label} [lazy-fill] Populated expanded_keywords cache (${expanded.length} variants) — create-time call had failed`)
+          _raw = JSON.stringify(expanded)
+        }
+      } catch (err) {
+        console.warn(`${label} [lazy-fill] expanded_keywords failed: ${err.message}`)
+      }
+    }
+    if (_raw) {
+      try {
         const _arr = typeof _raw === 'string' ? JSON.parse(_raw) : _raw
         if (Array.isArray(_arr)) {
           expandedKeywords = _arr.map(k => ({ keyword: k, type: 'keyword', subreddits: [], source: 'expanded', productContext: monitor.productContext || '' }))
         }
-      }
-    } catch (_) {}
+      } catch (_) {}
+    }
   }
   // Load suggested subreddits and attach to keywords that have none.
   // Capped at 5 — Reddit rate-limits aggressive RSS fan-out, and returns
   // diminish past the top-ranked few suggestions per keyword.
   let suggestedSubreddits = []
   if (redis) {
-    try {
-      const _raw = await redis.get(`monitor:${monitor.id}:suggested_subreddits`)
-      if (_raw) {
+    let _raw = null
+    try { _raw = await redis.get(`monitor:${monitor.id}:suggested_subreddits`) } catch (_) {}
+    if (!_raw && _eligibleForLazyFill && (monitor.keywords?.length || monitor.productContext)) {
+      try {
+        const { suggestSubreddits } = await import('./lib/subreddit-suggester.js')
+        const suggested = await suggestSubreddits(monitor.productContext || '', monitor.keywords || [])
+        if (suggested.length > 0) {
+          await redis.setex(`monitor:${monitor.id}:suggested_subreddits`, 86400 * 7, JSON.stringify(suggested))
+          console.log(`${label} [lazy-fill] Populated suggested_subreddits cache (${suggested.length} subs) — create-time call had failed`)
+          _raw = JSON.stringify(suggested)
+        }
+      } catch (err) {
+        console.warn(`${label} [lazy-fill] suggested_subreddits failed: ${err.message}`)
+      }
+    }
+    if (_raw) {
+      try {
         const _arr = typeof _raw === 'string' ? JSON.parse(_raw) : _raw
         if (Array.isArray(_arr)) suggestedSubreddits = _arr.slice(0, 5)
-      }
-    } catch (_) {}
+      } catch (_) {}
+    }
   }
   const kwWithSubs = suggestedSubreddits.length > 0
     ? monitor.keywords.map(kw => (kw.subreddits?.length > 0 ? kw : { ...kw, subreddits: suggestedSubreddits }))
