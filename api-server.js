@@ -787,31 +787,60 @@ app.post('/v1/monitors', async (req, res) => {
     await redis.expire(`report:token:${shareToken}`, ONE_YEAR_SECONDS).catch(() => {})
     await redis.sadd('insights:active_monitors', id)
 
-    // Fire-and-forget keyword expansion (non-blocking)
+    // Fire-and-forget keyword expansion (non-blocking).
+    // Single retry with backoff on transient failure — covers AI 429 / brief
+    // network blips that previously left monitors with a permanently empty
+    // cache (otihrm + silahubtechnol + PocketBridge all hit this). The
+    // monitor-v2.js cycle has a lazy-fill safety net beyond that, but
+    // retrying here means most monitors get the cache before their first scan.
     ;(async () => {
-      try {
+      const _runOnce = async () => {
         const { expandKeywords } = await import('./lib/keyword-expander.js')
         const expanded = await expandKeywords(cleanKws, monitor.productContext)
-        if (expanded.length > 0) {
-          await redis.setex(`monitor:${id}:expanded_keywords`, 86400 * 7, JSON.stringify(expanded))
-          console.log(`[keyword-expander] Generated ${expanded.length} variants for ${id}`)
+        if (expanded.length === 0) return false
+        await redis.setex(`monitor:${id}:expanded_keywords`, 86400 * 7, JSON.stringify(expanded))
+        console.log(`[keyword-expander] Generated ${expanded.length} variants for ${id}`)
+        return true
+      }
+      try {
+        if (!(await _runOnce())) {
+          await new Promise(r => setTimeout(r, 4000))
+          if (!(await _runOnce())) {
+            console.warn(`[keyword-expander] returned [] for ${id} on both attempts; lazy-fill will retry next cycle`)
+          }
         }
       } catch (err) {
-        console.warn(`[keyword-expander] failed for ${id}: ${err.message}`)
+        console.warn(`[keyword-expander] failed for ${id}: ${err.message} — retrying in 4s`)
+        await new Promise(r => setTimeout(r, 4000))
+        try { await _runOnce() } catch (err2) {
+          console.warn(`[keyword-expander] retry also failed for ${id}: ${err2.message} — lazy-fill will retry next cycle`)
+        }
       }
     })()
 
-    // Fire-and-forget subreddit suggestion (non-blocking)
+    // Fire-and-forget subreddit suggestion (non-blocking) — same retry pattern.
     ;(async () => {
-      try {
+      const _runOnce = async () => {
         const { suggestSubreddits } = await import('./lib/subreddit-suggester.js')
         const suggested = await suggestSubreddits(monitor.productContext, cleanKws)
-        if (suggested.length > 0) {
-          await redis.setex(`monitor:${id}:suggested_subreddits`, 86400 * 7, JSON.stringify(suggested))
-          console.log(`[subreddit-suggester] Suggested ${suggested.length} subreddits for ${id}`)
+        if (suggested.length === 0) return false
+        await redis.setex(`monitor:${id}:suggested_subreddits`, 86400 * 7, JSON.stringify(suggested))
+        console.log(`[subreddit-suggester] Suggested ${suggested.length} subreddits for ${id}`)
+        return true
+      }
+      try {
+        if (!(await _runOnce())) {
+          await new Promise(r => setTimeout(r, 4000))
+          if (!(await _runOnce())) {
+            console.warn(`[subreddit-suggester] returned [] for ${id} on both attempts; lazy-fill will retry next cycle`)
+          }
         }
       } catch (err) {
-        console.warn(`[subreddit-suggester] failed for ${id}: ${err.message}`)
+        console.warn(`[subreddit-suggester] failed for ${id}: ${err.message} — retrying in 4s`)
+        await new Promise(r => setTimeout(r, 4000))
+        try { await _runOnce() } catch (err2) {
+          console.warn(`[subreddit-suggester] retry also failed for ${id}: ${err2.message} — lazy-fill will retry next cycle`)
+        }
       }
     })()
 
