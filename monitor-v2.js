@@ -57,7 +57,7 @@ import { embeddingCacheKey } from './lib/embedding-cache.js'
 import { makeCostCap } from './lib/cost-cap.js'
 import { draftCall, extractInjectedUtmUrl } from './lib/draft-call.js'
 import { parseRedditRSS, buildRedditSearchUrl, parseRetryAfter, resolveKeyword } from './lib/reddit-rss.js'
-import { paceRedditRequest } from './lib/reddit-pacer.js'
+import { paceRedditRequest, pushCooldown, cooldownRemainingMs } from './lib/reddit-pacer.js'
 import { generateUnsubscribeToken, buildEmailFooter } from './lib/account-deletion.js'
 import { classifyMatch, intentPriority, isHighPriority } from './lib/classify.js'
 import { recordAuthor } from './lib/author-profiles.js'
@@ -382,9 +382,26 @@ async function searchReddit(monitorId, keywordEntry) {
       if (!res.ok) {
         const retryAfter = parseRetryAfter(res.headers)
         console.warn(`[v2][reddit:rss] ${res.status} for "${keyword}" → ${url.slice(0, 100)}…${retryAfter ? ` (Retry-After: ${retryAfter}s)` : ''}`)
-        if (res.status === 404 && _isDynamic && sr && redis) {
+        // 404 OR 403 → permanently bad subreddit; blacklist for 30d (only
+        // for dynamically suggested ones — explicit user lists may have
+        // valid reasons to retry). 403 typically means the sub is
+        // private/quarantined and won't recover; 404 means it doesn't exist.
+        if ((res.status === 404 || res.status === 403) && _isDynamic && sr && redis) {
           const _badSubKey = `subreddit:404:${String(sr).toLowerCase().replace(/^r\//, '')}`
           await redis.set(_badSubKey, '1', { ex: 2592000 }).catch(() => {})
+        }
+        // 429 → tell the global pacer that the IP is hot; ALL Reddit fetches
+        // across all monitors will pause for the Retry-After (or default 30s).
+        // Without this, the next keyword's first request fires after only the
+        // baseline 1500ms gap and we hammer the still-hot IP.
+        if (res.status === 429) {
+          const cooldownMs = Math.max((retryAfter || 30) * 1000, 30000)
+          pushCooldown(cooldownMs)
+          // Log when entering cooldown (only first 429 in a burst — subsequent
+          // ones in the same loop pass through quickly because the next
+          // paceRedditRequest will block on the cooldown).
+          const remainingS = Math.ceil(cooldownRemainingMs() / 1000)
+          console.warn(`[v2][reddit:rss] 429 → global pacer cooldown ~${remainingS}s`)
         }
         // Always wait at least interDelay after a non-2xx so the next URL in the
         // loop doesn't fire immediately. The continue below skips the interDelay

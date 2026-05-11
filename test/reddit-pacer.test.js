@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import { strict as assert } from 'node:assert'
-import { paceRedditRequest, _internals } from '../lib/reddit-pacer.js'
+import { paceRedditRequest, pushCooldown, cooldownRemainingMs, _internals } from '../lib/reddit-pacer.js'
 
 test('paceRedditRequest: first call returns immediately', async () => {
   _internals.reset()
@@ -53,4 +53,67 @@ test('_internals exposes default gap and reset hook', () => {
   assert.equal(typeof _internals.getDefaultGapMs(), 'number')
   assert.equal(typeof _internals.reset, 'function')
   assert.equal(typeof _internals.getLastFetchAt, 'function')
+})
+
+// ── Adaptive 429 cooldown ─────────────────────────────────────────────────
+
+test('pushCooldown: blocks paceRedditRequest until cooldown expires', async () => {
+  _internals.reset()
+  pushCooldown(200)
+  const t0 = Date.now()
+  await paceRedditRequest(0)  // gapMs=0 normally returns immediately, but cooldown still blocks
+  const elapsed = Date.now() - t0
+  assert.ok(elapsed >= 180, `expected wait ~200ms from cooldown, got ${elapsed}ms`)
+  assert.ok(elapsed < 350, `expected wait close to 200ms, got ${elapsed}ms`)
+})
+
+test('pushCooldown: only extends forward, never backward', async () => {
+  _internals.reset()
+  pushCooldown(500)
+  const after500 = _internals.getCooldownUntil()
+  pushCooldown(100)  // smaller — should NOT shorten cooldown
+  const afterSmaller = _internals.getCooldownUntil()
+  assert.equal(after500, afterSmaller, 'smaller cooldown must not move the target backward')
+  pushCooldown(800)  // larger — should extend
+  assert.ok(_internals.getCooldownUntil() > after500, 'larger cooldown must extend the target')
+})
+
+test('pushCooldown: clamped to COOLDOWN_MAX_MS so a runaway value cannot halt the worker', async () => {
+  _internals.reset()
+  const t0 = Date.now()
+  pushCooldown(10 * 60 * 60 * 1000)  // 10 hours — must clamp
+  const target = _internals.getCooldownUntil()
+  const span = target - t0
+  assert.ok(span <= _internals.getCooldownMaxMs() + 50, `expected cooldown ≤ COOLDOWN_MAX_MS, got ${span}ms`)
+})
+
+test('pushCooldown: ignores non-finite and non-positive values', () => {
+  _internals.reset()
+  pushCooldown(NaN); assert.equal(_internals.getCooldownUntil(), 0)
+  pushCooldown(0);   assert.equal(_internals.getCooldownUntil(), 0)
+  pushCooldown(-100);assert.equal(_internals.getCooldownUntil(), 0)
+})
+
+test('cooldownRemainingMs: reflects active cooldown and returns 0 when expired', async () => {
+  _internals.reset()
+  pushCooldown(150)
+  assert.ok(cooldownRemainingMs() > 0, 'should be positive while active')
+  await new Promise(r => setTimeout(r, 200))
+  assert.equal(cooldownRemainingMs(), 0, 'should be 0 after expiry')
+})
+
+test('paceRedditRequest: adds jitter on top of base gap', async () => {
+  _internals.reset()
+  // First call sets _lastFetchAt
+  await paceRedditRequest(100)
+  // Subsequent waits should include jitter (0-JITTER_MS), so observed mean
+  // should be > the pure gap. Run 5 to dampen variance.
+  const waits = []
+  for (let i = 0; i < 5; i++) {
+    const t = Date.now()
+    await paceRedditRequest(100)
+    waits.push(Date.now() - t)
+  }
+  const mean = waits.reduce((a, b) => a + b, 0) / waits.length
+  assert.ok(mean > 100, `jitter should push mean above pure gap; got mean ${mean}ms`)
 })
