@@ -1813,6 +1813,18 @@ function AggregateOutcomesPanel({ apiKey }) {
           <div style={{fontSize:28,fontWeight:800,color:'#FF6B35',lineHeight:1,fontVariantNumeric:'tabular-nums'}}>{data.engagementRate}</div>
           <div style={{fontSize:11,color:'#64748B',marginTop:4,letterSpacing:.3}}>engagement rate</div>
         </div>
+        {/* PR #29 final piece — 4th big number: total UTM-link clicks driven
+            by replies in this period. Renders only when the user has a
+            product URL set on at least one monitor (totalClicks > 0 OR
+            replies-with-clicks > 0); otherwise the metric column is silently
+            omitted so this card doesn't show a misleading "0 clicks" for
+            users who haven't enabled UTM tracking. */}
+        {(data.totalClicks > 0 || data.repliesWithClicks > 0) && (
+          <div title={`${data.repliesWithClicks} of your replies drove at least one click — paste the short link from any draft (e.g. /r/<matchId>) and any reader-click is counted here.`}>
+            <div style={{fontSize:28,fontWeight:800,color:'#2563EB',lineHeight:1,fontVariantNumeric:'tabular-nums'}}>{data.totalClicks}</div>
+            <div style={{fontSize:11,color:'#64748B',marginTop:4,letterSpacing:.3}}>clicks driven{data.repliesWithClicks ? ` · ${data.repliesWithClicks} replies` : ''}</div>
+          </div>
+        )}
       </div>
       {top && top.title && (
         <div style={{marginTop:14,paddingTop:12,borderTop:'1px dashed #FED7AA',fontSize:12.5,color:'#475569'}}>
