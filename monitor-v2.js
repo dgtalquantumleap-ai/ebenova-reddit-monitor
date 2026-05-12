@@ -382,11 +382,14 @@ async function searchReddit(monitorId, keywordEntry) {
       if (!res.ok) {
         const retryAfter = parseRetryAfter(res.headers)
         console.warn(`[v2][reddit:rss] ${res.status} for "${keyword}" → ${url.slice(0, 100)}…${retryAfter ? ` (Retry-After: ${retryAfter}s)` : ''}`)
-        // 404 OR 403 → permanently bad subreddit; blacklist for 30d (only
-        // for dynamically suggested ones — explicit user lists may have
-        // valid reasons to retry). 403 typically means the sub is
-        // private/quarantined and won't recover; 404 means it doesn't exist.
-        if ((res.status === 404 || res.status === 403) && _isDynamic && sr && redis) {
+        // 404 OR 403 → permanently bad subreddit; blacklist for 30d.
+        // Applies to BOTH dynamic AND explicit subreddit lists — Reddit
+        // saying "this sub doesn't exist / is private" is ground truth
+        // regardless of how the sub ended up on the keyword's list.
+        // Operator can remove from explicit lists via the dashboard.
+        // 403 typically means private/quarantined and won't recover;
+        // 404 means it doesn't exist. 30d TTL retries after a month.
+        if ((res.status === 404 || res.status === 403) && sr && redis) {
           const _badSubKey = `subreddit:404:${String(sr).toLowerCase().replace(/^r\//, '')}`
           await redis.set(_badSubKey, '1', { ex: 2592000 }).catch(() => {})
         }
@@ -1154,17 +1157,21 @@ async function runMonitor(monitor) {
       const ctx = kw.productContext || monitor.productContext || ''
       const kwType = kw.type || 'keyword'
       // If keyword has no explicit subreddits but we have AI-suggested ones, use them.
-      // AI-suggested lists are filtered against the 404 blacklist so subreddits Reddit
-      // has confirmed don't exist (e.g. r/identityverification) aren't retried for 30d.
+      // The 404/403 blacklist filter applies to BOTH explicit and AI-suggested
+      // subreddit lists — once Reddit has confirmed a sub doesn't exist (404)
+      // or is private/quarantined (403), it doesn't matter who originally added
+      // it to the list. Production logs (2026-05-12) showed Prembly's monitor
+      // hitting r/identityverification's 404 every cycle because it was in the
+      // explicit list, not the dynamic one.
       const _useSuggested = (!kw.subreddits || kw.subreddits.length === 0) && suggestedSubreddits.length > 0
       let _kwSubs = _useSuggested ? suggestedSubreddits : kw.subreddits
-      if (_useSuggested && redis && _kwSubs?.length) {
+      if (redis && _kwSubs?.length) {
         const _filtered = []
         for (const _sr of _kwSubs) {
           const _subName = String(_sr).toLowerCase().replace(/^r\//, '')
           const _isBad = await redis.get(`subreddit:404:${_subName}`).catch(() => null)
           if (_isBad) {
-            console.log(`${label} [subreddit-intel] Skipping blacklisted subreddit r/${_subName}`)
+            console.log(`${label} [subreddit-intel] Skipping blacklisted subreddit r/${_subName}${_useSuggested ? '' : ' (explicit list — edit the monitor to remove it)'}`)
             continue
           }
           _filtered.push(_sr)
@@ -1173,7 +1180,7 @@ async function runMonitor(monitor) {
       }
       const kwWithSubs = _useSuggested
         ? { ...kw, subreddits: _kwSubs, _dynamicSubreddits: true }
-        : kw
+        : { ...kw, subreddits: _kwSubs }
       if (_useSuggested) {
         console.log(`${label} [subreddit-intel] Using ${_kwSubs.length} suggested subreddits for "${kw.keyword}"`)
       }
@@ -1411,8 +1418,16 @@ async function runMonitor(monitor) {
   // Groq's 30 RPM account-level limit. Tune via CLASSIFY_DELAY_MS env if the
   // TPM math turns out to need an even slower drip — see lib/ai-router.js
   // TASK_ROUTING.classify_match for the routing context.
+  // 2026-05-12 — production logs show Groq llama-3.1-8b-instant 6000 TPM
+  // ceiling still being hit on 12-17-match classify batches even with the
+  // PR #64 throttle. The fallback to GROQ_QUALITY recovers each call so no
+  // classifications are dropped, but every 429 adds ~1s of latency × batch
+  // size. The real math: 1 call per 200ms = 5 RPS × ~250 tok/req = 75k TPM
+  // (12.5× over budget). Bumping default to 400ms = 2.5 RPS ≈ 37.5k TPM
+  // (still over but with bigger headroom, halving the 429-retry tax).
+  // For TPM-safe operation, set CLASSIFY_DELAY_MS=2500 (~24 RPM = ~6k TPM).
   const CLASSIFY_CONCURRENCY = parseInt(process.env.CLASSIFY_CONCURRENCY || '1')
-  const CLASSIFY_DELAY_MS    = parseInt(process.env.CLASSIFY_DELAY_MS    || '200')
+  const CLASSIFY_DELAY_MS    = parseInt(process.env.CLASSIFY_DELAY_MS    || '400')
   const groqCapForClassify = getGroqCap()
   for (let i = 0; i < allMatches.length; i += CLASSIFY_CONCURRENCY) {
     const batch = allMatches.slice(i, i + CLASSIFY_CONCURRENCY)
