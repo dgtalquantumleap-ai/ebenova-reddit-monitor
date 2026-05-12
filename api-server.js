@@ -507,6 +507,41 @@ app.get('/v1/platforms', (req, res) => {
 })
 
 // ── GET /health ────────────────────────────────────────────────────────────
+// ── GET /r/:matchId ────────────────────────────────────────────────────────
+// Click-tracking redirect (PR #29 — final piece). When a draft contains a
+// UTM-injected product URL, monitor-v2.js rewrites it to https://ebenova.org/r/<matchId>
+// before storing the draft. The user posts the short link on Reddit, a reader
+// clicks it, we 302-redirect to the stored UTM URL and increment a counter.
+// Both `match:<id>:url` and `match:<id>:clicks` are written by the worker
+// at draft-generation time with a 60-day TTL (matches Olumide's manual
+// review window) — see monitor-v2.js around the m.utmUrl block.
+//
+// Public route, no auth (whoever clicks the Reddit comment shouldn't need an
+// API key). Conservative input validation: matchId must look like a hash to
+// avoid path traversal / open redirect via crafted IDs. The redirect target
+// is bounded to URLs we ourselves wrote, so the open-redirect risk is nil
+// even if validation slips.
+app.get('/r/:matchId', async (req, res) => {
+  const { matchId } = req.params || {}
+  if (!matchId || !/^[A-Za-z0-9_-]{4,80}$/.test(matchId)) {
+    return res.status(400).send('Invalid link.')
+  }
+  try {
+    const redis = getRedis()
+    const url = redis ? await redis.get(`match:${matchId}:url`) : null
+    if (!url || typeof url !== 'string' || !/^https?:\/\//.test(url)) {
+      return res.status(404).type('text/plain').send('This link has expired or never existed.')
+    }
+    // Fire-and-forget increment + audit ping. Never block the redirect on a
+    // counter failure; the user's click should always go through.
+    if (redis) redis.incr(`match:${matchId}:clicks`).catch(() => {})
+    return res.redirect(302, url)
+  } catch (err) {
+    console.warn(`[redirect] /r/${matchId} failed:`, err.message)
+    return res.status(503).type('text/plain').send('Redirect temporarily unavailable. Try again in a moment.')
+  }
+})
+
 app.get('/health', async (req, res) => {
   let redisOk = false
   try { const r = getRedis(); await r.ping(); redisOk = true } catch (err) { console.error('[health] Redis ping failed:', err.message) }
@@ -1719,13 +1754,16 @@ app.get('/v1/monitors/:id/outcomes', async (req, res) => {
 
     const o = await getRecentOutcomes({ redis, monitorId: id, days: 30 })
     res.json({
-      success:        true,
-      period:         '30d',
-      totalPosted:    o.posted,
-      gotEngagement:  o.engaged,
-      engagementRate: o.rateLabel,
-      topPerforming:  o.topPerforming,
-      recentOutcomes: o.recent,
+      success:           true,
+      period:            '30d',
+      totalPosted:       o.posted,
+      gotEngagement:     o.engaged,
+      engagementRate:    o.rateLabel,
+      // PR #29 final piece — click-tracking aggregates from /r/:matchId hits.
+      totalClicks:       o.totalClicks || 0,
+      repliesWithClicks: o.repliesWithClicks || 0,
+      topPerforming:     o.topPerforming,
+      recentOutcomes:    o.recent,
     })
   } catch (err) {
     serverError(res, err)
@@ -1754,6 +1792,7 @@ app.get('/v1/outcomes', async (req, res) => {
     const ownerSetKey = `insights:monitors:${auth.owner}`
     const monitorIds = (await redis.smembers(ownerSetKey)) || []
     let totalPosted = 0, totalEngaged = 0
+    let totalClicks = 0, repliesWithClicks = 0
     const recentAll = []
     const topPerformingAll = []
     for (const id of monitorIds) {
@@ -1761,8 +1800,10 @@ app.get('/v1/outcomes', async (req, res) => {
       // with many monitors; getRecentOutcomes is bounded (≤500 IDs/monitor)
       // so the total work scales linearly with monitor count.
       const o = await getRecentOutcomes({ redis, monitorId: id, days, recentLimit: 10, topLimit: 3 })
-      totalPosted  += o.posted || 0
-      totalEngaged += o.engaged || 0
+      totalPosted       += o.posted || 0
+      totalEngaged      += o.engaged || 0
+      totalClicks       += o.totalClicks || 0
+      repliesWithClicks += o.repliesWithClicks || 0
       for (const r of (o.recent || []))         recentAll.push({ ...r, monitorId: id })
       for (const t of (o.topPerforming || [])) topPerformingAll.push({ ...t, monitorId: id })
     }
@@ -1772,12 +1813,16 @@ app.get('/v1/outcomes', async (req, res) => {
       ? `${Math.round((totalEngaged / totalPosted) * 100)}%`
       : '0%'
     res.json({
-      success:        true,
-      period:         `${days}d`,
-      monitorCount:   monitorIds.length,
+      success:           true,
+      period:            `${days}d`,
+      monitorCount:      monitorIds.length,
       totalPosted,
-      gotEngagement:  totalEngaged,
+      gotEngagement:     totalEngaged,
       engagementRate,
+      // PR #29 final piece — click aggregates surface in AggregateOutcomesPanel
+      // (4th big number) and as the "Z drove traffic" digest line.
+      totalClicks,
+      repliesWithClicks,
       topPerforming:  topPerformingAll.slice(0, 3),
       recentOutcomes: recentAll.slice(0, 10),
     })

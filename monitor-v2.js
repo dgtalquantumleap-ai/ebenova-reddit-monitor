@@ -1478,15 +1478,36 @@ async function runMonitor(monitor) {
       })
       m.draft = r.draft
       m.draftedBy = r.model
-      // PR (deferred-fixes): persist the UTM-injected product URL alongside
-      // the draft. This is the data foundation for click-tracking — a
-      // redirect layer can read match.utmUrl directly instead of re-parsing
-      // the draft on every page view. Null if no UTM URL was injected.
+      // PR #29 — final piece. UTM-injected product URLs in the draft get
+      // rewritten to a short link `${APP_URL}/r/${m.id}` which the api-server
+      // `/r/:matchId` route redirects through (bumping a click counter on
+      // each hop). The raw UTM URL is persisted on the match record AND on
+      // its own Redis key `match:<id>:url` so the redirect route can look
+      // it up without scanning monitor records.
+      //
+      // Net effect: every UTM-injected draft posted on Reddit becomes a
+      // measurable funnel. The "Z drove traffic" digest line + the
+      // AggregateOutcomesPanel 4th big-number both read from
+      // `match:<id>:clicks`.
       if (m.draft && monitor.productUrl) {
         const utmUrl = extractInjectedUtmUrl({ draft: m.draft, productUrl: monitor.productUrl })
         if (utmUrl) {
           m.utmUrl = utmUrl
           m.utmInjectedAt = new Date().toISOString()
+          const _appUrl   = process.env.APP_URL || 'https://ebenova.org'
+          const shortUrl  = `${_appUrl.replace(/\/+$/, '')}/r/${m.id}`
+          // String split/join is safer than regex when the UTM URL contains
+          // regex-special characters (it always has `?` and `&`).
+          m.draft         = m.draft.split(utmUrl).join(shortUrl)
+          m.utmShortUrl   = shortUrl
+          if (redis) {
+            const _redirectTtl = 60 * 24 * 60 * 60   // 60 days
+            // Best-effort writes — never throw if Upstash blips. The match
+            // record itself is the source of truth for `m.utmUrl`; these
+            // keys just power the redirect-layer lookup.
+            await redis.setex(`match:${m.id}:url`, _redirectTtl, utmUrl).catch(() => {})
+            await redis.set(`match:${m.id}:clicks`, '0', { nx: true, ex: _redirectTtl }).catch(() => {})
+          }
         }
       }
       if (m.draft) console.log(`${label} Draft by ${r.model}: "${m.title.slice(0, 50)}…"`)
