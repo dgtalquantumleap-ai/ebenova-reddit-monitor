@@ -1777,6 +1777,56 @@ function SprintView({ matches, monitorId, apiKey, onClose, onAction }) {
   );
 }
 
+// PR #29 — Aggregate reply-outcomes stat card. Renders at the top of the
+// Feed tab so the headline ROI number ("X posted · Y got engagement · Z%")
+// is visible the moment the customer opens the dashboard, not just buried
+// in the Monday weekly digest email. Hits GET /v1/outcomes which sums
+// getRecentOutcomes() across all of the owner's monitors. Quietly returns
+// null when no posts are tracked yet (encouraging-empty: no card at all,
+// rather than a "0 / 0" card that signals nothing's happening).
+function AggregateOutcomesPanel({ apiKey }) {
+  const [data, setData] = useState(null);
+  useEffect(() => {
+    if (!apiKey) return;
+    apiFetch('/v1/outcomes', {}, apiKey)
+      .then(r => { if (r.ok) setData(r.data); })
+      .catch(() => {});
+  }, [apiKey]);
+  if (!data || !data.totalPosted) return null;
+  const top = (data.topPerforming || [])[0] || null;
+  return (
+    <div className="card" style={{padding:'16px 20px',marginBottom:16,background:'linear-gradient(135deg,#FFF7F2 0%,#FFFFFF 70%)',border:'1px solid #FED7AA'}}>
+      <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}>
+        <i className="ph-fill ph-chart-line-up" style={{color:'#FF6B35',fontSize:18}}></i>
+        <span style={{fontSize:11,fontWeight:700,letterSpacing:1.5,color:'#9A3412',textTransform:'uppercase'}}>Reply Performance · {data.period || '30d'} · all monitors</span>
+      </div>
+      <div style={{display:'flex',gap:24,flexWrap:'wrap',alignItems:'baseline'}}>
+        <div>
+          <div style={{fontSize:28,fontWeight:800,color:'#0F172A',lineHeight:1,fontVariantNumeric:'tabular-nums'}}>{data.totalPosted}</div>
+          <div style={{fontSize:11,color:'#64748B',marginTop:4,letterSpacing:.3}}>replies posted</div>
+        </div>
+        <div>
+          <div style={{fontSize:28,fontWeight:800,color:'#16A34A',lineHeight:1,fontVariantNumeric:'tabular-nums'}}>{data.gotEngagement}</div>
+          <div style={{fontSize:11,color:'#64748B',marginTop:4,letterSpacing:.3}}>got engagement</div>
+        </div>
+        <div>
+          <div style={{fontSize:28,fontWeight:800,color:'#FF6B35',lineHeight:1,fontVariantNumeric:'tabular-nums'}}>{data.engagementRate}</div>
+          <div style={{fontSize:11,color:'#64748B',marginTop:4,letterSpacing:.3}}>engagement rate</div>
+        </div>
+      </div>
+      {top && top.title && (
+        <div style={{marginTop:14,paddingTop:12,borderTop:'1px dashed #FED7AA',fontSize:12.5,color:'#475569'}}>
+          <span style={{color:'#9A3412',fontSize:10.5,fontWeight:700,letterSpacing:1,textTransform:'uppercase',marginRight:8}}>Top reply</span>
+          <a href={top.url} target="_blank" rel="noreferrer" style={{color:'#0F172A',fontWeight:600,textDecoration:'none'}}>{(top.title || '').slice(0, 90)}{(top.title || '').length > 90 ? '…' : ''}</a>
+          {typeof top.commentsDelta === 'number' && top.commentsDelta > 0 && (
+            <span style={{marginLeft:8,padding:'2px 8px',background:'#DCFCE7',color:'#166534',borderRadius:10,fontSize:11,fontWeight:700}}>+{top.commentsDelta} comments</span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function MatchesFeed({ apiKey, monitors }) {
   const [selId, setSelId] = useState('');
   const [matches, setMatches] = useState([]);
@@ -1825,6 +1875,12 @@ function MatchesFeed({ apiKey, monitors }) {
 
   return (
     <>
+      {/* PR #29 — Aggregate outcomes card. Renders ABOVE the page header
+          so the headline ROI number (X posted · Y engaged · Z%) is the
+          first thing a customer sees on the Feed tab. Component returns
+          null when no replies are tracked yet — so customers in the
+          empty state aren't staring at "0 / 0 / 0%". */}
+      <AggregateOutcomesPanel apiKey={apiKey} />
       <div className="page-header">
         <div>
           <h1 className="page-title">Monitor Feed</h1>
