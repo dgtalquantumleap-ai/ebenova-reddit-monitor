@@ -1732,6 +1732,60 @@ app.get('/v1/monitors/:id/outcomes', async (req, res) => {
   }
 })
 
+// ── GET /v1/outcomes ───────────────────────────────────────────────────────
+// Aggregate Reply Outcome stats across ALL of the authenticated owner's
+// monitors. Powers the headline stat card on the dashboard Feed tab so a
+// customer sees their ROI-proof number the moment they log in, not buried
+// in the Monday digest email.
+//
+// Returns the same shape as the per-monitor endpoint (totalPosted /
+// gotEngagement / engagementRate / topPerforming / recentOutcomes) but
+// summed, with each item carrying its `monitorId` for the click-through.
+//
+// Days defaults to 30, clamped 1..90 via the `days` query param. Auth-
+// gated; never 404s — returns zeroed fields for owners with no monitors
+// or no posted replies yet.
+app.get('/v1/outcomes', async (req, res) => {
+  const auth = await authenticate(req)
+  if (!auth.ok) return res.status(auth.status).json({ success: false, error: auth.error })
+  const days = Math.min(Math.max(parseInt(req.query.days) || 30, 1), 90)
+  try {
+    const redis = getRedis()
+    const ownerSetKey = `insights:monitors:${auth.owner}`
+    const monitorIds = (await redis.smembers(ownerSetKey)) || []
+    let totalPosted = 0, totalEngaged = 0
+    const recentAll = []
+    const topPerformingAll = []
+    for (const id of monitorIds) {
+      // Sequential to avoid hammering Redis with parallel scans for owners
+      // with many monitors; getRecentOutcomes is bounded (≤500 IDs/monitor)
+      // so the total work scales linearly with monitor count.
+      const o = await getRecentOutcomes({ redis, monitorId: id, days, recentLimit: 10, topLimit: 3 })
+      totalPosted  += o.posted || 0
+      totalEngaged += o.engaged || 0
+      for (const r of (o.recent || []))         recentAll.push({ ...r, monitorId: id })
+      for (const t of (o.topPerforming || [])) topPerformingAll.push({ ...t, monitorId: id })
+    }
+    recentAll.sort((a, b) => new Date(b.postedAt || 0) - new Date(a.postedAt || 0))
+    topPerformingAll.sort((a, b) => (b.commentsDelta || 0) - (a.commentsDelta || 0))
+    const engagementRate = totalPosted > 0
+      ? `${Math.round((totalEngaged / totalPosted) * 100)}%`
+      : '0%'
+    res.json({
+      success:        true,
+      period:         `${days}d`,
+      monitorCount:   monitorIds.length,
+      totalPosted,
+      gotEngagement:  totalEngaged,
+      engagementRate,
+      topPerforming:  topPerformingAll.slice(0, 3),
+      recentOutcomes: recentAll.slice(0, 10),
+    })
+  } catch (err) {
+    serverError(res, err)
+  }
+})
+
 // ── GET /v1/monitors/:id/subreddits ────────────────────────────────────────
 // Returns AI-suggested subreddits for the monitor. Generated async on monitor
 // creation and cached in Redis for 7 days. Returns [] if not yet generated.
