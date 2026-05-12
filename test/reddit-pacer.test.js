@@ -17,9 +17,12 @@ test('paceRedditRequest: enforces minimum gap between consecutive calls', async 
   const t0 = Date.now()
   await paceRedditRequest(150)
   const elapsed = Date.now() - t0
-  // Second call should wait ~150ms because the first set the timestamp.
-  assert.ok(elapsed >= 130, `expected wait ~150ms, got ${elapsed}ms`)
-  assert.ok(elapsed < 250, `expected wait close to 150ms, got ${elapsed}ms (sleep overshoot too large)`)
+  // Second call should wait at least the base gap. Upper bound accounts for
+  // PR-G's default jitter (0-JITTER_MS) on top of the base gap, so the
+  // measured wait can legitimately be up to base+JITTER_MS.
+  const jitter = _internals.getJitterMs()
+  assert.ok(elapsed >= 130, `expected wait ≥ ~150ms, got ${elapsed}ms`)
+  assert.ok(elapsed < 150 + jitter + 100, `expected wait ≤ ${150 + jitter + 100}ms (base+jitter+slack), got ${elapsed}ms`)
 })
 
 test('paceRedditRequest: gapMs=0 disables pacing entirely', async () => {
