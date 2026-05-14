@@ -16,8 +16,8 @@
     --ink: #f5efe0;
     --ink-2: #b9b09f;
     --ink-3: #6f6757;
-    --gold: #FF6B35;
-    --gold-2: #FF8C42;
+    --gold: #c9a84c;
+    --gold-2: #e8c97a;
     --green: #34d058;
     --red: #ff5959;
     --line: #2a2419;
@@ -119,10 +119,10 @@
     background: linear-gradient(135deg, var(--gold), var(--gold-2));
     -webkit-background-clip: text; background-clip: text; color: transparent;
   }
-  .hero-title small {
-    display: block; font-family: var(--mono); font-size: 14px;
-    font-weight: 400; color: var(--ink-3); letter-spacing: 4px;
-    text-transform: uppercase; margin-top: 24px;
+  .hero-platforms-sub {
+    display: block; font-family: var(--mono); font-size: 13px;
+    font-weight: 400; color: var(--ink-3); letter-spacing: 3px;
+    text-transform: uppercase; margin-top: -20px; margin-bottom: 28px;
   }
   .hero-sub {
     font-size: 18px; color: var(--ink-2); line-height: 1.65;
@@ -593,8 +593,8 @@
     <h1 class="hero-title">
       Your next customer<br>
       is <em>already typing.</em>
-      <small>// REDDIT · HN · GITHUB · MEDIUM · SUBSTACK · MORE</small>
     </h1>
+    <p class="hero-platforms-sub">// REDDIT · HN · GITHUB · MEDIUM · SUBSTACK · MORE</p>
     <p class="hero-sub">
       <b style="color:var(--ink);font-weight:600;">A live feed of buying-intent posts across Reddit, Hacker News, GitHub, Medium, Substack and more — with ready-to-edit reply templates you can post in seconds.</b><br>
       Built for solo founders, indie makers, and lean agencies who don't have time to scroll Reddit all day.
@@ -610,7 +610,7 @@
       <span role="listitem">→ Freelancers</span>
     </div>
     <div style="font-family:var(--mono);font-size:11px;color:var(--ink-3);letter-spacing:1px;margin-top:14px;display:flex;gap:18px;flex-wrap:wrap;">
-      <span><b style="color:var(--green)">●</b> FREE FOREVER · NO CREDIT CARD · 60-SEC SETUP</span>
+      <span><b style="color:var(--green)">●</b> FREE TO START · NO CREDIT CARD · 60-SEC SETUP</span>
     </div>
   </div>
 
@@ -622,6 +622,12 @@
       <div class="terminal-status">SCANNING</div>
     </div>
     <div class="feed" id="hero-feed">
+      <div class="feed-row feed-header" aria-hidden="true" style="opacity:0.4;font-size:10px;letter-spacing:1px;padding-bottom:4px;border-bottom:1px solid var(--line);margin-bottom:4px;">
+        <span class="feed-time">TIME</span>
+        <span class="feed-source" style="visibility:hidden;">SRC</span>
+        <span class="feed-title" style="color:var(--ink-3)">THREAD</span>
+        <span class="feed-score" style="color:var(--ink-3)">INTENT</span>
+      </div>
       <div class="feed-row" style="animation-delay: 0s;">
         <span class="feed-time">04:42:18</span>
         <span class="feed-source src-reddit">REDDIT</span>
@@ -662,7 +668,7 @@
       </div>
     </div>
     <div class="feed-cta">
-      <span class="feed-cta-blink">FEED // DEMO_MODE</span>
+      <span class="feed-cta-blink">DEMO FEED</span>
       <a href="/dashboard">OPEN LIVE FEED →</a>
     </div>
   </div>
@@ -681,7 +687,7 @@
     <span class="platform-pill"><span class="dot live"></span>FIVERR</span>
     <span class="platform-pill"><span class="dot live"></span>PRODUCT HUNT</span>
   </div>
-  <div class="platforms-meta">7 STREAMS // 1 INTERFACE</div>
+  <div class="platforms-meta">7 PLATFORMS // 1 FEED</div>
 </div>
 
 <!-- PROTOCOL — interactive platform selector -->
@@ -873,8 +879,8 @@
   <span class="label">DISPATCH</span>
   <div class="dispatch-grid">
     <div>
-      <h2 class="h-display">Not ready to run<br>your own monitor?<br><em>Read ours.</em></h2>
-      <p class="dispatch-sub">A weekly briefing of buying-intent posts we caught — anonymized, with the reply that worked.</p>
+      <h2 class="h-display">Want the signals<br>without the setup?<br><em>We send a digest.</em></h2>
+      <p class="dispatch-sub">Every Tuesday: a curated briefing of buying-intent posts we caught that week — anonymized, with the reply draft that worked.</p>
     </div>
     <form class="dispatch-form" id="dispatch-form" novalidate>
       <label for="dispatch-email" class="dispatch-label">EMAIL</label>
