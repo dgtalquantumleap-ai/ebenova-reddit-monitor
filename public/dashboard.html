@@ -204,6 +204,7 @@ select.inp{cursor:pointer}
 .alert-error{background:#FEF2F2;border:1px solid #FECACA;color:#991B1B}
 .alert-success{background:#ECFDF5;border:1px solid #A7F3D0;color:#065F46}
 .alert-info{background:#EFF6FF;border:1px solid #BFDBFE;color:#1E40AF}
+.alert-warn{background:#FFFBEB;border:1px solid #FDE68A;color:#92400E}
 
 /* Draft box */
 .draft-box{background:#FFF7F2;border:1px solid #FED7AA;border-radius:8px;padding:14px 16px;margin-top:12px}
@@ -1839,7 +1840,7 @@ function AggregateOutcomesPanel({ apiKey }) {
   );
 }
 
-function MatchesFeed({ apiKey, monitors }) {
+function MatchesFeed({ apiKey, monitors, onGoToSettings }) {
   const [selId, setSelId] = useState('');
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -1994,15 +1995,55 @@ function MatchesFeed({ apiKey, monitors }) {
               </div>
             )}
             {loading && <div style={{display:'flex',flexDirection:'column',gap:8}}>{[1,2,3].map(i=><div key={i} className="shimmer" style={{height:120}} />)}</div>}
-            {!loading && !matches.length && (
-              <div className="card">
-                <div className="empty">
-                  <div className="empty-icon"><i className="ph ph-clock"></i></div>
-                  <div className="empty-title">Your first matches will appear here</div>
-                  <div className="empty-desc">Ebenova scans 13 platforms every 10 minutes. After the first scan, posts from people actively asking for what you sell will appear here — scored by demand strength and sorted so the most urgent appear first.</div>
+            {!loading && !matches.length && selMonitor && (() => {
+              // ── Zero-match nudge ──────────────────────────────────────────
+              // If a monitor has been active for >1h but still has zero
+              // all-time matches, the keyword set is almost certainly too
+              // narrow (brand-name comparisons) or too broad (industry
+              // terms that drown signal). Surface a yellow callout that
+              // links to Settings so the owner can tune, plus a mailto for
+              // hands-on help — these first-week interventions are the
+              // single biggest activation lever we have.
+              const createdMs = selMonitor.created_at ? new Date(selMonitor.created_at).getTime() : 0;
+              const ageH      = createdMs ? (Date.now() - createdMs) / 3600000 : 0;
+              const isStale   = ageH > 1 && selMonitor.active && (selMonitor.total_matches_found || 0) === 0;
+              if (isStale) {
+                const subject = `Help tuning keywords for "${selMonitor.name || 'my monitor'}"`;
+                const body    = `Hi Olumide,\n\nMy monitor "${selMonitor.name || ''}" has been running for a while but isn't returning any matches. Could you help me pick better keywords?\n\nWhat I'm trying to find:\n(describe the kind of customer you want)\n\nThanks!`;
+                const mailto  = `mailto:dgtalquantumleap@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+                return (
+                  <div className="card" style={{borderLeft:'4px solid #F59E0B',background:'#FFFBEB'}}>
+                    <div style={{display:'flex',gap:14,padding:'22px 24px',alignItems:'flex-start'}}>
+                      <div style={{flexShrink:0,fontSize:28,lineHeight:1}}>⚠️</div>
+                      <div style={{flex:1,minWidth:0}}>
+                        <h3 style={{margin:'0 0 6px',fontSize:15,fontWeight:600,color:'#92400E'}}>This monitor hasn't surfaced any matches yet</h3>
+                        <p style={{margin:'0 0 14px',fontSize:13.5,color:'#78350F',lineHeight:1.6}}>
+                          It's been active for {Math.floor(ageH)}h with {selMonitor.keyword_count || 0} keyword{(selMonitor.keyword_count||0)===1?'':'s'} and zero hits. Usually this means the keywords are either <b>too narrow</b> (brand names rarely appear on Reddit) or <b>too generic</b> (drowning in unrelated posts). Try adding 3-5 pain-phrases that real buyers type, like <i>"looking for a tool that…"</i>, <i>"frustrated with…"</i>, or <i>"how do I…"</i> — those convert best.
+                        </p>
+                        <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+                          <button className="btn btn-primary btn-sm" onClick={() => onGoToSettings && onGoToSettings()}>
+                            <i className="ph ph-pencil-simple"></i> Tune keywords
+                          </button>
+                          <a className="btn btn-white btn-sm" href={mailto} style={{textDecoration:'none'}}>
+                            <i className="ph ph-chat-circle"></i> Get setup help
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+              // ── Fresh monitor (< 1h old) — friendly empty state ───────────
+              return (
+                <div className="card">
+                  <div className="empty">
+                    <div className="empty-icon"><i className="ph ph-clock"></i></div>
+                    <div className="empty-title">Your first matches will appear here</div>
+                    <div className="empty-desc">Ebenova scans Reddit, Hacker News, GitHub, Medium, Substack and more every 15 minutes. After the first scan, posts from people actively asking for what you sell will appear here — scored by demand strength and sorted so the most urgent appear first.</div>
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
             {!loading && <RevenueTicker matches={matches} monitor={selMonitor} />}
             {sprintMode && !loading && matches.length > 0 && (
               <SprintView
@@ -4384,7 +4425,7 @@ function App() {
       <FeedbackWidget apiKey={apiKey} />
       <div className="main">
         {tab==='find'     && <FindCustomers apiKey={apiKey} onMonitorCreated={()=>{ loadMonitors(); setTab('feed'); }} />}
-        {tab==='feed'     && <MatchesFeed apiKey={apiKey} monitors={monitors} />}
+        {tab==='feed'     && <MatchesFeed apiKey={apiKey} monitors={monitors} onGoToSettings={() => setTab('settings')} />}
         {tab==='drafts'   && <DraftsFeed apiKey={apiKey} monitors={monitors} onDraftCount={setDraftCount} />}
         {tab==='settings' && <Settings apiKey={apiKey} userEmail={userEmail} plan={plan} onSignOut={signOut} monitors={monitors} onRefresh={loadMonitors} />}
       </div>

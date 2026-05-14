@@ -564,13 +564,11 @@
     <span class="ticker-item">MATCHED <span class="num">142</span> <span class="ticker-arrow-up">▲</span></span>
     <span class="ticker-item">REDDIT <span class="num">38</span></span>
     <span class="ticker-item">HN <span class="num">11</span></span>
-    <span class="ticker-item">UPWORK <span class="num">22</span></span>
-    <span class="ticker-item">QUORA <span class="num">9</span></span>
-    <span class="ticker-item">FIVERR <span class="num">14</span></span>
     <span class="ticker-item">GITHUB <span class="num">19</span></span>
-    <span class="ticker-item">PH <span class="num">8</span></span>
-    <span class="ticker-item">SUBSTACK <span class="num">7</span></span>
     <span class="ticker-item">MEDIUM <span class="num">14</span></span>
+    <span class="ticker-item">SUBSTACK <span class="num">7</span></span>
+    <span class="ticker-item">FIVERR <span class="num">14</span></span>
+    <span class="ticker-item">PH <span class="num">8</span></span>
   </div>
 </div>
 
@@ -591,14 +589,14 @@
 <!-- HERO -->
 <section class="hero" id="main">
   <div>
-    <div class="hero-eyebrow" id="hero-platform-count">SIGNAL // 13 PLATFORMS</div>
+    <div class="hero-eyebrow" id="hero-platform-count">SIGNAL // 7 PLATFORMS</div>
     <h1 class="hero-title">
       Your next customer<br>
       is <em>already typing.</em>
-      <small>// REDDIT · HN · UPWORK · QUORA · 5 MORE</small>
+      <small>// REDDIT · HN · GITHUB · MEDIUM · SUBSTACK · MORE</small>
     </h1>
     <p class="hero-sub">
-      <b style="color:var(--ink);font-weight:600;">A live feed of buying-intent posts across 9 platforms, with ready-to-edit reply templates you can post in seconds.</b><br>
+      <b style="color:var(--ink);font-weight:600;">A live feed of buying-intent posts across Reddit, Hacker News, GitHub, Medium, Substack and more — with ready-to-edit reply templates you can post in seconds.</b><br>
       Built for solo founders, indie makers, and lean agencies who don't have time to scroll Reddit all day.
     </p>
     <div class="hero-cta-row">
@@ -640,14 +638,14 @@
       </div>
       <div class="feed-row" style="animation-delay: 0.2s;">
         <span class="feed-time">04:41:39</span>
-        <span class="feed-source src-upwork">UPWORK</span>
-        <span class="feed-title-low">Need a Shopify dev — looking for ongoing relationship</span>
+        <span class="feed-source src-medium">MEDIUM</span>
+        <span class="feed-title-low">Why I'm switching from Brand24 — looking for something less noisy</span>
         <span class="feed-score">7.4</span>
       </div>
       <div class="feed-row" style="animation-delay: 0.3s;">
         <span class="feed-time">04:41:08</span>
-        <span class="feed-source src-quora">QUORA</span>
-        <span class="feed-title-low">What's the best alternative to Brand24 for monitoring mentions?</span>
+        <span class="feed-source src-substack">SUBSTACK</span>
+        <span class="feed-title-low">Open thread: which tools are you actually paying for in 2026?</span>
         <span class="feed-score">8.9</span>
       </div>
       <div class="feed-row" style="animation-delay: 0.4s;">
@@ -671,19 +669,19 @@
 </section>
 
 <!-- PLATFORMS STRIP -->
+<!-- Marketing-honest list: only platforms NOT in lib/platforms.js PLATFORM_DISABLED.
+     When a platform comes back online, re-add its pill here AND its chip below. -->
 <div class="platforms">
   <div class="platforms-inner">
     <span class="platform-pill"><span class="dot live"></span>REDDIT</span>
     <span class="platform-pill"><span class="dot live"></span>HACKER NEWS</span>
-    <span class="platform-pill"><span class="dot live"></span>UPWORK</span>
-    <span class="platform-pill"><span class="dot live"></span>FIVERR</span>
-    <span class="platform-pill"><span class="dot live"></span>QUORA</span>
+    <span class="platform-pill"><span class="dot live"></span>GITHUB</span>
     <span class="platform-pill"><span class="dot live"></span>MEDIUM</span>
     <span class="platform-pill"><span class="dot live"></span>SUBSTACK</span>
-    <span class="platform-pill"><span class="dot live"></span>GITHUB</span>
+    <span class="platform-pill"><span class="dot live"></span>FIVERR</span>
     <span class="platform-pill"><span class="dot live"></span>PRODUCT HUNT</span>
   </div>
-  <div class="platforms-meta">9 STREAMS // 1 INTERFACE</div>
+  <div class="platforms-meta">7 STREAMS // 1 INTERFACE</div>
 </div>
 
 <!-- PROTOCOL — interactive platform selector -->
@@ -692,24 +690,21 @@
   <h2 class="h-display">Pick what you want <em>watched.</em></h2>
   <p class="how-intro">Toggle a source off and the feed below stops carrying it. The selection follows you to the dashboard when you sign up.</p>
 
+  <!-- Marketing-honest selector: only platforms NOT in lib/platforms.js
+       PLATFORM_DISABLED. When a platform comes back online, re-add its
+       chip here AND its pill in the PLATFORMS STRIP above. -->
   <div class="selector-grid" role="group" aria-label="Platform selection">
-    <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="reddit"     aria-label="Toggle Reddit">REDDIT</button>
-    <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="hackernews" aria-label="Toggle Hacker News">HACKER NEWS</button>
-    <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="upwork"     aria-label="Toggle Upwork">UPWORK</button>
-    <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="fiverr"     aria-label="Toggle Fiverr">FIVERR</button>
-    <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="quora"      aria-label="Toggle Quora">QUORA</button>
-    <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="github"     aria-label="Toggle GitHub">GITHUB</button>
-    <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="medium"     aria-label="Toggle Medium">MEDIUM</button>
-    <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="substack"   aria-label="Toggle Substack">SUBSTACK</button>
+    <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="reddit"      aria-label="Toggle Reddit">REDDIT</button>
+    <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="hackernews"  aria-label="Toggle Hacker News">HACKER NEWS</button>
+    <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="github"      aria-label="Toggle GitHub">GITHUB</button>
+    <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="medium"      aria-label="Toggle Medium">MEDIUM</button>
+    <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="substack"    aria-label="Toggle Substack">SUBSTACK</button>
+    <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="fiverr"      aria-label="Toggle Fiverr">FIVERR</button>
     <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="producthunt" aria-label="Toggle Product Hunt">PRODUCT HUNT</button>
-    <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="twitter"     aria-label="Toggle Twitter">TWITTER</button>
-    <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="jijing"      aria-label="Toggle Jiji.ng">JIJI.NG</button>
-    <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="youtube"     aria-label="Toggle YouTube">YOUTUBE</button>
-    <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="amazon"      aria-label="Toggle Amazon Reviews">AMAZON REVIEWS</button>
   </div>
 
   <div class="selector-meta">
-    Watching <span class="selector-count" id="selector-count">13</span> of <span id="selector-total">13</span> · all plans
+    Watching <span class="selector-count" id="selector-count">7</span> of <span id="selector-total">7</span> · all plans
   </div>
 
   <div class="selector-feed" id="selector-feed" role="log" aria-live="off"></div>
@@ -733,7 +728,7 @@
           <span style="color: var(--gold); font-weight: 600;">9.2 INTENT</span>
         </div>
         <h3 class="anatomy-title">Anyone using AI to monitor Reddit for buying signals? I keep losing leads to competitors who just happen to comment first.</h3>
-        <p class="anatomy-body">"…tried Brand24 last month and it was way too noisy. Looking for something that actually filters and ideally writes the first draft. Doesn't have to be Reddit-only — Quora, Upwork forums also fine. Budget under $50/mo if it works."</p>
+        <p class="anatomy-body">"…tried Brand24 last month and it was way too noisy. Looking for something that actually filters and ideally writes the first draft. Doesn't have to be Reddit-only — Substack comments, GitHub threads, indie blogs also fine. Budget under $50/mo if it works."</p>
 
         <div class="anatomy-draft">
           <div class="anatomy-draft-label">EBENOVA DRAFT // CONFIDENCE 0.88</div>
@@ -793,7 +788,7 @@
         <li>Alerts on every keyword match — including unrelated noise</li>
         <li>No buying-intent scoring — you triage by hand</li>
         <li>No reply drafts — you write from a blank box</li>
-        <li>No Upwork or Fiverr forum coverage where freelancers post</li>
+        <li>Reddit-only or social-only — misses Substack, Medium, GitHub threads</li>
         <li>$99–$299/month for less keyword volume</li>
       </ul>
     </div>
@@ -804,7 +799,7 @@
         <li>Intent score per match — only posts worth replying to</li>
         <li>SKIP filter — won't draft replies that would get you banned</li>
         <li>Reply drafts that sound like a community member, not an ad</li>
-        <li>Upwork + Fiverr + GitHub Issues + Product Hunt comments — all in</li>
+        <li>Reddit + HN + GitHub + Medium + Substack + Fiverr + Product Hunt — all in</li>
         <li>Free to start. $29/mo Growth. $199/mo Scale.</li>
       </ul>
     </div>
@@ -838,7 +833,7 @@
         <li>1 active monitor</li>
         <li>10 keywords</li>
         <li>Email digest</li>
-        <li>All 9 platforms</li>
+        <li>All 7 platforms</li>
       </ul>
       <a href="/dashboard" class="price-cta" aria-label="Start the free Starter plan">START FREE</a>
     </div>
@@ -917,11 +912,14 @@
 (function () {
   // Shared pool. window.__ebnvFeedPool exposed so the platform-selector
   // script (loaded later in the page) can read the same source of truth.
+  // Marketing-honest pool: only platforms NOT in lib/platforms.js
+  // PLATFORM_DISABLED. When a platform comes back online, re-add its
+  // entries here AND its chip/pill above.
   var POOL = [
     { src: 'reddit',     cls: 'src-reddit',   title: '"Anyone using AI to draft sales emails? Looking for recommendations…"', score: 9.2, summary: 'r/SaaS · 14 comments · author has shipped before' },
     { src: 'hackernews', cls: 'src-hn',       title: 'Show HN: I want to monitor Reddit for buying signals',                  score: 8.7, summary: '94 points · 22 comments' },
-    { src: 'upwork',     cls: 'src-upwork',   title: 'Need a Shopify dev — looking for ongoing relationship',                 score: 7.4, summary: 'job posted 12m ago · fixed-price' },
-    { src: 'quora',      cls: 'src-quora',    title: "What's the best alternative to Brand24 for monitoring mentions?",       score: 8.9, summary: '47 followers · 3 answers' },
+    { src: 'medium',     cls: 'src-medium',   title: 'Why I\'m switching from Brand24 — looking for something less noisy',    score: 7.4, summary: 'article · 190 claps' },
+    { src: 'substack',   cls: 'src-substack', title: 'Open thread: which tools are you actually paying for in 2026?',         score: 8.9, summary: 'comments · 38 likes' },
     { src: 'fiverr',     cls: 'src-fiverr',   title: 'Looking for a freelance copywriter who has worked with B2B SaaS',       score: 7.8, summary: 'buyer request · open' },
     { src: 'github',     cls: 'src-github',   title: 'Issue: best library for AI prompt sanitization?',                       score: 6.5, summary: 'opened 8m ago · 2 reactions' },
     { src: 'producthunt',cls: 'src-ph',       title: 'Frustrated by manual outreach — what\'s the modern stack?',             score: 8.1, summary: 'discussion · 6 comments' },
@@ -929,16 +927,13 @@
     { src: 'medium',     cls: 'src-medium',   title: 'How I built a dripped-out outbound stack on $50/mo',                    score: 6.8, summary: 'article · 240 claps' },
     { src: 'reddit',     cls: 'src-reddit',   title: 'Need help finding leads in r/Entrepreneur without getting banned',      score: 8.4, summary: 'r/Entrepreneur · 9 comments' },
     { src: 'hackernews', cls: 'src-hn',       title: 'Ask HN: how do you replace cold email in 2026?',                         score: 7.9, summary: '38 points · 19 comments' },
-    { src: 'quora',      cls: 'src-quora',    title: 'Has anyone moved off Brand24? Looking for cheaper options',             score: 8.2, summary: '12 followers · 1 answer' },
-    { src: 'upwork',     cls: 'src-upwork',   title: 'Need ongoing AI engineer — comfortable with LangChain + Python',        score: 8.6, summary: 'hourly · long-term' },
     { src: 'fiverr',     cls: 'src-fiverr',   title: 'Want a designer who has shipped a SaaS marketing site before',          score: 7.1, summary: 'open brief · negotiable' },
     { src: 'github',     cls: 'src-github',   title: 'PR comment: "Could we use OpenRouter instead of direct Groq?"',          score: 6.9, summary: 'review thread · merged' },
     { src: 'producthunt',cls: 'src-ph',       title: 'Founders: what\'s actually working for new-customer acquisition?',     score: 8.0, summary: 'maker discussion · 14 comments' },
     { src: 'substack',   cls: 'src-substack', title: 'Reply on "The death of paid ads" → asks for tool recs',                 score: 7.5, summary: 'comment · 8 likes' },
     { src: 'medium',     cls: 'src-medium',   title: 'My honest review of every social-listening tool I tried in Q1',         score: 7.3, summary: 'article · 180 claps' },
-    { src: 'twitter',    cls: 'src-twitter',  title: '"Just paid $99/mo for Brand24 and it\'s still missing half the threads. There has to be something better."', score: 8.4, summary: '@alex_indie · 14 likes · 6 replies' },
-    { src: 'twitter',    cls: 'src-twitter',  title: 'who do y\'all use for monitoring buying signals on the open web? prefer something cheap and not 100% reddit-only', score: 8.7, summary: '@startup_lia · 22 likes · 11 replies' },
-    { src: 'twitter',    cls: 'src-twitter',  title: 'Anyone tried the new wave of social-listening tools? My current one drowns me in noise.',                       score: 7.3, summary: '@founder_rae · 8 likes · 4 replies' },
+    { src: 'reddit',     cls: 'src-reddit',   title: 'r/SaaS: "Best way to monitor competitor mentions without paying $99/mo?"', score: 8.2, summary: 'r/SaaS · 28 comments' },
+    { src: 'hackernews', cls: 'src-hn',       title: 'Ask HN: tools you use to surface buying-intent threads in 2026?',       score: 8.5, summary: '52 points · 31 comments' },
   ];
   window.__ebnvFeedPool = POOL;
 
@@ -1003,19 +998,22 @@
 <script>
 (function () {
   var STORAGE_KEY = 'ebnv_landing_platform_prefs';
-  // Mirrors VALID_PLATFORMS in lib/platforms.js. The static chip strip
-  // above ships with all 13 baked into the markup so SEO + first paint
-  // don't depend on a fetch. The fetch below reconciles for future drift —
-  // if the server adds a 14th platform, the eyebrow + count update on
-  // page load without redeploying the marketing markup.
-  var KNOWN = ['reddit','hackernews','medium','substack','quora','upwork','fiverr','github','producthunt','twitter','jijing','youtube','amazon'];
+  // KNOWN mirrors the chip strip above — only platforms NOT in
+  // lib/platforms.js PLATFORM_DISABLED. The fetch below reconciles
+  // counts against /v1/platforms (which honors the disabled flag) so
+  // when a platform comes back online the eyebrow updates on next
+  // page load without redeploying.
+  var KNOWN = ['reddit','hackernews','github','medium','substack','fiverr','producthunt'];
 
-  // Drift-proof reconciliation: pull live platform list from the API and
-  // update the eyebrow + total count if the server has more than what's
-  // baked in here. Best-effort; the static markup is the SEO floor.
+  // Drift-proof reconciliation: pull live platform list from the API
+  // and update the eyebrow + total count using only platforms that are
+  // currently enabled server-side. Best-effort; the static markup is
+  // the SEO floor.
   fetch('/v1/platforms').then(function (r) { return r.ok ? r.json() : null }).then(function (d) {
     if (!d || !Array.isArray(d.platforms) || d.platforms.length === 0) return;
-    var n = d.platforms.length;
+    var enabled = d.platforms.filter(function (p) { return !p.disabled; });
+    var n = enabled.length;
+    if (n <= 0) return;
     var hero = document.getElementById('hero-platform-count');
     var totalEl = document.getElementById('selector-total');
     if (hero)    hero.textContent    = 'SIGNAL // ' + n + ' PLATFORMS';
