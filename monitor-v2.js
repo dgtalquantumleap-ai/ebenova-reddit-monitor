@@ -98,7 +98,6 @@ const OPENAI_API_KEY   = process.env.OPENAI_API_KEY   // embeddings for semantic
 const VOYAGE_API_KEY   = process.env.VOYAGE_API_KEY   // alternative: cheaper than OpenAI
 const FROM_EMAIL       = process.env.FROM_EMAIL || 'insights@ebenova.org'
 const POLL_MINUTES     = parseInt(process.env.POLL_INTERVAL_MINUTES || '15')
-const MAX_SEEN         = 50_000
 const SEMANTIC_ENABLED = !!(OPENAI_API_KEY || VOYAGE_API_KEY)
 if (SEMANTIC_ENABLED) console.log(`[v2] Semantic V2: ON (${VOYAGE_API_KEY ? 'Voyage AI' : 'OpenAI'})`)
 
@@ -126,34 +125,32 @@ if (!redis) console.log('[v2] ⚠️  Redis not configured — multi-tenant feat
 
 const resend = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null
 
-// ── Seen IDs (global, resets on restart) ─────────────────────────────────────
-// We track by monitorId + postId so different monitors don't block each other
-const seenMap = new Map() // key: `${monitorId}:${postId}` → true
+// ── Seen IDs (cycle-scoped, reset at the start of every poll) ────────────────
+// Module-level so hasSeen/markSeen helpers can reference it without threading
+// a parameter through every scraper call. Replaced with a fresh Set at the top
+// of pollInner() each cycle so it never accumulates across cycles.
+// Cross-cycle dedup is handled by Redis seen:v2:{monitorId}:{postId} (3-day TTL).
+let _cycleSeenIds = new Set() // key: `${monitorId}:${postId}`
 
 function hasSeen(monitorId, postId) {
-  return seenMap.has(`${monitorId}:${postId}`)
+  return _cycleSeenIds.has(`${monitorId}:${postId}`)
 }
 
-// Redis-backed seen check — backfills memory so restarts don't re-alert (3-day TTL)
+// Redis-backed seen check — cross-cycle dedup via 3-day TTL keys.
+// The cycle-scoped Set is checked first (fast path, no network).
 async function hasSeenWithRedis(monitorId, postId) {
   if (hasSeen(monitorId, postId)) return true
   if (!redis) return false
   try {
     const r = await redis.get(`seen:v2:${monitorId}:${postId}`)
-    if (r) { seenMap.set(`${monitorId}:${postId}`, true); return true }
+    if (r) { _cycleSeenIds.add(`${monitorId}:${postId}`); return true }
   } catch (_) {}
   return false
 }
 
 function markSeen(monitorId, postId) {
-  seenMap.set(`${monitorId}:${postId}`, true)
+  _cycleSeenIds.add(`${monitorId}:${postId}`)
   if (redis) redis.setex(`seen:v2:${monitorId}:${postId}`, 60 * 60 * 24 * 3, '1').catch(() => {})
-  if (seenMap.size > MAX_SEEN) {
-    // Prune oldest 10k entries
-    const keys = [...seenMap.keys()].slice(0, 10000)
-    keys.forEach(k => seenMap.delete(k))
-    console.log(`[v2] 🧹 Pruned ${keys.length} seen entries`)
-  }
 }
 
 // ── Utility ───────────────────────────────────────────────────────────────────
@@ -650,9 +647,9 @@ async function storeMatches(redis, monitor, matches) {
     const key = `insights:match:${monitor.id}:${m.id}`
     // Only lpush when this is a genuinely new match. Existing keys mean the
     // ID is already in the list — re-pushing after a restart would create
-    // duplicate list entries because the in-memory seenMap resets on restart
-    // while the 7-day match TTL keeps entries alive longer than the 3-day
-    // seen:v2 TTL.
+    // duplicate list entries because the cycle-scoped _cycleSeenIds resets each
+    // poll cycle while the 7-day match TTL keeps entries alive longer than the
+    // 3-day seen:v2 TTL.
     const isNew = !(await redis.exists(key))
     await redis.set(key, JSON.stringify({ ...m, monitorId: monitor.id, storedAt: new Date().toISOString() }))
     await redis.expire(key, TTL)
@@ -1749,6 +1746,10 @@ async function pollInner() {
   const cycleStart = Date.now()
   console.log(`\n[v2] ===== POLL START: ${new Date().toISOString()} =====`)
 
+  // Reset cycle-scoped seen set — bounds memory to one poll cycle.
+  // Cross-cycle dedup is handled by Redis seen:v2:{monitorId}:{postId} keys.
+  _cycleSeenIds = new Set()
+
   let redis
   try {
     redis = getRedis()
@@ -1812,6 +1813,8 @@ async function pollInner() {
   for (let i = 0; i < monitors.length; i += MONITOR_CONCURRENCY) {
     const batch = monitors.slice(i, i + MONITOR_CONCURRENCY)
     await Promise.all(batch.map(m => runMonitor(m)))
+    // Release references to help GC between monitor batches
+    if (global.gc) global.gc()
     // 5s gap between batches so Reddit doesn't rate-limit
     if (i + MONITOR_CONCURRENCY < monitors.length) await delay(5000)
   }
@@ -1842,7 +1845,11 @@ if (!redis) {
   // Memory usage logging every 5 minutes
   setInterval(() => {
     const m = process.memoryUsage()
-    console.log(`[v2] 📊 Memory: Heap ${Math.round(m.heapUsed/1024/1024)}/${Math.round(m.heapTotal/1024/1024)}MB | RSS ${Math.round(m.rss/1024/1024)}MB | Seen entries: ${seenMap.size}`)
+    const heapUsedMB = Math.round(m.heapUsed/1024/1024)
+    console.log(`[v2] 📊 Memory: Heap ${heapUsedMB}/${Math.round(m.heapTotal/1024/1024)}MB | RSS ${Math.round(m.rss/1024/1024)}MB | Seen entries (cycle): ${_cycleSeenIds.size}`)
+    if (heapUsedMB > 200) {
+      console.warn(`[v2] ⚠️  HIGH HEAP: ${heapUsedMB}MB — possible leak`)
+    }
   }, 300_000)
 
   // Run once on startup, then on cron

@@ -11,7 +11,7 @@
     "start:v1": "node monitor.js",
     "start:v2": "node monitor-v2.js",
     "start:mcp": "node mcp-server.js",
-    "test": "node --test --test-reporter=spec test/",
+    "test": "node --test --test-reporter=spec test/*.test.js",
     "test:integration": "node test-reddit-monitor.js",
     "test:mcp": "node test-apify-actor.js",
     "test:scrapers": "node scripts/test-new-scrapers.js",
