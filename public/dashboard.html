@@ -204,6 +204,7 @@ select.inp{cursor:pointer}
 .alert-error{background:#FEF2F2;border:1px solid #FECACA;color:#991B1B}
 .alert-success{background:#ECFDF5;border:1px solid #A7F3D0;color:#065F46}
 .alert-info{background:#EFF6FF;border:1px solid #BFDBFE;color:#1E40AF}
+.alert-warn{background:#FFFBEB;border:1px solid #FDE68A;color:#92400E}
 
 /* Draft box */
 .draft-box{background:#FFF7F2;border:1px solid #FED7AA;border-radius:8px;padding:14px 16px;margin-top:12px}
@@ -1048,6 +1049,26 @@ function MatchCard({ match, monitorId, apiKey, onAction }) {
     }).catch(() => {});
   };
 
+  // One-click reply workflow. Copies the (edited) draft to clipboard,
+  // flips postedAt on the server (so reply-tracker engagement check fires
+  // 24h later), and opens the original post in a new tab so the user can
+  // paste their reply. Closes the loop that ~99% of users currently leave
+  // open — production data shows only 1 of 603 matches has postedAt set
+  // because copy/post/mark-posted is three separate clicks today.
+  const copyPostAndOpen = async () => {
+    if (!draftText) return;
+    try { await navigator.clipboard.writeText(draftText) } catch (_) {}
+    setCopied(true); setTimeout(() => setCopied(false), 2000);
+    if (match.url) window.open(match.url, '_blank', 'noopener,noreferrer');
+    if (!postedAt && !posting) {
+      setPosting(true);
+      try {
+        const r = await apiFetch('/v1/matches/posted', { method:'PATCH', body:JSON.stringify({ monitor_id: monitorId, match_id: match.id }) }, apiKey);
+        if (r.ok) setPostedAt(r.data.postedAt || new Date().toISOString());
+      } finally { setPosting(false); }
+    }
+  };
+
   if (gone) return null;
 
   const _engHigh  = (match.score||0) >= 10 || (match.comments||0) >= 5;
@@ -1099,18 +1120,25 @@ function MatchCard({ match, monitorId, apiKey, onAction }) {
             onChange={e => setDraftText(e.target.value)}
             placeholder="Edit your reply…"
           />
-          {!postedAt && <div style={{fontSize:11,color:'#9A3412',opacity:.65,marginTop:4}}>Copy → post on the platform → click <strong>Mark posted</strong> below to track your reply.</div>}
+          {!postedAt && <div style={{fontSize:11,color:'#9A3412',opacity:.65,marginTop:4}}>One click: <strong>Copy + Open + Mark posted</strong> below copies your edited draft, opens the post in a new tab, and starts the 24h engagement tracker.</div>}
         </div>
       )}
       <div style={{display:'flex',gap:6,flexWrap:'wrap',alignItems:'center',marginTop:12,paddingTop:12,borderTop:'1px solid #F8FAFC'}}>
-        {match.draft && (
-          <Tip text="Copy the edited draft to your clipboard, then paste it on the platform">
-            <button className="btn btn-primary btn-sm" onClick={copyDraft} disabled={!draftText}>
-              <i className={`ph-bold ph-${copied?'check':'copy'}`}></i> {copied ? 'Copied' : 'Copy'}
+        {match.draft && !postedAt && (
+          <Tip text="Copies the draft, opens the original post in a new tab, and records that you replied — all in one click. Tracks engagement 24h later.">
+            <button className="btn btn-primary btn-sm" onClick={copyPostAndOpen} disabled={!draftText || posting}>
+              <i className={`ph-bold ph-${copied?'check':'arrow-square-out'}`}></i> {copied ? 'Copied & opening…' : (posting ? 'Saving…' : 'Copy + Open + Mark posted')}
             </button>
           </Tip>
         )}
-        <Tip text={postedAt ? 'Undo — mark as not posted' : 'Record that you replied to this post'}>
+        {match.draft && (
+          <Tip text="Copy the draft only (no open / no mark-as-posted)">
+            <button className={`btn btn-sm ${postedAt ? 'btn-primary' : 'btn-ghost'}`} onClick={copyDraft} disabled={!draftText}>
+              <i className={`ph-bold ph-${copied?'check':'copy'}`}></i> {copied ? 'Copied' : 'Copy only'}
+            </button>
+          </Tip>
+        )}
+        <Tip text={postedAt ? 'Undo — mark as not posted' : 'Record that you replied to this post (without copying or opening)'}>
           <button
             className={`btn btn-sm ${postedAt ? 'btn-posted' : 'btn-ghost'}`}
             onClick={togglePosted}
@@ -1750,7 +1778,69 @@ function SprintView({ matches, monitorId, apiKey, onClose, onAction }) {
   );
 }
 
-function MatchesFeed({ apiKey, monitors }) {
+// PR #29 — Aggregate reply-outcomes stat card. Renders at the top of the
+// Feed tab so the headline ROI number ("X posted · Y got engagement · Z%")
+// is visible the moment the customer opens the dashboard, not just buried
+// in the Monday weekly digest email. Hits GET /v1/outcomes which sums
+// getRecentOutcomes() across all of the owner's monitors. Quietly returns
+// null when no posts are tracked yet (encouraging-empty: no card at all,
+// rather than a "0 / 0" card that signals nothing's happening).
+function AggregateOutcomesPanel({ apiKey }) {
+  const [data, setData] = useState(null);
+  useEffect(() => {
+    if (!apiKey) return;
+    apiFetch('/v1/outcomes', {}, apiKey)
+      .then(r => { if (r.ok) setData(r.data); })
+      .catch(() => {});
+  }, [apiKey]);
+  if (!data || !data.totalPosted) return null;
+  const top = (data.topPerforming || [])[0] || null;
+  return (
+    <div className="card" style={{padding:'16px 20px',marginBottom:16,background:'linear-gradient(135deg,#FFF7F2 0%,#FFFFFF 70%)',border:'1px solid #FED7AA'}}>
+      <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}>
+        <i className="ph-fill ph-chart-line-up" style={{color:'#FF6B35',fontSize:18}}></i>
+        <span style={{fontSize:11,fontWeight:700,letterSpacing:1.5,color:'#9A3412',textTransform:'uppercase'}}>Reply Performance · {data.period || '30d'} · all monitors</span>
+      </div>
+      <div style={{display:'flex',gap:24,flexWrap:'wrap',alignItems:'baseline'}}>
+        <div>
+          <div style={{fontSize:28,fontWeight:800,color:'#0F172A',lineHeight:1,fontVariantNumeric:'tabular-nums'}}>{data.totalPosted}</div>
+          <div style={{fontSize:11,color:'#64748B',marginTop:4,letterSpacing:.3}}>replies posted</div>
+        </div>
+        <div>
+          <div style={{fontSize:28,fontWeight:800,color:'#16A34A',lineHeight:1,fontVariantNumeric:'tabular-nums'}}>{data.gotEngagement}</div>
+          <div style={{fontSize:11,color:'#64748B',marginTop:4,letterSpacing:.3}}>got engagement</div>
+        </div>
+        <div>
+          <div style={{fontSize:28,fontWeight:800,color:'#FF6B35',lineHeight:1,fontVariantNumeric:'tabular-nums'}}>{data.engagementRate}</div>
+          <div style={{fontSize:11,color:'#64748B',marginTop:4,letterSpacing:.3}}>engagement rate</div>
+        </div>
+        {/* PR #29 final piece — 4th big number: total UTM-link clicks driven
+            by replies in this period. Renders only when the user has a
+            product URL set on at least one monitor (totalClicks > 0 OR
+            replies-with-clicks > 0); otherwise the metric column is silently
+            omitted so this card doesn't show a misleading "0 clicks" for
+            users who haven't enabled UTM tracking. */}
+        {(data.totalClicks > 0 || data.repliesWithClicks > 0) && (
+          <div title={`${data.repliesWithClicks} of your replies drove at least one click — paste the short link from any draft (e.g. /r/<matchId>) and any reader-click is counted here.`}>
+            <div style={{fontSize:28,fontWeight:800,color:'#2563EB',lineHeight:1,fontVariantNumeric:'tabular-nums'}}>{data.totalClicks}</div>
+            <div style={{fontSize:11,color:'#64748B',marginTop:4,letterSpacing:.3}}>clicks driven{data.repliesWithClicks ? ` · ${data.repliesWithClicks} replies` : ''}</div>
+          </div>
+        )}
+      </div>
+      {top && top.title && (
+        <div style={{marginTop:14,paddingTop:12,borderTop:'1px dashed #FED7AA',fontSize:12.5,color:'#475569'}}>
+          <span style={{color:'#9A3412',fontSize:10.5,fontWeight:700,letterSpacing:1,textTransform:'uppercase',marginRight:8}}>Top reply</span>
+          <a href={top.url} target="_blank" rel="noreferrer" style={{color:'#0F172A',fontWeight:600,textDecoration:'none'}}>{(top.title || '').slice(0, 90)}{(top.title || '').length > 90 ? '…' : ''}</a>
+          {typeof top.commentsDelta === 'number' && top.commentsDelta > 0 && (
+            <span style={{marginLeft:8,padding:'2px 8px',background:'#DCFCE7',color:'#166534',borderRadius:10,fontSize:11,fontWeight:700}}>+{top.commentsDelta} comments</span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MatchesFeed({ apiKey, monitors, onGoToSettings }) {
   const [selId, setSelId] = useState('');
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -1798,6 +1888,12 @@ function MatchesFeed({ apiKey, monitors }) {
 
   return (
     <>
+      {/* PR #29 — Aggregate outcomes card. Renders ABOVE the page header
+          so the headline ROI number (X posted · Y engaged · Z%) is the
+          first thing a customer sees on the Feed tab. Component returns
+          null when no replies are tracked yet — so customers in the
+          empty state aren't staring at "0 / 0 / 0%". */}
+      <AggregateOutcomesPanel apiKey={apiKey} />
       <div className="page-header">
         <div>
           <h1 className="page-title">Monitor Feed</h1>
@@ -1899,15 +1995,55 @@ function MatchesFeed({ apiKey, monitors }) {
               </div>
             )}
             {loading && <div style={{display:'flex',flexDirection:'column',gap:8}}>{[1,2,3].map(i=><div key={i} className="shimmer" style={{height:120}} />)}</div>}
-            {!loading && !matches.length && (
-              <div className="card">
-                <div className="empty">
-                  <div className="empty-icon"><i className="ph ph-clock"></i></div>
-                  <div className="empty-title">Your first matches will appear here</div>
-                  <div className="empty-desc">Ebenova scans 13 platforms every 10 minutes. After the first scan, posts from people actively asking for what you sell will appear here — scored by demand strength and sorted so the most urgent appear first.</div>
+            {!loading && !matches.length && selMonitor && (() => {
+              // ── Zero-match nudge ──────────────────────────────────────────
+              // If a monitor has been active for >1h but still has zero
+              // all-time matches, the keyword set is almost certainly too
+              // narrow (brand-name comparisons) or too broad (industry
+              // terms that drown signal). Surface a yellow callout that
+              // links to Settings so the owner can tune, plus a mailto for
+              // hands-on help — these first-week interventions are the
+              // single biggest activation lever we have.
+              const createdMs = selMonitor.created_at ? new Date(selMonitor.created_at).getTime() : 0;
+              const ageH      = createdMs ? (Date.now() - createdMs) / 3600000 : 0;
+              const isStale   = ageH > 1 && selMonitor.active && (selMonitor.total_matches_found || 0) === 0;
+              if (isStale) {
+                const subject = `Help tuning keywords for "${selMonitor.name || 'my monitor'}"`;
+                const body    = `Hi Olumide,\n\nMy monitor "${selMonitor.name || ''}" has been running for a while but isn't returning any matches. Could you help me pick better keywords?\n\nWhat I'm trying to find:\n(describe the kind of customer you want)\n\nThanks!`;
+                const mailto  = `mailto:dgtalquantumleap@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+                return (
+                  <div className="card" style={{borderLeft:'4px solid #F59E0B',background:'#FFFBEB'}}>
+                    <div style={{display:'flex',gap:14,padding:'22px 24px',alignItems:'flex-start'}}>
+                      <div style={{flexShrink:0,fontSize:28,lineHeight:1}}>⚠️</div>
+                      <div style={{flex:1,minWidth:0}}>
+                        <h3 style={{margin:'0 0 6px',fontSize:15,fontWeight:600,color:'#92400E'}}>This monitor hasn't surfaced any matches yet</h3>
+                        <p style={{margin:'0 0 14px',fontSize:13.5,color:'#78350F',lineHeight:1.6}}>
+                          It's been active for {Math.floor(ageH)}h with {selMonitor.keyword_count || 0} keyword{(selMonitor.keyword_count||0)===1?'':'s'} and zero hits. Usually this means the keywords are either <b>too narrow</b> (brand names rarely appear on Reddit) or <b>too generic</b> (drowning in unrelated posts). Try adding 3-5 pain-phrases that real buyers type, like <i>"looking for a tool that…"</i>, <i>"frustrated with…"</i>, or <i>"how do I…"</i> — those convert best.
+                        </p>
+                        <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+                          <button className="btn btn-primary btn-sm" onClick={() => onGoToSettings && onGoToSettings()}>
+                            <i className="ph ph-pencil-simple"></i> Tune keywords
+                          </button>
+                          <a className="btn btn-white btn-sm" href={mailto} style={{textDecoration:'none'}}>
+                            <i className="ph ph-chat-circle"></i> Get setup help
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+              // ── Fresh monitor (< 1h old) — friendly empty state ───────────
+              return (
+                <div className="card">
+                  <div className="empty">
+                    <div className="empty-icon"><i className="ph ph-clock"></i></div>
+                    <div className="empty-title">Your first matches will appear here</div>
+                    <div className="empty-desc">Ebenova scans Reddit, Hacker News, GitHub, Medium, Substack and more every 15 minutes. After the first scan, posts from people actively asking for what you sell will appear here — scored by demand strength and sorted so the most urgent appear first.</div>
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
             {!loading && <RevenueTicker matches={matches} monitor={selMonitor} />}
             {sprintMode && !loading && matches.length > 0 && (
               <SprintView
@@ -4289,7 +4425,7 @@ function App() {
       <FeedbackWidget apiKey={apiKey} />
       <div className="main">
         {tab==='find'     && <FindCustomers apiKey={apiKey} onMonitorCreated={()=>{ loadMonitors(); setTab('feed'); }} />}
-        {tab==='feed'     && <MatchesFeed apiKey={apiKey} monitors={monitors} />}
+        {tab==='feed'     && <MatchesFeed apiKey={apiKey} monitors={monitors} onGoToSettings={() => setTab('settings')} />}
         {tab==='drafts'   && <DraftsFeed apiKey={apiKey} monitors={monitors} onDraftCount={setDraftCount} />}
         {tab==='settings' && <Settings apiKey={apiKey} userEmail={userEmail} plan={plan} onSignOut={signOut} monitors={monitors} onRefresh={loadMonitors} />}
       </div>

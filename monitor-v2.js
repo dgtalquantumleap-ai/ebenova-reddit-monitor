@@ -57,7 +57,7 @@ import { embeddingCacheKey } from './lib/embedding-cache.js'
 import { makeCostCap } from './lib/cost-cap.js'
 import { draftCall, extractInjectedUtmUrl } from './lib/draft-call.js'
 import { parseRedditRSS, buildRedditSearchUrl, parseRetryAfter, resolveKeyword } from './lib/reddit-rss.js'
-import { paceRedditRequest } from './lib/reddit-pacer.js'
+import { paceRedditRequest, pushCooldown, cooldownRemainingMs } from './lib/reddit-pacer.js'
 import { generateUnsubscribeToken, buildEmailFooter } from './lib/account-deletion.js'
 import { classifyMatch, intentPriority, isHighPriority } from './lib/classify.js'
 import { recordAuthor } from './lib/author-profiles.js'
@@ -379,9 +379,29 @@ async function searchReddit(monitorId, keywordEntry) {
       if (!res.ok) {
         const retryAfter = parseRetryAfter(res.headers)
         console.warn(`[v2][reddit:rss] ${res.status} for "${keyword}" → ${url.slice(0, 100)}…${retryAfter ? ` (Retry-After: ${retryAfter}s)` : ''}`)
-        if (res.status === 404 && _isDynamic && sr && redis) {
+        // 404 OR 403 → permanently bad subreddit; blacklist for 30d.
+        // Applies to BOTH dynamic AND explicit subreddit lists — Reddit
+        // saying "this sub doesn't exist / is private" is ground truth
+        // regardless of how the sub ended up on the keyword's list.
+        // Operator can remove from explicit lists via the dashboard.
+        // 403 typically means private/quarantined and won't recover;
+        // 404 means it doesn't exist. 30d TTL retries after a month.
+        if ((res.status === 404 || res.status === 403) && sr && redis) {
           const _badSubKey = `subreddit:404:${String(sr).toLowerCase().replace(/^r\//, '')}`
           await redis.set(_badSubKey, '1', { ex: 2592000 }).catch(() => {})
+        }
+        // 429 → tell the global pacer that the IP is hot; ALL Reddit fetches
+        // across all monitors will pause for the Retry-After (or default 30s).
+        // Without this, the next keyword's first request fires after only the
+        // baseline 1500ms gap and we hammer the still-hot IP.
+        if (res.status === 429) {
+          const cooldownMs = Math.max((retryAfter || 30) * 1000, 30000)
+          pushCooldown(cooldownMs)
+          // Log when entering cooldown (only first 429 in a burst — subsequent
+          // ones in the same loop pass through quickly because the next
+          // paceRedditRequest will block on the cooldown).
+          const remainingS = Math.ceil(cooldownRemainingMs() / 1000)
+          console.warn(`[v2][reddit:rss] 429 → global pacer cooldown ~${remainingS}s`)
         }
         // Always wait at least interDelay after a non-2xx so the next URL in the
         // loop doesn't fire immediately. The continue below skips the interDelay
@@ -431,9 +451,23 @@ async function searchReddit(monitorId, keywordEntry) {
 // endpoint and Olumide's own monitor.js — single source of truth for prompt,
 // validation, AI-tell ban list, and stripMarkdown post-processing.
 // Returns { draft, model } so the caller can attach `draftedBy` to the match.
+//
+// May 2026 — the v1-era `!post.approved` gate was removed here. That gate
+// short-circuited drafting for any Reddit match whose subreddit wasn't in
+// the hardcoded APPROVED_SUBREDDITS whitelist, which silently dropped ~77
+// of every 100 undrafted matches in production despite those matches
+// passing intent classification + minIntentScore. The AI-driven subreddit-
+// intel feature (PR #62) routes monitors to subreddits OUTSIDE that
+// whitelist on purpose, so the whitelist gate fought the rest of the
+// pipeline. Quality control is now handled by:
+//   - lib/relevance.js (passesRelevanceCheck) — relevance gate
+//   - minIntentScore (default 40) — drops low-signal matches
+//   - lib/classify.js — intent scoring 0-100
+//   - lib/draft-prompt.js validateDraft + AI-tell ban list — output filter
+// To restore strict whitelist behaviour, gate by APPROVED_SUBREDDITS at
+// the search layer instead.
 async function generateReplyDraft(post, productContext, tone, utmConfig) {
   if (!productContext || !productContext.trim()) return { draft: null, model: null }
-  if (!post.approved) return { draft: null, model: null }
 
   // F14: daily Groq cost cap — skip draft (post still gets through)
   const gcap = getGroqCap()
@@ -990,30 +1024,70 @@ async function runMonitor(monitor) {
   console.log(`${label} Starting — ${monitor.keywords.length} keywords, ${platforms.length} platforms: ${platforms.join(', ')}`)
 
   // Load expanded keywords from Redis and append to search (source: 'expanded')
+  // Lazy-fill rationale: api-server.js fires expandKeywords + suggestSubreddits
+  // as fire-and-forget at create time. If the AI provider is rate-limited or
+  // briefly unavailable the cache never gets written and the monitor scans
+  // only the user's literal keywords forever. Belt-and-suspenders: if either
+  // cache is missing AND the monitor is more than LAZY_FILL_GRACE_MS old
+  // (i.e. the create-time call had a fair chance), populate the cache here
+  // before reading it. Operator-visible via the [lazy-fill] log lines so we
+  // can see how often the create-time path is failing.
+  const LAZY_FILL_GRACE_MS = 5 * 60 * 1000
+  const monitorAgeMs = monitor.createdAt ? (Date.now() - new Date(monitor.createdAt).getTime()) : Infinity
+  const _eligibleForLazyFill = redis && Number.isFinite(monitorAgeMs) && monitorAgeMs > LAZY_FILL_GRACE_MS
+
   let expandedKeywords = []
   if (redis) {
-    try {
-      const _raw = await redis.get(`monitor:${monitor.id}:expanded_keywords`)
-      if (_raw) {
+    let _raw = null
+    try { _raw = await redis.get(`monitor:${monitor.id}:expanded_keywords`) } catch (_) {}
+    if (!_raw && _eligibleForLazyFill && (monitor.keywords?.length || monitor.productContext)) {
+      try {
+        const { expandKeywords } = await import('./lib/keyword-expander.js')
+        const expanded = await expandKeywords(monitor.keywords || [], monitor.productContext || '')
+        if (expanded.length > 0) {
+          await redis.setex(`monitor:${monitor.id}:expanded_keywords`, 86400 * 7, JSON.stringify(expanded))
+          console.log(`${label} [lazy-fill] Populated expanded_keywords cache (${expanded.length} variants) — create-time call had failed`)
+          _raw = JSON.stringify(expanded)
+        }
+      } catch (err) {
+        console.warn(`${label} [lazy-fill] expanded_keywords failed: ${err.message}`)
+      }
+    }
+    if (_raw) {
+      try {
         const _arr = typeof _raw === 'string' ? JSON.parse(_raw) : _raw
         if (Array.isArray(_arr)) {
           expandedKeywords = _arr.map(k => ({ keyword: k, type: 'keyword', subreddits: [], source: 'expanded', productContext: monitor.productContext || '' }))
         }
-      }
-    } catch (_) {}
+      } catch (_) {}
+    }
   }
   // Load suggested subreddits and attach to keywords that have none.
   // Capped at 5 — Reddit rate-limits aggressive RSS fan-out, and returns
   // diminish past the top-ranked few suggestions per keyword.
   let suggestedSubreddits = []
   if (redis) {
-    try {
-      const _raw = await redis.get(`monitor:${monitor.id}:suggested_subreddits`)
-      if (_raw) {
+    let _raw = null
+    try { _raw = await redis.get(`monitor:${monitor.id}:suggested_subreddits`) } catch (_) {}
+    if (!_raw && _eligibleForLazyFill && (monitor.keywords?.length || monitor.productContext)) {
+      try {
+        const { suggestSubreddits } = await import('./lib/subreddit-suggester.js')
+        const suggested = await suggestSubreddits(monitor.productContext || '', monitor.keywords || [])
+        if (suggested.length > 0) {
+          await redis.setex(`monitor:${monitor.id}:suggested_subreddits`, 86400 * 7, JSON.stringify(suggested))
+          console.log(`${label} [lazy-fill] Populated suggested_subreddits cache (${suggested.length} subs) — create-time call had failed`)
+          _raw = JSON.stringify(suggested)
+        }
+      } catch (err) {
+        console.warn(`${label} [lazy-fill] suggested_subreddits failed: ${err.message}`)
+      }
+    }
+    if (_raw) {
+      try {
         const _arr = typeof _raw === 'string' ? JSON.parse(_raw) : _raw
         if (Array.isArray(_arr)) suggestedSubreddits = _arr.slice(0, 5)
-      }
-    } catch (_) {}
+      } catch (_) {}
+    }
   }
   const kwWithSubs = suggestedSubreddits.length > 0
     ? monitor.keywords.map(kw => (kw.subreddits?.length > 0 ? kw : { ...kw, subreddits: suggestedSubreddits }))
@@ -1034,9 +1108,10 @@ async function runMonitor(monitor) {
   const competitorMatches = []
   if ((monitor.competitors || []).length > 0) {
     const { buildCompetitorKeywords } = await import('./lib/competitor-tracker.js')
-    const compPhrases = buildCompetitorKeywords(monitor.competitors)
+    const compKwEntries = buildCompetitorKeywords(monitor.competitors, monitor.productContext || '')
     if (platforms.includes('reddit')) {
-      for (const phrase of compPhrases) {
+      for (const compKwEntry of compKwEntries) {
+        const phrase = compKwEntry.keyword
         const compKw = { keyword: phrase, type: 'competitor', subreddits: [], productContext: monitor.productContext || '' }
         const matches = await searchReddit(monitor.id, compKw)
         for (const m of matches) {
@@ -1053,7 +1128,8 @@ async function runMonitor(monitor) {
     // Also search HN for competitor keywords
     if (platforms.includes('hackernews') || true) { // always search HN for competitor mentions
       const seenIdsCopy = seenIds
-      for (const phrase of compPhrases) {
+      for (const compKwEntry of compKwEntries) {
+        const phrase = compKwEntry.keyword
         const compKw = { keyword: phrase, type: 'competitor', subreddits: [] }
         const matches = await searchHackerNews(compKw, { seenIds: seenIdsCopy, delay, MAX_AGE_MS: maxAgeMs })
         for (const m of matches) {
@@ -1080,17 +1156,21 @@ async function runMonitor(monitor) {
       const ctx = kw.productContext || monitor.productContext || ''
       const kwType = kw.type || 'keyword'
       // If keyword has no explicit subreddits but we have AI-suggested ones, use them.
-      // AI-suggested lists are filtered against the 404 blacklist so subreddits Reddit
-      // has confirmed don't exist (e.g. r/identityverification) aren't retried for 30d.
+      // The 404/403 blacklist filter applies to BOTH explicit and AI-suggested
+      // subreddit lists — once Reddit has confirmed a sub doesn't exist (404)
+      // or is private/quarantined (403), it doesn't matter who originally added
+      // it to the list. Production logs (2026-05-12) showed Prembly's monitor
+      // hitting r/identityverification's 404 every cycle because it was in the
+      // explicit list, not the dynamic one.
       const _useSuggested = (!kw.subreddits || kw.subreddits.length === 0) && suggestedSubreddits.length > 0
       let _kwSubs = _useSuggested ? suggestedSubreddits : kw.subreddits
-      if (_useSuggested && redis && _kwSubs?.length) {
+      if (redis && _kwSubs?.length) {
         const _filtered = []
         for (const _sr of _kwSubs) {
           const _subName = String(_sr).toLowerCase().replace(/^r\//, '')
           const _isBad = await redis.get(`subreddit:404:${_subName}`).catch(() => null)
           if (_isBad) {
-            console.log(`${label} [subreddit-intel] Skipping blacklisted subreddit r/${_subName}`)
+            console.log(`${label} [subreddit-intel] Skipping blacklisted subreddit r/${_subName}${_useSuggested ? '' : ' (explicit list — edit the monitor to remove it)'}`)
             continue
           }
           _filtered.push(_sr)
@@ -1099,7 +1179,7 @@ async function runMonitor(monitor) {
       }
       const kwWithSubs = _useSuggested
         ? { ...kw, subreddits: _kwSubs, _dynamicSubreddits: true }
-        : kw
+        : { ...kw, subreddits: _kwSubs }
       if (_useSuggested) {
         console.log(`${label} [subreddit-intel] Using ${_kwSubs.length} suggested subreddits for "${kw.keyword}"`)
       }
@@ -1337,8 +1417,16 @@ async function runMonitor(monitor) {
   // Groq's 30 RPM account-level limit. Tune via CLASSIFY_DELAY_MS env if the
   // TPM math turns out to need an even slower drip — see lib/ai-router.js
   // TASK_ROUTING.classify_match for the routing context.
+  // 2026-05-12 — production logs show Groq llama-3.1-8b-instant 6000 TPM
+  // ceiling still being hit on 12-17-match classify batches even with the
+  // PR #64 throttle. The fallback to GROQ_QUALITY recovers each call so no
+  // classifications are dropped, but every 429 adds ~1s of latency × batch
+  // size. The real math: 1 call per 200ms = 5 RPS × ~250 tok/req = 75k TPM
+  // (12.5× over budget). Bumping default to 400ms = 2.5 RPS ≈ 37.5k TPM
+  // (still over but with bigger headroom, halving the 429-retry tax).
+  // For TPM-safe operation, set CLASSIFY_DELAY_MS=2500 (~24 RPM = ~6k TPM).
   const CLASSIFY_CONCURRENCY = parseInt(process.env.CLASSIFY_CONCURRENCY || '1')
-  const CLASSIFY_DELAY_MS    = parseInt(process.env.CLASSIFY_DELAY_MS    || '200')
+  const CLASSIFY_DELAY_MS    = parseInt(process.env.CLASSIFY_DELAY_MS    || '400')
   const groqCapForClassify = getGroqCap()
   for (let i = 0; i < allMatches.length; i += CLASSIFY_CONCURRENCY) {
     const batch = allMatches.slice(i, i + CLASSIFY_CONCURRENCY)
@@ -1404,15 +1492,36 @@ async function runMonitor(monitor) {
       })
       m.draft = r.draft
       m.draftedBy = r.model
-      // PR (deferred-fixes): persist the UTM-injected product URL alongside
-      // the draft. This is the data foundation for click-tracking — a
-      // redirect layer can read match.utmUrl directly instead of re-parsing
-      // the draft on every page view. Null if no UTM URL was injected.
+      // PR #29 — final piece. UTM-injected product URLs in the draft get
+      // rewritten to a short link `${APP_URL}/r/${m.id}` which the api-server
+      // `/r/:matchId` route redirects through (bumping a click counter on
+      // each hop). The raw UTM URL is persisted on the match record AND on
+      // its own Redis key `match:<id>:url` so the redirect route can look
+      // it up without scanning monitor records.
+      //
+      // Net effect: every UTM-injected draft posted on Reddit becomes a
+      // measurable funnel. The "Z drove traffic" digest line + the
+      // AggregateOutcomesPanel 4th big-number both read from
+      // `match:<id>:clicks`.
       if (m.draft && monitor.productUrl) {
         const utmUrl = extractInjectedUtmUrl({ draft: m.draft, productUrl: monitor.productUrl })
         if (utmUrl) {
           m.utmUrl = utmUrl
           m.utmInjectedAt = new Date().toISOString()
+          const _appUrl   = process.env.APP_URL || 'https://ebenova.org'
+          const shortUrl  = `${_appUrl.replace(/\/+$/, '')}/r/${m.id}`
+          // String split/join is safer than regex when the UTM URL contains
+          // regex-special characters (it always has `?` and `&`).
+          m.draft         = m.draft.split(utmUrl).join(shortUrl)
+          m.utmShortUrl   = shortUrl
+          if (redis) {
+            const _redirectTtl = 60 * 24 * 60 * 60   // 60 days
+            // Best-effort writes — never throw if Upstash blips. The match
+            // record itself is the source of truth for `m.utmUrl`; these
+            // keys just power the redirect-layer lookup.
+            await redis.setex(`match:${m.id}:url`, _redirectTtl, utmUrl).catch(() => {})
+            await redis.set(`match:${m.id}:clicks`, '0', { nx: true, ex: _redirectTtl }).catch(() => {})
+          }
         }
       }
       if (m.draft) console.log(`${label} Draft by ${r.model}: "${m.title.slice(0, 50)}…"`)
