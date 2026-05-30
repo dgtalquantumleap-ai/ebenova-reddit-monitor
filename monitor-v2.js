@@ -570,6 +570,7 @@ function buildAlertEmail(monitor, matches, appUrl = 'https://ebenova.org') {
         <div style="font-size:12px;color:#888;margin-bottom:5px;">
           ${sourceLabel} · u/${escapeHtml(p.author)} · ${escapeHtml(p.score)} upvotes${sentimentBadge}${intentBadge}${highPriBadge}${scoreBadge}
         </div>
+        ${p.matchExplanation ? `<div style="font-size:11px;color:#aaa;margin-bottom:6px;font-style:italic;">${escapeHtml(p.matchExplanation)}</div>` : ''}
         <a href="${escapeHtml(p.url)}" style="font-size:15px;font-weight:600;color:#1a1a1a;text-decoration:none;">${escapeHtml(p.title)}</a>
         ${p.body ? `<p style="font-size:13px;color:#555;margin:7px 0 0;line-height:1.5;">${escapeHtml(p.body)}${p.body.length >= 300 ? '…' : ''}</p>` : ''}
         <a href="${escapeHtml(p.url)}" style="display:inline-block;margin-top:8px;font-size:12px;color:#FF6B35;font-weight:600;">Open thread →</a>
@@ -581,6 +582,16 @@ function buildAlertEmail(monitor, matches, appUrl = 'https://ebenova.org') {
         <div style="margin-top:10px;padding:12px;background:#fffdf0;border:1px solid #e8d87a;border-radius:6px;">
           <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#a08c00;margin-bottom:6px;">✏️ Suggested reply</div>
           <div style="font-size:13px;color:#333;line-height:1.6;white-space:pre-wrap;">${escapeHtml(p.draft)}</div>
+        </div>` : ''}
+        ${p._hunterEnrichment ? `
+        <div style="margin-top:10px;padding:8px 12px;background:#f8f9fa;border:1px solid #e2e8f0;border-radius:6px;">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#64748b;margin-bottom:5px;">🔍 Lead intel</div>
+          <div style="font-size:11px;color:#475569;line-height:1.6;">
+            ${p._hunterEnrichment.company ? `<span style="margin-right:10px;">🏢 ${escapeHtml(p._hunterEnrichment.company)}</span>` : ''}
+            ${p._hunterEnrichment.email ? `<a href="mailto:${escapeHtml(p._hunterEnrichment.email)}" style="color:#3b82f6;margin-right:10px;">✉️ ${escapeHtml(p._hunterEnrichment.email)}</a>` : ''}
+            ${p._hunterEnrichment.linkedinUrl ? `<a href="${escapeHtml(p._hunterEnrichment.linkedinUrl)}" style="color:#3b82f6;margin-right:10px;">🔗 LinkedIn</a>` : ''}
+            ${typeof p._hunterEnrichment.confidence === 'number' ? `<span style="color:#94a3b8;">${p._hunterEnrichment.confidence}% confidence</span>` : ''}
+          </div>
         </div>` : ''}
         <div style="margin-top:10px;padding-top:8px;border-top:1px solid #eaeaea;font-size:12px;color:#999;">Was this match useful?&nbsp;<a href="${_fbBase}&v=yes" style="color:#16a34a;font-weight:700;text-decoration:none;">👍 Yes</a>&nbsp;·&nbsp;<a href="${_fbBase}&v=no" style="color:#dc2626;font-weight:700;text-decoration:none;">👎 No</a></div>
       </div>`
@@ -727,6 +738,23 @@ async function sendMonitorAlert(monitor, matches) {
   }
   try {
     const appUrl = process.env.APP_URL
+    // Attach any cached Hunter enrichment data to matches before building the email.
+    // Best-effort: Redis failure just means no lead intel pill in this email.
+    if (redis) {
+      for (const m of matches) {
+        if (m.source !== 'reddit' || !m.author) continue
+        try {
+          const enrichKey = `author:enrichment:${monitor.id}:${m.source}:${m.author}`
+          const raw = await redis.get(enrichKey)
+          if (raw) {
+            const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
+            if (parsed && (parsed.email || parsed.company || parsed.linkedinUrl)) {
+              m._hunterEnrichment = parsed
+            }
+          }
+        } catch (_) {}
+      }
+    }
     const html = buildAlertEmail(monitor, matches, appUrl)
     const unsubUrl = monitor.unsubscribeToken
       ? `${appUrl}/unsubscribe?token=${encodeURIComponent(monitor.unsubscribeToken)}`
@@ -841,7 +869,7 @@ async function runBuilderTrackerMonitor(monitor) {
   // log inside the helpers but don't abort the cycle.
   const newProfiles = []
   let recorded = 0
-  const redisClient = getRedis()
+  const redisClient = redis
   for (const match of _builderCandidates) {
     if (!PLATFORMS_WITH_REAL_USERNAMES.includes(match.source)) continue
 
@@ -1400,8 +1428,22 @@ async function runMonitor(monitor) {
 
   if (allMatches.length === 0) {
     console.log(`${label} No new matches`)
+    // Track consecutive zero-match cycles in Redis so the dashboard can
+    // surface a "your keywords may need tuning" nudge to the user.
+    if (redis) {
+      try {
+        const zeroKey = `monitor:${monitor.id}:zero_match_cycles`
+        const count = await redis.incr(zeroKey)
+        await redis.expire(zeroKey, 60 * 60 * 24 * 7) // 7-day TTL, resets on any match
+        if (count >= 3) {
+          console.warn(`${label} ⚠️  ${count} consecutive zero-match cycles — keywords may need tuning`)
+        }
+      } catch (_) {}
+    }
     return
   }
+  // Reset zero-match counter on any successful match cycle
+  if (redis) redis.del(`monitor:${monitor.id}:zero_match_cycles`).catch(() => {})
 
   // ── Classify sentiment + intent (best-effort, before drafting) ───────────
   // Why before drafting: priority sort uses intent. Why best-effort: classify
@@ -1459,6 +1501,14 @@ async function runMonitor(monitor) {
   for (const m of allMatches) {
     if (m.source === 'hackernews' && m.type === 'ask_hn') {
       if (typeof m.intentScore !== 'number' || m.intentScore < 60) m.intentScore = 60
+    }
+    // Attach a one-line match explanation so users can see WHY this surfaced.
+    // Keeps it honest: matched keyword + source + intent if classified.
+    if (!m.matchExplanation) {
+      const kw = m.matchedKeyword || m.keyword || ''
+      const src = m.source === 'reddit' ? `r/${m.subreddit}` : m.source
+      const intentLabel = m.intent ? ` • ${m.intent.replace(/_/g, ' ')}` : ''
+      m.matchExplanation = `Matched “${kw}” in ${src}${intentLabel}`
     }
   }
 
@@ -1617,7 +1667,6 @@ async function runMonitor(monitor) {
 
   // Store in Redis + send alert
   try {
-    const redis = getRedis()
     await storeMatches(redis, monitor, allMatches)
 
     // Per-keyword health tracking. Builds a keyword → count map from allMatches.
@@ -1649,6 +1698,18 @@ async function runMonitor(monitor) {
       if (r?.recorded) {
         authorsRecorded++
         if (r.isNew) authorsNew++
+      }
+      // Hunter.io lead enrichment — fire-and-forget, never blocks the cycle.
+      // Only runs for high-intent (score >= 70) Reddit matches when key is set.
+      if (process.env.HUNTER_API_KEY && m.source === 'reddit') {
+        const { enrichAuthor } = await import('./lib/hunter-enrich.js')
+        enrichAuthor({ match: m, monitorId: monitor.id, redis }).then(enrichResult => {
+          if (enrichResult.enriched) {
+            console.log(`[hunter] enriched ${m.author}: ${enrichResult.data?.email || 'no email'} @ ${enrichResult.data?.company || 'unknown company'}`)
+          }
+        }).catch(err => {
+          console.warn(`[hunter] enrichment error for ${m.author}: ${err.message}`)
+        })
       }
     }
     if (authorsRecorded > 0) {
@@ -1752,9 +1813,10 @@ async function pollInner() {
   // Cross-cycle dedup is handled by Redis seen:v2:{monitorId}:{postId} keys.
   _cycleSeenIds = new Set()
 
-  let redis
+  let redisInner
   try {
-    redis = getRedis()
+    redisInner = redis
+    if (!redisInner) throw new Error('Redis not configured')
   } catch (err) {
     console.error('[v2] Redis unavailable — skipping cycle:', err.message)
     return
@@ -1763,7 +1825,7 @@ async function pollInner() {
   // Load all active monitor IDs
   let monitorIds = []
   try {
-    monitorIds = await redis.smembers('insights:active_monitors') || []
+    monitorIds = await redisInner.smembers('insights:active_monitors') || []
   } catch (err) {
     console.error('[v2] Failed to load monitor IDs:', err.message)
     return
@@ -1782,10 +1844,10 @@ async function pollInner() {
   const priorityIds = new Set()
   for (const id of monitorIds) {
     try {
-      const flag = await redis.get(`poll-now:${id}`)
+      const flag = await redisInner.get(`poll-now:${id}`)
       if (flag) {
         priorityIds.add(id)
-        await redis.del(`poll-now:${id}`)
+        await redisInner.del(`poll-now:${id}`)
       }
     } catch (_) { /* best-effort */ }
   }
@@ -1797,7 +1859,7 @@ async function pollInner() {
   const monitors = []
   for (const id of monitorIds) {
     try {
-      const raw = await redis.get(`insights:monitor:${id}`)
+      const raw = await redisInner.get(`insights:monitor:${id}`)
       if (!raw) { console.warn(`[v2] Monitor ${id} not found in Redis — skipping`); continue }
       const m = typeof raw === 'string' ? JSON.parse(raw) : raw
       if (!m.active) { console.log(`[v2] Monitor ${id} is inactive — skipping`); continue }
@@ -1848,9 +1910,20 @@ if (!redis) {
   setInterval(() => {
     const m = process.memoryUsage()
     const heapUsedMB = Math.round(m.heapUsed/1024/1024)
-    console.log(`[v2] 📊 Memory: Heap ${heapUsedMB}/${Math.round(m.heapTotal/1024/1024)}MB | RSS ${Math.round(m.rss/1024/1024)}MB | Seen entries (cycle): ${_cycleSeenIds.size}`)
-    if (heapUsedMB > 200) {
+    const heapTotalMB = Math.round(m.heapTotal/1024/1024)
+    console.log(`[v2] 📊 Memory: Heap ${heapUsedMB}/${heapTotalMB}MB | RSS ${Math.round(m.rss/1024/1024)}MB | Seen entries (cycle): ${_cycleSeenIds.size} | EmbedCache: ${embeddingCache.size}`)
+    if (heapUsedMB > 300) {
       console.warn(`[v2] ⚠️  HIGH HEAP: ${heapUsedMB}MB — possible leak`)
+      // Force a GC hint and trim the embedding cache aggressively
+      if (embeddingCache.size > 500) {
+        let trimmed = 0
+        for (const k of embeddingCache.keys()) {
+          embeddingCache.delete(k)
+          if (++trimmed >= embeddingCache.size / 2) break
+        }
+        console.warn(`[v2] ⚠️  Trimmed embeddingCache to ${embeddingCache.size} entries`)
+      }
+      if (global.gc) global.gc()
     }
   }, 300_000)
 
