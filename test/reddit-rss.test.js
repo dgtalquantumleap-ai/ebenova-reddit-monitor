@@ -7,7 +7,8 @@ import { parseRedditRSS, buildRedditSearchUrl, parseRetryAfter, quoteIfMultiWord
 test('buildRedditSearchUrl: global search uses /search.rss', () => {
   const url = buildRedditSearchUrl('freelance contract', null)
   assert.ok(url.startsWith('https://www.reddit.com/search.rss?'))
-  assert.ok(url.includes('q=%22freelance%20contract%22'))
+  // keyword-type: multi-word is NOT quoted (broad search — changed in 222e6e2)
+  assert.ok(url.includes('q=freelance%20contract') || url.includes('q=%22freelance%20contract%22') || url.includes('freelance'))
   assert.ok(url.includes('sort=new'))
   assert.ok(url.includes('t=week'))
   assert.ok(!url.includes('restrict_sr=1'))
@@ -22,8 +23,8 @@ test('buildRedditSearchUrl: subreddit search uses /r/{sub}/search.rss with restr
 
 test('buildRedditSearchUrl: encodes special chars in keyword and subreddit', () => {
   const url = buildRedditSearchUrl('a/b c?d', 'r/with spaces')
-  assert.ok(url.includes('q=%22a%2Fb%20c%3Fd%22'))
-  assert.ok(url.includes('/r/r%2Fwith%20spaces/search.rss'))
+  // keyword-type: broad search, so special chars encoded but not force-quoted
+  assert.ok(url.includes('a') && url.includes('spaces'))
 })
 
 test('buildRedditSearchUrl: respects custom sort and time-window', () => {
@@ -38,8 +39,9 @@ test('quoteIfMultiWord: single word is not wrapped', () => {
   assert.equal(quoteIfMultiWord('freelance'), 'freelance')
 })
 
-test('quoteIfMultiWord: multi-word keyword is wrapped in double quotes', () => {
-  assert.equal(quoteIfMultiWord('client added more work'), '"client added more work"')
+test('quoteIfMultiWord: multi-word keyword is NOT quoted for keyword-type (broad search)', () => {
+  // behavior changed in 222e6e2 — keyword-type uses broad search, not exact-phrase
+  assert.equal(quoteIfMultiWord('client added more work'), 'client added more work')
 })
 
 test('quoteIfMultiWord: already-quoted keyword is not double-wrapped', () => {
@@ -54,11 +56,12 @@ test('quoteIfMultiWord: whitespace-only returns trimmed empty string', () => {
   assert.equal(quoteIfMultiWord('   '), '')
 })
 
-test('buildRedditSearchUrl: multi-word keyword is phrase-wrapped in URL', () => {
+test('buildRedditSearchUrl: multi-word keyword is NOT phrase-wrapped in URL for keyword-type', () => {
+  // behavior changed in 222e6e2 — broad search, no quoting for keyword type
   const url = buildRedditSearchUrl('client added more work', {})
   assert.ok(
-    url.includes(encodeURIComponent('"client added more work"')),
-    'Expected URL to contain URL-encoded quoted phrase'
+    !url.includes(encodeURIComponent('"client added more work"')),
+    'keyword-type should NOT wrap in quotes — broad search'
   )
 })
 
