@@ -298,6 +298,48 @@ hr.div{border:none;border-top:1px solid #F1F5F9;margin:18px 0}
 .fb-fab{position:fixed;bottom:20px;right:20px;z-index:200;background:linear-gradient(135deg,#FF6B35,#FF8C42);color:#fff;border:none;border-radius:50px;padding:13px 18px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 8px 24px rgba(255,107,53,.35);display:flex;align-items:center;gap:8px;transition:transform .15s,box-shadow .15s}
 .fb-fab:hover{transform:translateY(-2px);box-shadow:0 12px 28px rgba(255,107,53,.45)}
 .fb-fab i{font-size:16px}
+
+/* ── Intent Engine UI (feat/intent-engine-ui) ──────────────────────────── */
+/* Intelligence Brief */
+.ib-wrap{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:20px}
+@media(max-width:900px){.ib-wrap{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:600px){.ib-wrap{grid-template-columns:repeat(2,1fr)}}
+.ib-card{background:#0F172A;border:1px solid #1E293B;border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:4px}
+.ib-icon{font-size:22px;margin-bottom:2px}
+.ib-num{font-size:26px;font-weight:800;color:#F8FAFC;letter-spacing:-1px;line-height:1}
+.ib-label{font-size:10px;font-weight:600;color:#475569;text-transform:uppercase;letter-spacing:.8px;line-height:1.3}
+.ib-delta{font-size:10px;font-weight:600;margin-top:2px}
+.ib-delta-up{color:#10B981}
+.ib-delta-warn{color:#F59E0B}
+.ib-delta-neutral{color:#475569}
+/* Intent tab bar */
+.itab-bar{display:flex;gap:4px;margin-bottom:16px;flex-wrap:wrap}
+.itab{padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid #E2E8F0;background:#fff;color:#64748B;transition:all .15s;font-family:inherit;white-space:nowrap}
+.itab:hover{border-color:#CBD5E1;color:#374151}
+.itab.active{background:#0F172A;color:#F8FAFC;border-color:#0F172A}
+.itab.active.hot{background:linear-gradient(135deg,#FF6B35,#FF8C42);border-color:#FF6B35;color:#000}
+.itab-count{display:inline-flex;align-items:center;justify-content:center;background:rgba(255,255,255,.15);border-radius:10px;font-size:10px;font-weight:700;padding:0 6px;margin-left:5px;min-width:18px}
+.itab:not(.active) .itab-count{background:#F1F5F9;color:#64748B}
+/* WHY panel */
+.why-panel{background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;padding:12px 14px;margin-top:12px;margin-bottom:2px}
+.why-header{display:flex;align-items:center;gap:6px;font-size:10px;font-weight:700;letter-spacing:1.2px;color:#64748B;text-transform:uppercase;margin-bottom:10px;cursor:pointer;user-select:none}
+.why-header:hover{color:#374151}
+.why-row{display:flex;align-items:flex-start;gap:8px;margin-bottom:6px;font-size:12px}
+.why-check{color:#10B981;font-size:13px;flex-shrink:0;margin-top:1px}
+.why-text{color:#374151;line-height:1.5}
+.why-text b{color:#0F172A}
+.why-meta{display:flex;gap:12px;margin-top:10px;padding-top:10px;border-top:1px solid #E2E8F0;flex-wrap:wrap}
+.why-meta-item{display:flex;flex-direction:column;gap:2px}
+.why-meta-label{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#94A3B8}
+.why-meta-val{font-size:12px;font-weight:600;color:#0F172A}
+/* 3-hour engagement clock */
+.eng-clock{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:3px 8px;border-radius:20px}
+.eng-clock-hot{background:#FEF3C7;color:#92400E;border:1px solid #FDE68A}
+.eng-clock-warm{background:#DBEAFE;color:#1E40AF;border:1px solid #BFDBFE}
+.eng-clock-cold{background:#F1F5F9;color:#64748B;border:1px solid #E2E8F0}
+.eng-clock i{font-size:12px}
+@keyframes clock-pulse{0%,100%{opacity:1}50%{opacity:.5}}
+.eng-clock-hot i{animation:clock-pulse 1.5s infinite}
 .fb-overlay{position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:300;display:flex;align-items:center;justify-content:center;padding:20px;animation:fb-fade .15s ease-out}
 @keyframes fb-fade{from{opacity:0}to{opacity:1}}
 .fb-modal{background:#fff;border-radius:14px;padding:24px;max-width:480px;width:100%;box-shadow:0 24px 60px rgba(0,0,0,.25);max-height:90vh;overflow-y:auto}
@@ -1005,6 +1047,238 @@ function extractDraftText(draft) {
   return draft.text || draft.draft || draft.body || draft.content || '';
 }
 
+// ── EngagementClock ── shows time remaining in 3hr peak window ──────────────
+function EngagementClock({ createdAt }) {
+  const [label, setLabel] = React.useState('');
+  const [cls, setCls] = React.useState('eng-clock-cold');
+  React.useEffect(() => {
+    function update() {
+      if (!createdAt) { setLabel(''); return; }
+      const ageMs = Date.now() - new Date(createdAt).getTime();
+      const windowMs = 3 * 60 * 60 * 1000;
+      const remMs = windowMs - ageMs;
+      if (remMs <= 0) { setLabel(''); return; }
+      const remMin = Math.floor(remMs / 60000);
+      const h = Math.floor(remMin / 60);
+      const m = remMin % 60;
+      const txt = h > 0 ? `${h}h ${m}m left` : `${m}m left in window`;
+      setLabel(txt);
+      setCls(remMin < 30 ? 'eng-clock-hot' : remMin < 90 ? 'eng-clock-warm' : 'eng-clock-cold');
+    }
+    update();
+    const t = setInterval(update, 30000);
+    return () => clearInterval(t);
+  }, [createdAt]);
+  if (!label) return null;
+  return (
+    <span className={`eng-clock ${cls}`}>
+      <i className="ph ph-clock"></i>
+      {label}
+    </span>
+  );
+}
+
+// ── WhyPanel ── explains why a match surfaced ─────────────────────────────────
+function WhyPanel({ match }) {
+  const [open, setOpen] = React.useState(false);
+
+  // Build signal list from existing match fields
+  const signals = [];
+  if (match.keywordType === 'competitor' && match.keyword)
+    signals.push({ text: <><b>Competitor named</b> — matched via {match.keyword}</> });
+  if (match.intent === 'asking_for_tool')
+    signals.push({ text: <><b>Explicitly asking for a tool</b> — highest conversion intent</> });
+  if (match.intent === 'buying')
+    signals.push({ text: <><b>Buying signal detected</b> — actively evaluating solutions</> });
+  if (match.intent === 'switching' || (match.reasoning && /switch|replac|migrat/i.test(match.reasoning)))
+    signals.push({ text: <><b>Switching language</b> — actively replacing a current solution</> });
+  if (match.sentiment === 'frustrated')
+    signals.push({ text: <><b>Frustration detected</b> — current solution is failing them</> });
+  if (match.commercial_signal || match.intent === 'buying')
+    signals.push({ text: <><b>Budget or cost signal present</b></> });
+  if (match.specificity === 'clear')
+    signals.push({ text: <><b>Specific use case stated</b> — clear requirements</> });
+  if (match.isUnanswered)
+    signals.push({ text: <><b>No replies yet</b> — first-mover advantage</> });
+  if (match.keyword && match.keywordType !== 'competitor')
+    signals.push({ text: <>Matched keyword <b>"{match.keyword}"</b> {match.subreddit ? `in r/${match.subreddit}` : `on ${match.source}`}</> });
+  if (match.matchExplanation && signals.length === 0)
+    signals.push({ text: <>{match.matchExplanation}</> });
+
+  // Buying stage label
+  const stageMap = {
+    asking_for_tool: { label: 'Decision', desc: 'Actively seeking a solution' },
+    buying:          { label: 'Evaluation', desc: 'Comparing and evaluating options' },
+    switching:       { label: 'Switching', desc: 'Replacing current solution' },
+    researching:     { label: 'Research', desc: 'Gathering information' },
+    complaining:     { label: 'Pain', desc: 'Experiencing a problem' },
+    venting:         { label: 'Awareness', desc: 'Expressing frustration' },
+  };
+  const stage = stageMap[match.intent] || null;
+  const scoreColor = (match.intentScore||0) >= 80 ? '#92400E' : (match.intentScore||0) >= 60 ? '#1d4ed8' : '#64748B';
+  const scoreBg   = (match.intentScore||0) >= 80 ? '#FEF3C7' : (match.intentScore||0) >= 60 ? '#DBEAFE' : '#F1F5F9';
+
+  if (signals.length === 0 && !stage) return null;
+
+  return (
+    <div className="why-panel">
+      <div className="why-header" onClick={() => setOpen(o => !o)}>
+        <i className={`ph ph-${open ? 'caret-up' : 'caret-down'}`}></i>
+        WHY THIS MATCHED
+        {!open && match.intentScore > 0 &&
+          <span style={{marginLeft:'auto',background:scoreBg,color:scoreColor,padding:'1px 7px',borderRadius:10,fontSize:10,fontWeight:700}}>
+            {match.intentScore}/100
+          </span>
+        }
+      </div>
+      {open && (
+        <>
+          {signals.map((s, i) => (
+            <div key={i} className="why-row">
+              <span className="why-check"><i className="ph-bold ph-check"></i></span>
+              <span className="why-text">{s.text}</span>
+            </div>
+          ))}
+          {(stage || match.intentScore > 0 || match.confidence) && (
+            <div className="why-meta">
+              {stage && (
+                <div className="why-meta-item">
+                  <span className="why-meta-label">Buying Stage</span>
+                  <span className="why-meta-val" style={{color:'#FF6B35'}}>{stage.label} <span style={{color:'#64748B',fontWeight:400,fontSize:11}}>· {stage.desc}</span></span>
+                </div>
+              )}
+              {match.intentScore > 0 && (
+                <div className="why-meta-item">
+                  <span className="why-meta-label">Confidence Score</span>
+                  <span className="why-meta-val" style={{color:scoreColor}}>{match.intentScore}/100</span>
+                </div>
+              )}
+              {match.confidence && (
+                <div className="why-meta-item">
+                  <span className="why-meta-label">Signal Strength</span>
+                  <span className="why-meta-val" style={{textTransform:'capitalize'}}>{match.confidence}</span>
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── IntelBrief ── 5-number daily intelligence brief ───────────────────────────
+function IntelBrief({ matches, lastUpdated }) {
+  if (!matches || matches.length === 0) return null;
+  const now = Date.now();
+  const windowMs = 3 * 60 * 60 * 1000;
+
+  const hotLeads = matches.filter(m =>
+    m.intent === 'asking_for_tool' || m.intent === 'buying' ||
+    m.keywordType === 'competitor'
+  ).length;
+
+  const evalSignals = matches.filter(m =>
+    m.intent === 'researching' && (m.intentScore || 0) >= 60
+  ).length;
+
+  const expiring = matches.filter(m => {
+    if (!m.createdAt) return false;
+    const rem = windowMs - (now - new Date(m.createdAt).getTime());
+    return rem > 0 && rem < 30 * 60 * 1000;
+  }).length;
+
+  const engaged = matches.filter(m =>
+    m.engagement?.gotEngagement || m.gotEngagement
+  ).length;
+
+  const cards = [
+    {
+      icon: '🔥',
+      num: hotLeads,
+      label: 'Switch signals + buying intent',
+      delta: hotLeads > 0 ? { text: 'Act now', cls: 'ib-delta-warn' } : null,
+    },
+    {
+      icon: '⚡',
+      num: evalSignals,
+      label: 'Evaluation signals',
+      delta: evalSignals > 0 ? { text: 'Warm leads', cls: 'ib-delta-up' } : null,
+    },
+    {
+      icon: '⏱',
+      num: expiring,
+      label: 'Expiring in < 30 min',
+      delta: expiring > 0 ? { text: 'Reply fast', cls: 'ib-delta-warn' } : { text: 'All good', cls: 'ib-delta-neutral' },
+    },
+    {
+      icon: '📬',
+      num: matches.length,
+      label: 'Total matches loaded',
+      delta: null,
+    },
+    {
+      icon: '✅',
+      num: engaged,
+      label: 'Got engagement',
+      delta: engaged > 0 ? { text: 'Nice! Keep it up', cls: 'ib-delta-up' } : null,
+    },
+  ];
+
+  return (
+    <div style={{marginBottom: 20}}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+        <span style={{fontSize:11,fontWeight:700,letterSpacing:1.5,color:'#64748B',textTransform:'uppercase'}}>Today's Intelligence Brief</span>
+        {lastUpdated && <span style={{fontSize:10,color:'#94A3B8'}}>Updated {timeAgo(lastUpdated)}</span>}
+      </div>
+      <div className="ib-wrap">
+        {cards.map((c, i) => (
+          <div key={i} className="ib-card">
+            <div className="ib-icon">{c.icon}</div>
+            <div className="ib-num">{c.num}</div>
+            <div className="ib-label">{c.label}</div>
+            {c.delta && <div className={`ib-delta ${c.delta.cls}`}>{c.delta.text}</div>}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── IntentTabBar ── filters feed by intent type ───────────────────────────────
+function IntentTabBar({ matches, activeTab, onTab }) {
+  const counts = {
+    all: matches.length,
+    hot: matches.filter(m => m.intent === 'asking_for_tool' || m.intent === 'buying' || m.keywordType === 'competitor').length,
+    switching: matches.filter(m => m.keywordType === 'competitor' || (m.reasoning && /switch|replac/i.test(m.reasoning))).length,
+    hiring: matches.filter(m => m.intent === 'hiring').length,
+    research: matches.filter(m => m.intent === 'researching').length,
+    others: matches.filter(m => !['asking_for_tool','buying','researching'].includes(m.intent) && m.keywordType !== 'competitor').length,
+  };
+  const tabs = [
+    { id: 'all',       label: 'All' },
+    { id: 'hot',       label: '🔥 Hot Leads', isHot: true },
+    { id: 'switching', label: 'Switching' },
+    { id: 'hiring',    label: 'Hiring' },
+    { id: 'research',  label: 'Research' },
+    { id: 'others',    label: 'Others' },
+  ];
+  return (
+    <div className="itab-bar">
+      {tabs.map(t => (
+        <button
+          key={t.id}
+          className={`itab${activeTab === t.id ? ' active' + (t.isHot ? ' hot' : '') : ''}`}
+          onClick={() => onTab(t.id)}
+        >
+          {t.label}
+          {counts[t.id] > 0 && <span className="itab-count">{counts[t.id]}</span>}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function MatchCard({ match, monitorId, apiKey, onAction }) {
   const [drafting, setDrafting] = useState(false);
   const [gone, setGone] = useState(false);
@@ -1096,12 +1370,14 @@ function MatchCard({ match, monitorId, apiKey, onAction }) {
         {match.keywordType === 'competitor' && <span style={{padding:'2px 7px',borderRadius:10,background:'#FEF2F2',color:'#991B1B',fontSize:10,fontWeight:700,letterSpacing:.2}}>⚔️ Competitor</span>}
         {match.isUnanswered && <span className="unanswered-badge">🟢 No replies yet</span>}
         <span style={{marginLeft:'auto',fontSize:11,color:'#94A3B8'}}>{timeAgo(match.createdAt)}</span>
+        <EngagementClock createdAt={match.createdAt} />
       </div>
       <a href={match.url} target="_blank" rel="noreferrer"
         style={{fontSize:14,fontWeight:600,color:'#0F172A',textDecoration:'none',display:'block',marginBottom:6,lineHeight:1.5}}>
         {match.title}
       </a>
       {match.body && <p style={{fontSize:13,color:'#64748B',lineHeight:1.65,marginBottom:10}}>{match.body.slice(0,260)}{match.body.length>260?'…':''}</p>}
+      <WhyPanel match={match} />
       <div style={{display:'flex',gap:8,alignItems:'center',fontSize:12,color:'#94A3B8',marginBottom:match.draft?0:10,flexWrap:'wrap'}}>
         {match.author && <span>u/{match.author}</span>}
         {match.score!=null && <span style={_engStyle}>· {match.score} pts</span>}
@@ -1845,6 +2121,7 @@ function MatchesFeed({ apiKey, monitors, onGoToSettings }) {
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(false);
   const [sprintMode, setSprintMode] = useState(false);
+  const [activeTab, setActiveTab] = useState('all');
 
   useEffect(()=>{ if (monitors.length && !selId) setSelId(monitors[0].id); },[monitors]);
 
@@ -2058,7 +2335,21 @@ function MatchesFeed({ apiKey, monitors, onGoToSettings }) {
                 onAction={handleAction}
               />
             )}
-            {!sprintMode && !loading && matches.map(m=>(
+            {!sprintMode && !loading && matches.length > 0 && (
+              <IntelBrief matches={matches} lastUpdated={matches[0]?.createdAt} />
+            )}
+            {!sprintMode && !loading && matches.length > 0 && (
+              <IntentTabBar matches={matches} activeTab={activeTab} onTab={t => setActiveTab(t)} />
+            )}
+            {!sprintMode && !loading && matches.filter(m => {
+              if (activeTab === 'all') return true;
+              if (activeTab === 'hot') return m.intent === 'asking_for_tool' || m.intent === 'buying' || m.keywordType === 'competitor';
+              if (activeTab === 'switching') return m.keywordType === 'competitor' || (m.reasoning && /switch|replac/i.test(m.reasoning));
+              if (activeTab === 'hiring') return m.intent === 'hiring';
+              if (activeTab === 'research') return m.intent === 'researching';
+              if (activeTab === 'others') return !['asking_for_tool','buying','researching'].includes(m.intent) && m.keywordType !== 'competitor';
+              return true;
+            }).map(m=>(
               <MatchCard key={m.id} match={m} monitorId={selId} apiKey={apiKey} onAction={handleAction} />
             ))}
           </>
