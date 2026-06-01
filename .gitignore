@@ -6,3 +6,12 @@ node_modules/
 scripts/testers.csv
 scripts/testers-*.csv
 .worktrees/
+
+# Claude Code internal worktrees — never commit
+.claude/worktrees/
+
+# One-shot insertion scripts — safe to delete after use
+scripts/insert-*.cjs
+scripts/insert-*.js
+COPY_INSTRUCTIONS.md
+
