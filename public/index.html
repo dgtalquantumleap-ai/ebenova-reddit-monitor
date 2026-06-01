@@ -3,1267 +3,613 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>EBENOVA INSIGHTS // INTEL TERMINAL</title>
+<title>Ebenova Insights — Find high-intent buyers before your competitors do</title>
+<meta name="description" content="Ebenova Insights monitors 13+ platforms in real-time to surface switching signals, buying intent, and competitor opportunities — so you can act while it matters.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Crimson+Pro:ital,wght@0,600;0,700;1,400&family=Inter:wght@500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Bricolage+Grotesque:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  :root {
-    --bg: #0a0907;
-    --bg-2: #14110d;
-    --bg-3: #1d1812;
-    --ink: #f5efe0;
-    --ink-2: #b9b09f;
-    --ink-3: #6f6757;
-    --gold: #c9a84c;
-    --gold-2: #e8c97a;
-    --green: #34d058;
-    --red: #ff5959;
-    --line: #2a2419;
-    --serif: 'Crimson Pro', 'Georgia', serif;
-    --sans: 'Inter', system-ui, sans-serif;
-    --mono: 'JetBrains Mono', 'Menlo', monospace;
-  }
-  @media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after {
-      animation-duration: 0.01ms !important;
-      animation-iteration-count: 1 !important;
-      transition-duration: 0.01ms !important;
-      scroll-behavior: auto !important;
-    }
-  }
-  html, body { background: var(--bg); color: var(--ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
-  body { min-height: 100vh; }
-  a { color: inherit; text-decoration: none; }
-  .mono { font-family: var(--mono); font-feature-settings: 'ss01' on; }
-  .serif { font-family: var(--serif); }
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --navy:#080D14;
+  --navy2:#0D1520;
+  --navy3:#111C2D;
+  --navy4:#162038;
+  --purple:#6366F1;
+  --purple-l:#818CF8;
+  --purple-ll:#C7D2FE;
+  --purple-bg:rgba(99,102,241,.10);
+  --purple-border:rgba(99,102,241,.25);
+  --orange:#FF6B35;
+  --orange-l:#FF8A57;
+  --orange-bg:rgba(255,107,53,.10);
+  --green:#10B981;
+  --green-bg:rgba(16,185,129,.10);
+  --amber:#F59E0B;
+  --amber-bg:rgba(245,158,11,.10);
+  --slate:#94A3B8;
+  --slate2:#64748B;
+  --slate3:#475569;
+  --white:#F8FAFC;
+  --border:rgba(255,255,255,.07);
+  --border2:rgba(255,255,255,.12);
+  --font-sans:'Inter',system-ui,sans-serif;
+  --font-display:'Bricolage Grotesque','Inter',sans-serif;
+}
+html,body{background:var(--navy);color:var(--white);font-family:var(--font-sans);-webkit-font-smoothing:antialiased;scroll-behavior:smooth}
+a{color:inherit;text-decoration:none}
+img{max-width:100%}
 
-  /* Ticker */
-  .ticker-bar {
-    border-bottom: 1px solid var(--line);
-    background: rgba(10,9,7,0.85);
-    backdrop-filter: blur(12px);
-    position: sticky; top: 0; z-index: 50;
-  }
-  .ticker {
-    display: flex; align-items: center; gap: 36px;
-    padding: 8px 24px;
-    font-family: var(--mono); font-size: 11px; color: var(--ink-3);
-    overflow: hidden; white-space: nowrap;
-  }
-  .ticker-item { display: inline-flex; align-items: center; gap: 8px; }
-  .ticker-dot {
-    width: 6px; height: 6px; border-radius: 50%; background: var(--green);
-    box-shadow: 0 0 8px rgba(52, 208, 88, 0.6);
-    animation: pulse-dot 1.6s infinite;
-  }
-  @keyframes pulse-dot { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
-  .ticker-arrow-up { color: var(--green); }
-  .ticker-arrow-down { color: var(--red); }
-  .ticker .num { color: var(--ink); }
+/* ── SKIP LINK ── */
+.skip{position:absolute;top:-40px;left:0;background:var(--purple);color:#fff;padding:8px 16px;font-size:13px;font-weight:600;z-index:999;border-radius:0 0 6px 0}
+.skip:focus{top:0}
 
-  /* Nav */
-  .nav {
-    border-bottom: 1px solid var(--line);
-    padding: 18px 24px;
-    display: flex; align-items: center; justify-content: space-between;
-    max-width: 1280px; margin: 0 auto;
-  }
-  .logo {
-    display: flex; align-items: center; gap: 12px;
-  }
-  .logo-mark {
-    width: 32px; height: 32px;
-    background: linear-gradient(135deg, var(--gold), var(--gold-2));
-    border-radius: 4px;
-    display: flex; align-items: center; justify-content: center;
-    font-family: var(--mono); font-size: 11px; font-weight: 700; color: #000;
-    letter-spacing: -0.5px;
-  }
-  .logo-text { font-family: var(--mono); font-size: 13px; letter-spacing: 1px; font-weight: 500; }
-  .logo-text b { color: var(--gold); font-weight: 700; }
-  .nav-links { display: flex; gap: 28px; align-items: center; font-family: var(--mono); font-size: 12px; }
-  .nav-links a { color: var(--ink-2); }
-  .nav-cta {
-    background: var(--gold); color: #000; font-weight: 600;
-    padding: 9px 18px; border-radius: 4px; font-size: 12px;
-    font-family: var(--mono); letter-spacing: 0.5px;
-  }
-  .nav-cta:hover { background: var(--gold-2); }
+/* ── NAV ── */
+nav{position:sticky;top:0;z-index:50;background:rgba(8,13,20,.85);backdrop-filter:blur(16px);border-bottom:1px solid var(--border)}
+.nav-inner{max-width:1200px;margin:0 auto;padding:0 24px;height:64px;display:flex;align-items:center;justify-content:space-between;gap:24px}
+.nav-logo{display:flex;align-items:center;gap:10px;font-family:var(--font-display);font-size:17px;font-weight:700;color:var(--white)}
+.nav-logo-mark{width:32px;height:32px;background:linear-gradient(135deg,var(--purple),var(--purple-l));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#fff;flex-shrink:0}
+.nav-logo span{color:var(--purple-l)}
+.nav-links{display:flex;gap:28px;align-items:center;font-size:14px;font-weight:500;color:var(--slate)}
+.nav-links a:hover{color:var(--white);transition:color .15s}
+.nav-right{display:flex;gap:10px;align-items:center}
+.btn-sm{padding:8px 18px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;display:inline-flex;align-items:center;gap:6px;transition:all .15s}
+.btn-ghost-sm{background:transparent;color:var(--slate);border:1px solid var(--border2)}
+.btn-ghost-sm:hover{color:var(--white);border-color:rgba(255,255,255,.25)}
+.btn-primary-sm{background:var(--purple);color:#fff}
+.btn-primary-sm:hover{background:var(--purple-l);transform:translateY(-1px)}
+@media(max-width:768px){.nav-links{display:none}.nav-logo-sub{display:none}}
 
-  /* Hero */
-  .hero {
-    max-width: 1280px; margin: 0 auto;
-    padding: 80px 24px 48px;
-    display: grid; grid-template-columns: 1.1fr 1fr; gap: 80px; align-items: start;
-  }
-  .hero-eyebrow {
-    display: inline-flex; align-items: center; gap: 10px;
-    font-family: var(--mono); font-size: 11px; color: var(--gold);
-    letter-spacing: 2.5px; text-transform: uppercase; margin-bottom: 28px;
-    border: 1px solid rgba(255,107,53,0.3); padding: 6px 12px; border-radius: 999px;
-  }
-  .hero-eyebrow::before {
-    content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--gold);
-    animation: pulse-dot 1.6s infinite;
-  }
-  .hero-title {
-    font-family: var(--serif);
-    font-size: clamp(48px, 6.4vw, 86px);
-    font-weight: 700; line-height: 0.96; letter-spacing: -2px;
-    margin-bottom: 32px;
-  }
-  .hero-title em {
-    font-style: italic; font-weight: 400;
-    background: linear-gradient(135deg, var(--gold), var(--gold-2));
-    -webkit-background-clip: text; background-clip: text; color: transparent;
-  }
-  .hero-platforms-sub {
-    display: block; font-family: var(--mono); font-size: 13px;
-    font-weight: 400; color: var(--ink-3); letter-spacing: 3px;
-    text-transform: uppercase; margin-top: -20px; margin-bottom: 28px;
-  }
-  .hero-sub {
-    font-size: 18px; color: var(--ink-2); line-height: 1.65;
-    max-width: 560px; margin-bottom: 40px;
-  }
-  .hero-cta-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 36px; }
-  .btn {
-    display: inline-flex; align-items: center; gap: 10px;
-    padding: 16px 26px; border-radius: 6px;
-    font-family: var(--mono); font-size: 13px; font-weight: 600;
-    letter-spacing: 0.5px; cursor: pointer; border: none;
-    transition: all 0.18s ease;
-  }
-  .btn-primary { background: var(--gold); color: #000; }
-  .btn-primary:hover { background: var(--gold-2); transform: translateY(-1px); box-shadow: 0 8px 30px rgba(255,107,53,0.25); }
-  .btn-ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); }
-  .btn-ghost:hover { border-color: var(--ink-2); background: var(--bg-2); }
-  .btn-arrow { font-size: 16px; }
-  .hero-meta {
-    font-family: var(--mono); font-size: 11px; color: var(--ink-3);
-    letter-spacing: 1px; display: flex; gap: 20px; flex-wrap: wrap;
-  }
-  .hero-meta b { color: var(--green); }
+/* ── HERO ── */
+.hero{max-width:1200px;margin:0 auto;padding:96px 24px 72px;display:grid;grid-template-columns:1fr 1fr;gap:72px;align-items:center}
+@media(max-width:900px){.hero{grid-template-columns:1fr;gap:48px;padding:64px 24px 48px}}
+.hero-eyebrow{display:inline-flex;align-items:center;gap:8px;background:var(--purple-bg);border:1px solid var(--purple-border);color:var(--purple-ll);padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;letter-spacing:.5px;margin-bottom:24px}
+.hero-eyebrow-dot{width:6px;height:6px;border-radius:50%;background:var(--purple-l);animation:pulse 1.8s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.hero-h1{font-family:var(--font-display);font-size:clamp(40px,5.5vw,68px);font-weight:800;line-height:1.06;letter-spacing:-2px;margin-bottom:20px}
+.hero-h1 em{font-style:normal;color:var(--purple-l)}
+.hero-h1 .hl{position:relative;display:inline-block}
+.hero-h1 .hl::after{content:'';position:absolute;bottom:-4px;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--purple),var(--orange));border-radius:2px}
+.hero-sub{font-size:17px;color:var(--slate);line-height:1.7;margin-bottom:36px;max-width:500px}
+.hero-cta-row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:32px}
+.btn-lg{padding:14px 28px;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;border:none;display:inline-flex;align-items:center;gap:8px;transition:all .18s}
+.btn-primary-lg{background:linear-gradient(135deg,var(--purple),var(--purple-l));color:#fff;box-shadow:0 8px 32px rgba(99,102,241,.35)}
+.btn-primary-lg:hover{transform:translateY(-2px);box-shadow:0 12px 40px rgba(99,102,241,.45)}
+.btn-outline-lg{background:transparent;color:var(--white);border:1px solid var(--border2)}
+.btn-outline-lg:hover{border-color:rgba(255,255,255,.3);background:rgba(255,255,255,.04)}
+.hero-trust{display:flex;gap:20px;flex-wrap:wrap;font-size:13px;color:var(--slate2)}
+.hero-trust span{display:flex;align-items:center;gap:6px}
+.hero-trust-dot{width:5px;height:5px;border-radius:50%;background:var(--green)}
 
-  /* Hero terminal */
-  .terminal {
-    background: var(--bg-2); border: 1px solid var(--line);
-    border-radius: 8px; overflow: hidden;
-    font-family: var(--mono); font-size: 12px;
-    box-shadow: 0 30px 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,107,53,0.05);
-  }
-  .terminal-header {
-    background: linear-gradient(to bottom, #1f1a13, #14110d);
-    border-bottom: 1px solid var(--line);
-    padding: 10px 14px;
-    display: flex; align-items: center; gap: 12px; font-size: 11px; color: var(--ink-3);
-  }
-  .terminal-dots { display: flex; gap: 6px; }
-  .terminal-dots span { width: 10px; height: 10px; border-radius: 50%; background: #3a3328; }
-  .terminal-title { letter-spacing: 1.5px; }
-  .terminal-status { margin-left: auto; color: var(--green); display: inline-flex; align-items: center; gap: 6px; }
-  .terminal-status::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 6px var(--green); animation: pulse-dot 1.6s infinite; }
-  .feed { padding: 8px 0; max-height: 480px; overflow: hidden; position: relative; }
-  .feed::after {
-    content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 80px;
-    background: linear-gradient(to bottom, transparent, var(--bg-2));
-    pointer-events: none;
-  }
-  .feed-row {
-    padding: 11px 14px; border-bottom: 1px dotted #2a2419;
-    display: grid; grid-template-columns: 70px 60px 1fr auto; gap: 12px;
-    align-items: baseline; font-size: 11.5px; line-height: 1.4;
-    animation: slide-in 0.6s ease;
-  }
-  @keyframes slide-in { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: translateX(0); } }
-  .feed-time { color: var(--ink-3); letter-spacing: 0.5px; }
-  .feed-source {
-    font-size: 10px; padding: 2px 6px; border-radius: 3px; font-weight: 600;
-    letter-spacing: 0.5px; text-align: center; color: #000;
-  }
-  .src-reddit { background: #ff7c47; }
-  .src-hn { background: #ff9d4d; }
-  .src-substack { background: #ff8a3d; color: #000; }
-  .src-upwork { background: #6fda44; }
-  .src-quora { background: #d63938; color: #fff; }
-  .src-fiverr { background: #1dbf73; }
-  .src-medium { background: #00ab6c; color: #fff; }
-  .src-github { background: #d8d4cc; }
-  .src-ph { background: #ff5852; color: #fff; }
-  .src-twitter { background: #1DA1F2; color: #fff; }
-  .feed-title { color: var(--ink); }
-  .feed-score { color: var(--gold); font-weight: 700; }
-  .feed-title-low { color: var(--ink-2); }
-  .feed-summary {
-    grid-column: 2 / -1;
-    color: var(--ink-3); font-size: 10.5px; margin-top: 2px;
-    font-family: var(--sans);
-  }
-  .feed-cta {
-    padding: 12px 14px;
-    background: rgba(255,107,53,0.06);
-    border-top: 1px solid var(--line);
-    font-size: 11px; color: var(--gold); display: flex; justify-content: space-between; align-items: center;
-  }
-  .feed-cta a { font-weight: 600; }
-  .feed-cta-blink::after { content: '_'; animation: blink 1s infinite; }
-  @keyframes blink { 50% { opacity: 0; } }
+/* ── HERO PRODUCT MOCKUP ── */
+.hero-mockup{background:var(--navy2);border:1px solid var(--border2);border-radius:16px;overflow:hidden;box-shadow:0 32px 80px rgba(0,0,0,.6),0 0 0 1px rgba(99,102,241,.08)}
+.mockup-topbar{background:var(--navy3);border-bottom:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;justify-content:space-between}
+.mockup-dots{display:flex;gap:6px}
+.mockup-dots span{width:10px;height:10px;border-radius:50%;background:var(--slate3)}
+.mockup-title{font-size:11px;font-weight:600;color:var(--slate2);letter-spacing:.5px}
+.mockup-badge{background:var(--green-bg);color:var(--green);font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;letter-spacing:.5px;display:flex;align-items:center;gap:4px}
+.mockup-badge::before{content:'';width:5px;height:5px;border-radius:50%;background:var(--green);animation:pulse 1.6s infinite}
+/* Brief row */
+.mockup-brief{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;padding:10px;background:var(--navy)}
+.brief-cell{background:var(--navy2);border:1px solid var(--border);border-radius:8px;padding:8px 10px}
+.brief-num{font-family:var(--font-display);font-size:20px;font-weight:800;color:var(--white);line-height:1}
+.brief-lbl{font-size:9px;font-weight:500;color:var(--slate2);letter-spacing:.4px;margin-top:3px;line-height:1.3}
+.brief-delta{font-size:9px;font-weight:600;margin-top:3px}
+.brief-delta.up{color:var(--green)}
+.brief-delta.warn{color:var(--amber)}
+/* Tab bar */
+.mockup-tabs{display:flex;gap:4px;padding:8px 10px 0;border-bottom:1px solid var(--border)}
+.tab{padding:5px 12px;border-radius:6px 6px 0 0;font-size:11px;font-weight:600;color:var(--slate2);cursor:pointer;border:1px solid transparent;border-bottom:none;margin-bottom:-1px}
+.tab.active{background:var(--navy2);border-color:var(--border);color:var(--white)}
+.tab.hot{color:var(--orange)}
+.tab.hot.active{background:var(--orange-bg);border-color:rgba(255,107,53,.3);color:var(--orange)}
+/* Match cards */
+.mockup-feed{padding:8px;display:flex;flex-direction:column;gap:6px}
+.mcard{background:var(--navy3);border:1px solid var(--border);border-radius:10px;padding:10px 12px;display:grid;grid-template-columns:1fr auto;gap:8px;align-items:start}
+.mcard-left{}
+.mcard-src{display:flex;align-items:center;gap:6px;margin-bottom:5px}
+.src-icon{width:18px;height:18px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;flex-shrink:0}
+.src-r{background:#FF4500;color:#fff}
+.src-x{background:#000;color:#fff;border:1px solid #333}
+.src-hn{background:#FF6600;color:#fff}
+.src-li{background:#0A66C2;color:#fff}
+.mcard-author{font-size:10px;color:var(--slate2)}
+.mcard-title{font-size:12px;font-weight:600;color:var(--white);line-height:1.45;margin-bottom:5px}
+.mcard-badge{display:inline-flex;padding:2px 7px;border-radius:10px;font-size:9px;font-weight:700;letter-spacing:.5px}
+.badge-switching{background:rgba(239,68,68,.15);color:#FCA5A5}
+.badge-research{background:rgba(59,130,246,.15);color:#93C5FD}
+.badge-hiring{background:rgba(16,185,129,.15);color:#6EE7B7}
+.badge-competitor{background:rgba(245,158,11,.15);color:#FCD34D}
+.mcard-right{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.mcard-score{font-family:var(--font-display);font-size:22px;font-weight:800;line-height:1}
+.mcard-score.high{color:var(--amber)}
+.mcard-score.med{color:#60A5FA}
+.mcard-score-sub{font-size:9px;color:var(--slate2)}
+.mcard-clock{font-size:9px;font-weight:600;color:var(--amber);background:var(--amber-bg);padding:2px 7px;border-radius:10px;display:flex;align-items:center;gap:3px}
 
-  /* Platform selector marketing block */
-  #how .how-intro {
-    color: var(--ink-2); font-size: 16px; line-height: 1.7;
-    max-width: 640px; margin: 12px 0 36px;
-  }
-  .selector-grid {
-    display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 18px;
-  }
-  .selector-chip {
-    font-family: var(--mono); font-size: 12px; letter-spacing: 1px;
-    padding: 9px 14px; border-radius: 999px;
-    background: var(--bg-2); color: var(--ink-2);
-    border: 1px solid var(--line); cursor: pointer;
-    transition: transform 0.1s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
-  }
-  .selector-chip:hover { transform: translateY(-1px); border-color: var(--ink-3); }
-  .selector-chip:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
-  .selector-chip:active { transform: scale(0.97); }
-  .selector-chip.on {
-    color: var(--ink); border-color: var(--gold);
-    box-shadow: inset 0 0 0 1px rgba(255,107,53,0.2);
-  }
-  .selector-meta {
-    font-family: var(--mono); font-size: 11px; color: var(--ink-3);
-    letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 24px;
-  }
-  .selector-count { color: var(--gold); font-weight: 700; transition: opacity 0.12s ease; }
-  .selector-count.flicker { opacity: 0.4; }
-  .selector-feed {
-    background: var(--bg-2); border: 1px solid var(--line);
-    border-radius: 8px; padding: 8px 0; min-height: 240px; max-height: 360px;
-    overflow: hidden; position: relative; font-family: var(--mono); font-size: 12px;
-  }
-  .selector-feed::after {
-    content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 60px;
-    background: linear-gradient(to bottom, transparent, var(--bg-2));
-    pointer-events: none;
-  }
-  @media (max-width: 640px) {
-    .selector-grid { gap: 8px; }
-    .selector-chip { font-size: 11px; padding: 8px 12px; }
-  }
+/* ── TRUST BAR ── */
+.trust-bar{border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:28px 24px;background:var(--navy2)}
+.trust-inner{max-width:1200px;margin:0 auto;display:flex;flex-direction:column;align-items:center;gap:20px}
+.trust-label{font-size:11px;font-weight:600;color:var(--slate3);letter-spacing:2px;text-transform:uppercase}
+.trust-logos{display:flex;gap:32px;align-items:center;flex-wrap:wrap;justify-content:center}
+.trust-item{font-size:13px;font-weight:600;color:var(--slate2);letter-spacing:.3px;opacity:.6}
 
-  /* Section frame */
-  section { max-width: 1280px; margin: 0 auto; padding: 80px 24px; }
-  .label {
-    font-family: var(--mono); font-size: 11px; letter-spacing: 3px;
-    color: var(--gold); text-transform: uppercase;
-    display: inline-flex; align-items: center; gap: 12px; margin-bottom: 18px;
-  }
-  .label::before { content: ''; width: 24px; height: 1px; background: var(--gold); }
-  .h-display {
-    font-family: var(--serif); font-size: clamp(36px, 4vw, 56px); font-weight: 700;
-    line-height: 1.05; letter-spacing: -1px; max-width: 800px;
-  }
-  .h-display em { font-style: italic; color: var(--gold); font-weight: 400; }
+/* ── SECTIONS ── */
+.section{max-width:1200px;margin:0 auto;padding:96px 24px}
+.section-label{display:inline-flex;align-items:center;gap:8px;background:var(--purple-bg);border:1px solid var(--purple-border);color:var(--purple-ll);padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:16px}
+.section-h2{font-family:var(--font-display);font-size:clamp(32px,4vw,52px);font-weight:800;line-height:1.08;letter-spacing:-1.5px;margin-bottom:16px}
+.section-h2 em{font-style:normal;color:var(--purple-l)}
+.section-sub{font-size:17px;color:var(--slate);line-height:1.7;max-width:580px}
+.hr{border:none;border-top:1px solid var(--border);margin:0}
 
-  /* Platforms strip */
-  .platforms {
-    border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
-    padding: 32px 24px; background: var(--bg-2);
-  }
-  .platforms-inner {
-    max-width: 1280px; margin: 0 auto;
-    display: flex; gap: 14px; align-items: center; flex-wrap: wrap; justify-content: center;
-  }
-  .platform-pill {
-    display: inline-flex; align-items: center; gap: 8px;
-    padding: 8px 16px; border-radius: 999px;
-    font-family: var(--mono); font-size: 12px; letter-spacing: 0.5px;
-    border: 1px solid var(--line); background: var(--bg);
-    color: var(--ink-2);
-  }
-  .platform-pill .dot {
-    width: 6px; height: 6px; border-radius: 50%;
-    box-shadow: 0 0 6px currentColor;
-  }
-  .platform-pill .dot.live { background: var(--green); color: var(--green); animation: pulse-dot 1.8s infinite; }
-  .platforms-meta {
-    text-align: center; margin-top: 18px;
-    font-family: var(--mono); font-size: 11px; color: var(--ink-3); letter-spacing: 2px; text-transform: uppercase;
-  }
+/* ── WHY EBENOVA — 4-feature grid ── */
+.feature-grid{display:grid;grid-template-columns:1fr 1fr;gap:2px;margin-top:56px;border:1px solid var(--border);border-radius:16px;overflow:hidden}
+@media(max-width:700px){.feature-grid{grid-template-columns:1fr}}
+.feature-cell{background:var(--navy2);padding:36px 32px}
+.feature-cell:nth-child(odd){border-right:1px solid var(--border)}
+.feature-cell:nth-child(1),.feature-cell:nth-child(2){border-bottom:1px solid var(--border)}
+.feature-icon{width:44px;height:44px;border-radius:12px;background:var(--purple-bg);border:1px solid var(--purple-border);display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:18px}
+.feature-h{font-family:var(--font-display);font-size:19px;font-weight:700;color:var(--white);margin-bottom:10px}
+.feature-p{font-size:14px;color:var(--slate);line-height:1.65}
 
-  /* Anatomy */
-  .anatomy { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 56px; align-items: center; }
-  .anatomy-card {
-    background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px;
-    padding: 24px; position: relative;
-    box-shadow: 0 30px 60px rgba(0,0,0,0.4);
-  }
-  .anatomy-card .src-reddit { font-size: 10px; padding: 2px 8px; border-radius: 3px; }
-  .anatomy-meta { font-family: var(--mono); font-size: 11px; color: var(--ink-3); margin-bottom: 12px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
-  .anatomy-title { font-size: 17px; font-weight: 600; line-height: 1.45; margin-bottom: 10px; }
-  .anatomy-body { color: var(--ink-2); font-size: 14px; line-height: 1.7; margin-bottom: 16px; }
-  .anatomy-draft {
-    background: rgba(255,107,53,0.06); border: 1px solid rgba(255,107,53,0.25);
-    border-radius: 6px; padding: 14px;
-  }
-  .anatomy-draft-label {
-    font-family: var(--mono); font-size: 10px; color: var(--gold);
-    letter-spacing: 2px; text-transform: uppercase; margin-bottom: 8px;
-    display: flex; align-items: center; gap: 8px;
-  }
-  .anatomy-draft-label::before { content: '◢'; }
-  .anatomy-draft-text { font-size: 13.5px; line-height: 1.7; color: var(--ink); font-family: var(--serif); }
-  .anatomy-marker {
-    position: absolute; padding: 4px 8px; border-radius: 3px;
-    background: var(--bg); border: 1px solid var(--gold);
-    font-family: var(--mono); font-size: 10px; letter-spacing: 1px;
-    color: var(--gold); white-space: nowrap;
-  }
-  .marker-1 { top: 18px; right: -88px; }
-  .marker-2 { top: 70px; right: -100px; }
-  .marker-3 { bottom: 70px; right: -120px; }
-  @media (max-width: 900px) { .anatomy-marker { display: none; } }
+/* ── PLATFORMS STRIP ── */
+.platforms-strip{background:var(--navy2);border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:40px 24px}
+.platforms-strip-inner{max-width:1200px;margin:0 auto}
+.platforms-strip-h{font-size:13px;font-weight:600;color:var(--slate2);letter-spacing:2px;text-transform:uppercase;text-align:center;margin-bottom:24px}
+.platform-pills{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+.ppill{display:inline-flex;align-items:center;gap:7px;background:var(--navy3);border:1px solid var(--border2);border-radius:20px;padding:7px 14px;font-size:12px;font-weight:600;color:var(--slate)}
+.ppill-dot{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:pulse 1.8s infinite}
 
-  .anatomy-marker::before {
-    content: '';
-    position: absolute;
-    background: var(--gold);
-    opacity: 0.6;
-  }
-  .anatomy-marker.marker-1::before { top: 50%; right: -28px; width: 24px; height: 1px; }
-  .anatomy-marker.marker-2::before { top: 50%; right: -28px; width: 24px; height: 1px; }
-  .anatomy-marker.marker-3::before { top: 50%; right: -28px; width: 24px; height: 1px; }
-  .anatomy-marker.marker-4::before { top: 50%; right: -28px; width: 24px; height: 1px; }
-  .anatomy-marker.marker-4 {
-    position: absolute; right: -180px; top: 24px;
-    font-family: var(--mono); font-size: 10px; color: var(--gold);
-    letter-spacing: 1px; white-space: nowrap;
-  }
-  @media (max-width: 1024px) {
-    .anatomy-marker::before { display: none; }
-    .anatomy-marker.marker-4 { position: static; display: inline-block; margin: 6px 0; }
-  }
+/* ── HOW IT WORKS ── */
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;margin-top:56px;border:1px solid var(--border);border-radius:16px;overflow:hidden}
+@media(max-width:700px){.steps{grid-template-columns:1fr}}
+.step{background:var(--navy2);padding:36px 28px;position:relative}
+.step:not(:last-child){border-right:1px solid var(--border)}
+@media(max-width:700px){.step:not(:last-child){border-right:none;border-bottom:1px solid var(--border)}}
+.step-num{font-family:var(--font-display);font-size:48px;font-weight:800;color:var(--purple-border);line-height:1;margin-bottom:16px}
+.step-h{font-family:var(--font-display);font-size:18px;font-weight:700;color:var(--white);margin-bottom:10px}
+.step-p{font-size:14px;color:var(--slate);line-height:1.65}
 
-  .anatomy-list { display: flex; flex-direction: column; gap: 26px; }
-  .anatomy-item { display: flex; gap: 18px; align-items: flex-start; }
-  .anatomy-num {
-    font-family: var(--mono); font-size: 11px; color: var(--gold);
-    letter-spacing: 2px; flex-shrink: 0; min-width: 32px;
-    border-right: 1px solid var(--gold); padding-right: 12px;
-  }
-  .anatomy-item h4 { font-family: var(--serif); font-size: 19px; font-weight: 600; margin-bottom: 6px; }
-  .anatomy-item p { color: var(--ink-2); font-size: 14px; line-height: 1.65; }
+/* ── COMPARISON ── */
+.compare-wrap{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid var(--border);border-radius:16px;overflow:hidden;margin-top:56px}
+@media(max-width:700px){.compare-wrap{grid-template-columns:1fr}}
+.compare-col{padding:40px 36px}
+.compare-col.them{background:var(--navy2)}
+.compare-col.us{background:linear-gradient(160deg,rgba(99,102,241,.08),var(--navy2));border-left:1px solid var(--border)}
+@media(max-width:700px){.compare-col.us{border-left:none;border-top:1px solid var(--border)}}
+.compare-tag{font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;color:var(--slate3)}
+.compare-tag.ours{color:var(--purple-l)}
+.compare-name{font-family:var(--font-display);font-size:22px;font-weight:800;margin-bottom:28px;letter-spacing:-.5px}
+.compare-list{list-style:none;display:flex;flex-direction:column;gap:13px}
+.compare-list li{display:flex;gap:10px;align-items:flex-start;font-size:14px;color:var(--slate);line-height:1.55}
+.compare-list li .icon{width:18px;height:18px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;margin-top:1px}
+.icon-x{background:rgba(239,68,68,.15);color:#F87171}
+.icon-check{background:var(--purple-bg);color:var(--purple-l)}
 
-  /* Comparison */
-  .compare {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 0;
-    border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
-    background: var(--bg-2);
-  }
-  .compare-col { padding: 36px 32px; }
-  .compare-col + .compare-col { border-left: 1px solid var(--line); background: linear-gradient(135deg, rgba(255,107,53,0.06), transparent); }
-  .compare-tag {
-    font-family: var(--mono); font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
-    color: var(--ink-3); margin-bottom: 8px;
-  }
-  .compare-col + .compare-col .compare-tag { color: var(--gold); }
-  .compare-name { font-family: var(--serif); font-size: 22px; font-weight: 700; margin-bottom: 24px; letter-spacing: -0.5px; }
-  .compare-list { list-style: none; display: flex; flex-direction: column; gap: 14px; }
-  .compare-list li { display: flex; gap: 12px; align-items: flex-start; font-size: 14px; line-height: 1.55; color: var(--ink-2); }
-  .compare-list li::before { content: '×'; color: var(--red); font-weight: 700; flex-shrink: 0; width: 16px; font-size: 18px; line-height: 1.1; }
-  .compare-col + .compare-col .compare-list li { color: var(--ink); }
-  .compare-col + .compare-col .compare-list li::before { content: '✓'; color: var(--gold); font-size: 14px; }
+/* ── PRICING ── */
+.pricing-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:56px}
+@media(max-width:900px){.pricing-grid{grid-template-columns:1fr}}
+.price-card{background:var(--navy2);border:1px solid var(--border);border-radius:16px;padding:32px 28px;position:relative;transition:border-color .2s,transform .2s}
+.price-card:hover{transform:translateY(-4px)}
+.price-card.featured{border-color:var(--purple);background:linear-gradient(160deg,rgba(99,102,241,.1),var(--navy2))}
+.featured-badge{position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,var(--purple),var(--purple-l));color:#fff;font-size:10px;font-weight:700;letter-spacing:1.5px;padding:4px 14px;border-radius:20px;white-space:nowrap}
+.price-tier{font-size:12px;font-weight:700;color:var(--slate2);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px}
+.price-name{font-family:var(--font-display);font-size:24px;font-weight:800;margin-bottom:20px}
+.price-amount{display:flex;align-items:baseline;gap:4px;margin-bottom:4px}
+.price-num{font-family:var(--font-display);font-size:44px;font-weight:800;color:var(--white);letter-spacing:-2px}
+.price-mo{font-size:15px;color:var(--slate2)}
+.price-bill{font-size:12px;color:var(--slate2);margin-bottom:24px}
+.price-list{list-style:none;display:flex;flex-direction:column;gap:11px;margin-bottom:28px}
+.price-list li{font-size:14px;color:var(--slate);display:flex;gap:9px;align-items:flex-start}
+.price-list li::before{content:'→';color:var(--purple-l);flex-shrink:0;font-weight:700}
+.price-cta-btn{width:100%;padding:14px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;border:1px solid var(--border2);background:transparent;color:var(--white);display:block;text-align:center;transition:all .15s}
+.price-cta-btn:hover{border-color:var(--purple-l);color:var(--purple-ll)}
+.price-card.featured .price-cta-btn{background:linear-gradient(135deg,var(--purple),var(--purple-l));border-color:transparent;color:#fff}
+.price-card.featured .price-cta-btn:hover{opacity:.9}
 
-  /* Manifesto */
-  .manifesto {
-    text-align: center; padding: 100px 24px; max-width: 880px; margin: 0 auto;
-  }
-  .manifesto-quote {
-    font-family: var(--serif); font-style: italic;
-    font-size: clamp(28px, 3.4vw, 42px); font-weight: 400; line-height: 1.35; letter-spacing: -0.5px;
-    color: var(--ink);
-  }
-  .manifesto-quote em { color: var(--gold); }
-  .manifesto-attr {
-    font-family: var(--mono); font-size: 11px; letter-spacing: 3px;
-    color: var(--ink-3); text-transform: uppercase; margin-top: 36px;
-  }
+/* ── CTA BANNER ── */
+.cta-banner{max-width:1200px;margin:0 auto 96px;padding:0 24px}
+.cta-inner{background:linear-gradient(135deg,rgba(99,102,241,.15),rgba(99,102,241,.05));border:1px solid var(--purple-border);border-radius:20px;padding:72px 48px;text-align:center}
+@media(max-width:640px){.cta-inner{padding:48px 24px}}
+.cta-h{font-family:var(--font-display);font-size:clamp(32px,4.5vw,52px);font-weight:800;letter-spacing:-1.5px;margin-bottom:16px;line-height:1.1}
+.cta-h em{font-style:normal;color:var(--purple-l)}
+.cta-sub{font-size:17px;color:var(--slate);margin-bottom:36px}
+.cta-btns{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.cta-meta{margin-top:18px;font-size:13px;color:var(--slate2);display:flex;gap:18px;justify-content:center;flex-wrap:wrap}
+.cta-meta span{display:flex;align-items:center;gap:6px}
+.cta-meta-check{color:var(--green);font-weight:700}
 
-  /* Pricing */
-  .pricing-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-top: 48px; }
-  .price-card {
-    background: var(--bg-2); border: 1px solid var(--line); border-radius: 12px;
-    padding: 32px 28px; position: relative; transition: border-color 0.2s, transform 0.2s;
-  }
-  .price-card:hover { border-color: rgba(255,107,53,0.4); }
-  .price-card.featured {
-    border-color: var(--gold);
-    background: linear-gradient(180deg, rgba(255,107,53,0.06), var(--bg-2));
-  }
-  .price-card.featured::before {
-    content: '★ MOST POPULAR'; position: absolute; top: -10px; left: 28px;
-    background: var(--gold); color: #000; font-family: var(--mono);
-    font-size: 10px; letter-spacing: 2px; padding: 4px 10px; border-radius: 3px;
-  }
-  .price-cmd {
-    font-family: var(--mono); font-size: 11px; color: var(--ink-3);
-    margin-bottom: 18px; padding: 8px 10px; background: var(--bg); border-radius: 4px;
-    border: 1px solid var(--line);
-  }
-  .price-cmd::before { content: '$ '; color: var(--gold); }
-  .price-name { font-family: var(--serif); font-size: 26px; font-weight: 700; margin-bottom: 4px; }
-  .price-amount { font-family: var(--mono); font-size: 38px; font-weight: 700; color: var(--gold); margin-bottom: 4px; letter-spacing: -1px; }
-  .price-amount small { font-size: 14px; color: var(--ink-3); margin-left: 4px; }
-  .price-bill { font-family: var(--mono); font-size: 11px; color: var(--ink-3); letter-spacing: 1px; margin-bottom: 24px; text-transform: uppercase; }
-  .price-list { list-style: none; display: flex; flex-direction: column; gap: 11px; margin-bottom: 28px; }
-  .price-list li { font-size: 13.5px; color: var(--ink-2); display: flex; align-items: flex-start; gap: 10px; }
-  .price-list li::before { content: '→'; color: var(--gold); flex-shrink: 0; }
-  .price-cta {
-    width: 100%; text-align: center; padding: 13px 16px; border-radius: 6px;
-    font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: 1px;
-    border: 1px solid var(--line); background: transparent; color: var(--ink); cursor: pointer; display: block;
-  }
-  .price-card.featured .price-cta { background: var(--gold); color: #000; border-color: var(--gold); }
-  .price-card.featured .price-cta:hover { background: var(--gold-2); }
-  .price-cta:hover { border-color: var(--gold); }
-
-  /* Dispatch */
-  #dispatch {
-    padding: 96px 24px;
-    max-width: 1280px; margin: 0 auto;
-    border-top: 1px solid var(--line);
-  }
-  .dispatch-grid {
-    display: grid; grid-template-columns: 1.1fr 1fr; gap: 64px; align-items: center;
-    margin-top: 24px;
-  }
-  .dispatch-sub {
-    color: var(--ink-2); font-size: 16px; line-height: 1.7; max-width: 520px; margin-top: 18px;
-  }
-  .dispatch-form { display: flex; flex-direction: column; gap: 12px; }
-  .dispatch-label {
-    font-family: var(--mono); font-size: 11px; color: var(--ink-3);
-    letter-spacing: 2.5px; text-transform: uppercase;
-  }
-  .dispatch-form input[type="email"] {
-    background: var(--bg-2); color: var(--ink);
-    border: 1px solid var(--line); border-radius: 6px;
-    padding: 14px 16px; font-family: var(--mono); font-size: 14px;
-    transition: border-color 0.15s ease;
-  }
-  .dispatch-form input[type="email"]:focus {
-    outline: none; border-color: var(--gold);
-    box-shadow: inset 0 0 0 1px rgba(255,107,53,0.2);
-  }
-  .dispatch-form input[type="email"]:disabled { opacity: 0.5; }
-  .dispatch-cta {
-    background: var(--gold); color: #000; font-weight: 700;
-    padding: 14px 22px; border-radius: 6px; border: none; cursor: pointer;
-    font-family: var(--mono); font-size: 13px; letter-spacing: 0.5px;
-    display: inline-flex; align-items: center; gap: 10px; align-self: flex-start;
-    transition: background 0.15s ease, transform 0.1s ease;
-  }
-  .dispatch-cta:hover { background: var(--gold-2); transform: translateY(-1px); }
-  .dispatch-cta:disabled { opacity: 0.6; cursor: progress; transform: none; }
-  .dispatch-meta {
-    font-family: var(--mono); font-size: 11px; color: var(--ink-3); letter-spacing: 0.5px;
-  }
-  .dispatch-error {
-    font-family: var(--mono); font-size: 11px; color: var(--red); letter-spacing: 0.5px;
-    margin-top: 4px;
-  }
-  .dispatch-success {
-    font-family: var(--serif); font-size: 22px; color: var(--ink);
-    line-height: 1.4;
-  }
-  .dispatch-success small {
-    display: block; font-family: var(--mono); font-size: 11px;
-    color: var(--ink-3); letter-spacing: 1px; margin-top: 8px;
-  }
-  @keyframes dispatch-shake {
-    0%, 100% { transform: translateX(0); }
-    25% { transform: translateX(-4px); }
-    75% { transform: translateX(4px); }
-  }
-  .dispatch-form.shake { animation: dispatch-shake 0.25s ease; }
-  @media (max-width: 768px) {
-    #dispatch { padding: 72px 24px; }
-    .dispatch-grid { grid-template-columns: 1fr; gap: 32px; }
-  }
-
-  /* CTA banner */
-  .cta-banner {
-    border: 1px solid var(--gold); border-radius: 12px;
-    padding: 56px 48px; max-width: 1280px; margin: 0 auto 80px; text-align: center;
-    background:
-      radial-gradient(circle at 20% 50%, rgba(255,107,53,0.15), transparent 50%),
-      radial-gradient(circle at 80% 50%, rgba(255,107,53,0.10), transparent 50%),
-      var(--bg-2);
-  }
-  .cta-h { font-family: var(--serif); font-size: clamp(32px, 4vw, 48px); font-weight: 700; letter-spacing: -1px; margin-bottom: 16px; line-height: 1.1; }
-  .cta-h em { font-style: italic; color: var(--gold); font-weight: 400; }
-  .cta-sub { color: var(--ink-2); font-size: 16px; margin-bottom: 28px; }
-
-  /* Footer */
-  footer {
-    border-top: 1px solid var(--line); padding: 32px 24px;
-    max-width: 1280px; margin: 0 auto;
-    display: flex; justify-content: space-between; align-items: center;
-    font-family: var(--mono); font-size: 11px; color: var(--ink-3); letter-spacing: 1px;
-  }
-  footer .right { display: flex; gap: 24px; }
-  .cursor { display: inline-block; width: 8px; height: 14px; background: var(--gold); margin-left: 4px; vertical-align: -2px; animation: blink 1s infinite; }
-
-  /* Skip-to-content for keyboard users */
-  .skip-link {
-    position: absolute; top: -40px; left: 0;
-    background: var(--gold); color: #000; padding: 10px 16px;
-    font-family: var(--mono); font-size: 12px; font-weight: 700;
-    z-index: 999; border-radius: 0 0 6px 0;
-  }
-  .skip-link:focus { top: 0; }
-
-  /* Responsive */
-  @media (max-width: 900px) {
-    .hero { grid-template-columns: 1fr; gap: 40px; padding: 40px 24px; }
-    .anatomy { grid-template-columns: 1fr; gap: 40px; }
-    .compare { grid-template-columns: 1fr; }
-    .compare-col + .compare-col { border-left: none; border-top: 1px solid var(--line); }
-    .pricing-grid { grid-template-columns: 1fr; }
-    .nav-links a { display: none; }
-    .nav-links .nav-cta { display: inline-flex; }
-    .ticker { font-size: 10px; gap: 24px; }
-    section { padding: 56px 24px; }
-
-    /* Hide the dense per-platform ticker counts on mobile, keep just LIVE + total */
-    .ticker .ticker-item:nth-child(n+4) { display: none; }
-    .ticker .ticker-item { font-size: 11px; }
-
-    /* Bigger tap targets on mobile (minimum 48px height per WCAG/Apple HIG) */
-    .btn { padding: 16px 24px; min-height: 50px; font-size: 14px; }
-    .hero-cta-row { flex-direction: column; align-items: stretch; }
-    .hero-cta-row .btn { width: 100%; justify-content: center; }
-    .price-cta { padding: 16px; min-height: 50px; }
-    .nav-cta { min-height: 40px; padding: 11px 16px; }
-  }
+/* ── FOOTER ── */
+footer{border-top:1px solid var(--border);padding:40px 24px}
+.footer-inner{max-width:1200px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:20px}
+.footer-logo{display:flex;align-items:center;gap:8px;font-family:var(--font-display);font-size:15px;font-weight:700}
+.footer-logo-mark{width:26px;height:26px;background:linear-gradient(135deg,var(--purple),var(--purple-l));border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff}
+.footer-links{display:flex;gap:24px;font-size:13px;color:var(--slate2)}
+.footer-links a:hover{color:var(--white)}
+.footer-copy{font-size:12px;color:var(--slate3)}
 </style>
-<link rel="stylesheet" href="/mobile.css">
 </head>
 <body>
 
-<a href="#main" class="skip-link">Skip to content</a>
-
-<!-- TICKER -->
-<div class="ticker-bar" role="status" aria-label="Live monitoring stats">
-  <div class="ticker">
-    <span class="ticker-item"><span class="ticker-dot"></span> LIVE</span>
-    <span class="ticker-item">SCANNED <span class="num">2,847</span> POSTS · 1H</span>
-    <span class="ticker-item">MATCHED <span class="num">142</span> <span class="ticker-arrow-up">▲</span></span>
-    <span class="ticker-item">REDDIT <span class="num">38</span></span>
-    <span class="ticker-item">HN <span class="num">11</span></span>
-    <span class="ticker-item">GITHUB <span class="num">19</span></span>
-    <span class="ticker-item">MEDIUM <span class="num">14</span></span>
-    <span class="ticker-item">SUBSTACK <span class="num">7</span></span>
-    <span class="ticker-item">FIVERR <span class="num">14</span></span>
-    <span class="ticker-item">PH <span class="num">8</span></span>
-  </div>
-</div>
+<a href="#main" class="skip">Skip to content</a>
 
 <!-- NAV -->
-<nav class="nav">
-  <div class="logo">
-    <div class="logo-mark">EI</div>
-    <div class="logo-text">EBENOVA <b>// INSIGHTS</b></div>
-  </div>
-  <div class="nav-links">
-    <a href="#how">How it works</a>
-    <a href="#anatomy">Anatomy</a>
-    <a href="#pricing">Pricing</a>
-    <a href="/dashboard" class="nav-cta">OPEN TERMINAL →</a>
+<nav aria-label="Main navigation">
+  <div class="nav-inner">
+    <a href="/" class="nav-logo" aria-label="Ebenova Insights home">
+      <div class="nav-logo-mark">EI</div>
+      Ebenova <span>Insights</span>
+    </a>
+    <div class="nav-links" role="list">
+      <a href="#how" role="listitem">How it works</a>
+      <a href="#platforms" role="listitem">Platforms</a>
+      <a href="#pricing" role="listitem">Pricing</a>
+    </div>
+    <div class="nav-right">
+      <a href="/dashboard" class="btn-sm btn-ghost-sm">Log in</a>
+      <a href="/dashboard" class="btn-sm btn-primary-sm">Start Free Trial →</a>
+    </div>
   </div>
 </nav>
 
 <!-- HERO -->
-<section class="hero" id="main">
+<section class="hero" id="main" aria-labelledby="hero-h1">
   <div>
-    <div class="hero-eyebrow" id="hero-platform-count">SIGNAL // 7 PLATFORMS</div>
-    <h1 class="hero-title">
-      Your next customer<br>
-      is <em>already typing.</em>
+    <div class="hero-eyebrow">
+      <span class="hero-eyebrow-dot"></span>
+      AI-POWERED INTENT INTELLIGENCE
+    </div>
+    <h1 class="hero-h1" id="hero-h1">
+      Find high-intent buyers<br>
+      <em class="hl">before</em> your<br>
+      competitors do.
     </h1>
-    <p class="hero-platforms-sub">// REDDIT · HN · GITHUB · MEDIUM · SUBSTACK · MORE</p>
     <p class="hero-sub">
-      <b style="color:var(--ink);font-weight:600;">A live feed of buying-intent posts across Reddit, Hacker News, GitHub, Medium, Substack and more — with ready-to-edit reply templates you can post in seconds.</b><br>
-      Built for solo founders, indie makers, and lean agencies who don't have time to scroll Reddit all day.
+      Ebenova Insights monitors 13+ platforms in real-time to surface switching signals, buying intent, and competitor opportunities — so you can act while it matters.
     </p>
     <div class="hero-cta-row">
-      <a href="/dashboard" class="btn btn-primary" aria-label="Open the dashboard and start monitoring for free">OPEN TERMINAL <span class="btn-arrow">→</span></a>
-      <a href="#how" class="btn btn-ghost" aria-label="Scroll to how it works">HOW IT WORKS</a>
+      <a href="/dashboard" class="btn-lg btn-primary-lg">Start Free Trial →</a>
+      <a href="#how" class="btn-lg btn-outline-lg">Book a Demo 📅</a>
     </div>
-    <div class="hero-meta" role="list" aria-label="Built for these audiences">
-      <span role="listitem">→ Solo founders</span>
-      <span role="listitem">→ Indie makers</span>
-      <span role="listitem">→ Lean agencies</span>
-      <span role="listitem">→ Freelancers</span>
-    </div>
-    <div style="font-family:var(--mono);font-size:11px;color:var(--ink-3);letter-spacing:1px;margin-top:14px;display:flex;gap:18px;flex-wrap:wrap;">
-      <span><b style="color:var(--green)">●</b> FREE TO START · NO CREDIT CARD · 60-SEC SETUP</span>
+    <div class="hero-trust">
+      <span><span class="hero-trust-dot"></span>14-day free trial</span>
+      <span><span class="hero-trust-dot"></span>No credit card required</span>
+      <span><span class="hero-trust-dot"></span>Cancel anytime</span>
     </div>
   </div>
 
-  <!-- Terminal preview -->
-  <div class="terminal">
-    <div class="terminal-header">
-      <div class="terminal-dots"><span></span><span></span><span></span></div>
-      <div class="terminal-title">EBNV-1 // LIVE FEED</div>
-      <div class="terminal-status">SCANNING</div>
+  <!-- Dashboard mockup -->
+  <div class="hero-mockup" aria-hidden="true">
+    <div class="mockup-topbar">
+      <div class="mockup-dots"><span></span><span></span><span></span></div>
+      <div class="mockup-title">EBENOVA INSIGHTS</div>
+      <div class="mockup-badge">LIVE</div>
     </div>
-    <div class="feed" id="hero-feed">
-      <div class="feed-row feed-header" aria-hidden="true" style="opacity:0.4;font-size:10px;letter-spacing:1px;padding-bottom:4px;border-bottom:1px solid var(--line);margin-bottom:4px;">
-        <span class="feed-time">TIME</span>
-        <span class="feed-source" style="visibility:hidden;">SRC</span>
-        <span class="feed-title" style="color:var(--ink-3)">THREAD</span>
-        <span class="feed-score" style="color:var(--ink-3)">INTENT</span>
+    <!-- Intelligence Brief -->
+    <div class="mockup-brief">
+      <div class="brief-cell">
+        <div class="brief-num">3</div>
+        <div class="brief-lbl">Switch signals + buying</div>
+        <div class="brief-delta warn">Act fast</div>
       </div>
-      <div class="feed-row" style="animation-delay: 0s;">
-        <span class="feed-time">04:42:18</span>
-        <span class="feed-source src-reddit">REDDIT</span>
-        <span class="feed-title">"Anyone using AI to draft sales emails? Looking for recommendations…"</span>
-        <span class="feed-score">9.2</span>
-        <span class="feed-summary">r/SaaS · 14 comments · author has shipped before</span>
+      <div class="brief-cell">
+        <div class="brief-num">7</div>
+        <div class="brief-lbl">Evaluation signals</div>
+        <div class="brief-delta up">↑ 16% vs yesterday</div>
       </div>
-      <div class="feed-row" style="animation-delay: 0.1s;">
-        <span class="feed-time">04:41:55</span>
-        <span class="feed-source src-hn">HN</span>
-        <span class="feed-title">Show HN: I want to monitor Reddit for buying signals</span>
-        <span class="feed-score">8.7</span>
-        <span class="feed-summary">94 points · 22 comments</span>
+      <div class="brief-cell">
+        <div class="brief-num">2</div>
+        <div class="brief-lbl">Expiring &lt; 30 min</div>
+        <div class="brief-delta warn">Act fast</div>
       </div>
-      <div class="feed-row" style="animation-delay: 0.2s;">
-        <span class="feed-time">04:41:39</span>
-        <span class="feed-source src-medium">MEDIUM</span>
-        <span class="feed-title-low">Why I'm switching from Brand24 — looking for something less noisy</span>
-        <span class="feed-score">7.4</span>
+      <div class="brief-cell">
+        <div class="brief-num">12</div>
+        <div class="brief-lbl">New since last login</div>
+        <div class="brief-delta up">↑ 20%</div>
       </div>
-      <div class="feed-row" style="animation-delay: 0.3s;">
-        <span class="feed-time">04:41:08</span>
-        <span class="feed-source src-substack">SUBSTACK</span>
-        <span class="feed-title-low">Open thread: which tools are you actually paying for in 2026?</span>
-        <span class="feed-score">8.9</span>
-      </div>
-      <div class="feed-row" style="animation-delay: 0.4s;">
-        <span class="feed-time">04:40:51</span>
-        <span class="feed-source src-fiverr">FIVERR</span>
-        <span class="feed-title-low">Looking for a freelance copywriter who has worked with B2B SaaS</span>
-        <span class="feed-score">7.8</span>
-      </div>
-      <div class="feed-row" style="animation-delay: 0.5s;">
-        <span class="feed-time">04:40:33</span>
-        <span class="feed-source src-github">GITHUB</span>
-        <span class="feed-title-low">Issue: best library for AI prompt sanitization?</span>
-        <span class="feed-score">6.5</span>
+      <div class="brief-cell">
+        <div class="brief-num">1</div>
+        <div class="brief-lbl">Got engagement</div>
+        <div class="brief-delta up">Nice! Keep it up</div>
       </div>
     </div>
-    <div class="feed-cta">
-      <span class="feed-cta-blink">DEMO FEED</span>
-      <a href="/dashboard">OPEN LIVE FEED →</a>
+    <!-- Tab bar -->
+    <div class="mockup-tabs">
+      <div class="tab">All 32</div>
+      <div class="tab hot active">🔥 Hot Leads 7</div>
+      <div class="tab">Switching 12</div>
+      <div class="tab">Hiring 4</div>
+    </div>
+    <!-- Match cards -->
+    <div class="mockup-feed">
+      <div class="mcard">
+        <div class="mcard-left">
+          <div class="mcard-src">
+            <div class="src-icon src-r">R</div>
+            <span class="mcard-author">u/saasfounder42 · 2h ago</span>
+          </div>
+          <div class="mcard-title">"We're switching from Intercom to something more flexible. Tired of paying for features we don't use."</div>
+          <span class="mcard-badge badge-switching">SWITCHING</span>
+        </div>
+        <div class="mcard-right">
+          <div class="mcard-score high">94</div>
+          <div class="mcard-score-sub">/100</div>
+          <div class="mcard-clock">⏱ 1h 12m left</div>
+        </div>
+      </div>
+      <div class="mcard">
+        <div class="mcard-left">
+          <div class="mcard-src">
+            <div class="src-icon src-x">X</div>
+            <span class="mcard-author">@growthtoolkit · 1h ago</span>
+          </div>
+          <div class="mcard-title">"Looking for an AI reporting tool that integrates with Notion or Slack. What are you using?"</div>
+          <span class="mcard-badge badge-research">RESEARCH</span>
+        </div>
+        <div class="mcard-right">
+          <div class="mcard-score med">68</div>
+          <div class="mcard-score-sub">/100</div>
+          <div class="mcard-clock">⏱ 2h 47m left</div>
+        </div>
+      </div>
+      <div class="mcard">
+        <div class="mcard-left">
+          <div class="mcard-src">
+            <div class="src-icon src-hn">HN</div>
+            <span class="mcard-author">user123 · 3h ago</span>
+          </div>
+          <div class="mcard-title">Show HN: We built an open source alternative to Calendly — better privacy, self-hosted</div>
+          <span class="mcard-badge badge-competitor">COMPETITOR MENTION</span>
+        </div>
+        <div class="mcard-right">
+          <div class="mcard-score high">86</div>
+          <div class="mcard-score-sub">/100</div>
+          <div class="mcard-clock" style="color:var(--orange);background:var(--orange-bg)">⏱ 35m left</div>
+        </div>
+      </div>
     </div>
   </div>
 </section>
 
-<!-- PLATFORMS STRIP -->
-<!-- Marketing-honest list: only platforms NOT in lib/platforms.js PLATFORM_DISABLED.
-     When a platform comes back online, re-add its pill here AND its chip below. -->
-<div class="platforms">
-  <div class="platforms-inner">
-    <span class="platform-pill"><span class="dot live"></span>REDDIT</span>
-    <span class="platform-pill"><span class="dot live"></span>HACKER NEWS</span>
-    <span class="platform-pill"><span class="dot live"></span>GITHUB</span>
-    <span class="platform-pill"><span class="dot live"></span>MEDIUM</span>
-    <span class="platform-pill"><span class="dot live"></span>SUBSTACK</span>
-    <span class="platform-pill"><span class="dot live"></span>FIVERR</span>
-    <span class="platform-pill"><span class="dot live"></span>PRODUCT HUNT</span>
+<!-- TRUST BAR -->
+<div class="trust-bar">
+  <div class="trust-inner">
+    <div class="trust-label">Trusted by growing teams worldwide</div>
+    <div class="trust-logos">
+      <span class="trust-item">Winnov8</span>
+      <span class="trust-item">Prembly Inc</span>
+      <span class="trust-item">Creative Hauz</span>
+      <span class="trust-item">Solivest</span>
+      <span class="trust-item">Ebenova Solutions</span>
+    </div>
   </div>
-  <div class="platforms-meta">7 PLATFORMS // 1 FEED</div>
 </div>
 
-<!-- PROTOCOL — interactive platform selector -->
-<section id="how">
-  <span class="label">PROTOCOL</span>
-  <h2 class="h-display">Pick what you want <em>watched.</em></h2>
-  <p class="how-intro">Toggle a source off and the feed below stops carrying it. The selection follows you to the dashboard when you sign up.</p>
+<hr class="hr">
 
-  <!-- Marketing-honest selector: only platforms NOT in lib/platforms.js
-       PLATFORM_DISABLED. When a platform comes back online, re-add its
-       chip here AND its pill in the PLATFORMS STRIP above. -->
-  <div class="selector-grid" role="group" aria-label="Platform selection">
-    <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="reddit"      aria-label="Toggle Reddit">REDDIT</button>
-    <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="hackernews"  aria-label="Toggle Hacker News">HACKER NEWS</button>
-    <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="github"      aria-label="Toggle GitHub">GITHUB</button>
-    <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="medium"      aria-label="Toggle Medium">MEDIUM</button>
-    <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="substack"    aria-label="Toggle Substack">SUBSTACK</button>
-    <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="fiverr"      aria-label="Toggle Fiverr">FIVERR</button>
-    <button type="button" role="switch" aria-checked="true" class="selector-chip on" data-platform="producthunt" aria-label="Toggle Product Hunt">PRODUCT HUNT</button>
-  </div>
+<!-- WHY EBENOVA -->
+<div class="section" id="why">
+  <div class="section-label">WHY EBENOVA</div>
+  <h2 class="section-h2">Turn noise into revenue <em>opportunities.</em></h2>
+  <p class="section-sub">We don't just show you mentions. We tell you what matters, why it matters, and when to act.</p>
+  <a href="#how" style="font-size:14px;font-weight:600;color:var(--purple-l);display:inline-flex;align-items:center;gap:6px;margin-top:12px">See how it works →</a>
 
-  <div class="selector-meta">
-    Watching <span class="selector-count" id="selector-count">7</span> of <span id="selector-total">7</span> · all plans
-  </div>
-
-  <div class="selector-feed" id="selector-feed" role="log" aria-live="off"></div>
-</section>
-
-<!-- ANATOMY -->
-<section id="anatomy" style="border-top: 1px solid var(--line);">
-  <span class="label">DOSSIER</span>
-  <h2 class="h-display">Anatomy of a <em>signal.</em></h2>
-  <p style="color: var(--ink-2); font-size: 16px; line-height: 1.7; max-width: 640px; margin: 12px 0 56px;">Every match arrives like this — context, intent score, reply draft. No copy-paste from a dashboard, no "find me leads" wizard. Just the right thread, at the right moment.</p>
-
-  <div class="anatomy">
-    <div style="position: relative;">
-      <div class="anatomy-card">
-        <div class="anatomy-meta">
-          <span class="src-reddit" style="font-size: 10px; padding: 2px 8px; border-radius: 3px; font-family: var(--mono); font-weight: 600;">REDDIT</span>
-          <span>r/SaaS</span>
-          <span>·</span>
-          <span>2h ago</span>
-          <span>·</span>
-          <span style="color: var(--gold); font-weight: 600;">9.2 INTENT</span>
-        </div>
-        <h3 class="anatomy-title">Anyone using AI to monitor Reddit for buying signals? I keep losing leads to competitors who just happen to comment first.</h3>
-        <p class="anatomy-body">"…tried Brand24 last month and it was way too noisy. Looking for something that actually filters and ideally writes the first draft. Doesn't have to be Reddit-only — Substack comments, GitHub threads, indie blogs also fine. Budget under $50/mo if it works."</p>
-
-        <div class="anatomy-draft">
-          <div class="anatomy-draft-label">EBENOVA DRAFT // CONFIDENCE 0.88</div>
-          <p class="anatomy-draft-text">"Same boat 6 months ago. The thing that made the difference for me was switching to a tool that scores by intent rather than just keywords — way less noise, and it drafts a starting reply you can edit. Happy to share what I'm using if you want — DM me."</p>
-        </div>
-      </div>
-      <div class="anatomy-marker marker-1">SOURCE + SCORE →</div>
-      <div class="anatomy-marker marker-2">CONTEXT →</div>
-      <div class="anatomy-marker marker-3">REPLY DRAFT →</div>
-      <div class="anatomy-marker marker-4">INTENT 9.2/10 →</div>
+  <div class="feature-grid">
+    <div class="feature-cell">
+      <div class="feature-icon">🎯</div>
+      <div class="feature-h">Intent Detection</div>
+      <p class="feature-p">Advanced AI identifies switching signals, buying intent, budget cues, and competitor frustration in real-time — not just keyword matches.</p>
     </div>
-
-    <div class="anatomy-list">
-      <div class="anatomy-item">
-        <div class="anatomy-num">01</div>
-        <div>
-          <h4>Intent score, not just match</h4>
-          <p>9.2 of 10 = high buying intent. Below 7 = filtered out. You only see what's worth replying to.</p>
-        </div>
-      </div>
-      <div class="anatomy-item">
-        <div class="anatomy-num">02</div>
-        <div>
-          <h4>Context preserved</h4>
-          <p>The thread, the subreddit, the tone, the budget hint — kept intact. Reply with awareness, not a template.</p>
-        </div>
-      </div>
-      <div class="anatomy-item">
-        <div class="anatomy-num">03</div>
-        <div>
-          <h4>Draft that won't get you banned</h4>
-          <p>Trained to sound like a community member. Won't suggest you reply to posts where self-promotion gets you removed.</p>
-        </div>
-      </div>
-      <div class="anatomy-item">
-        <div class="anatomy-num">04</div>
-        <div>
-          <h4>Drop into Slack, email, or webhook</h4>
-          <p>Get pinged where you already work. We won't ask you to learn a new dashboard you'll never open.</p>
-        </div>
-      </div>
+    <div class="feature-cell">
+      <div class="feature-icon">⏱</div>
+      <div class="feature-h">Perfect Timing</div>
+      <p class="feature-p">3-hour engagement window alerts help you engage when your reply has the highest chance of being seen and acted on.</p>
+    </div>
+    <div class="feature-cell">
+      <div class="feature-icon">💡</div>
+      <div class="feature-h">Explainable Insights</div>
+      <p class="feature-p">See exactly why a match surfaced, confidence score, buying stage, and recommended action — all in one view. No black box.</p>
+    </div>
+    <div class="feature-cell">
+      <div class="feature-icon">⚡</div>
+      <div class="feature-h">Actionable Workflows</div>
+      <p class="feature-p">Generate AI replies, track engagement outcomes, and push high-intent leads to your favourite tools — Slack, webhooks, CSV export.</p>
     </div>
   </div>
-</section>
+</div>
+
+<!-- PLATFORMS STRIP -->
+<div class="platforms-strip" id="platforms">
+  <div class="platforms-strip-inner">
+    <div class="platforms-strip-h">Monitor what matters. 13+ platforms. 1 unified view.</div>
+    <div class="platform-pills">
+      <span class="ppill"><span class="ppill-dot"></span>Reddit</span>
+      <span class="ppill"><span class="ppill-dot"></span>X (Twitter)</span>
+      <span class="ppill"><span class="ppill-dot"></span>Hacker News</span>
+      <span class="ppill"><span class="ppill-dot"></span>GitHub</span>
+      <span class="ppill"><span class="ppill-dot"></span>LinkedIn</span>
+      <span class="ppill"><span class="ppill-dot"></span>YouTube</span>
+      <span class="ppill"><span class="ppill-dot"></span>Medium</span>
+      <span class="ppill"><span class="ppill-dot"></span>Substack</span>
+      <span class="ppill"><span class="ppill-dot"></span>Quora</span>
+      <span class="ppill"><span class="ppill-dot"></span>Product Hunt</span>
+      <span class="ppill"><span class="ppill-dot"></span>Upwork</span>
+      <span class="ppill"><span class="ppill-dot"></span>Fiverr</span>
+      <span class="ppill"><span class="ppill-dot"></span>+ More</span>
+    </div>
+  </div>
+</div>
+
+<!-- HOW IT WORKS -->
+<div class="section" id="how">
+  <div class="section-label">HOW IT WORKS</div>
+  <h2 class="section-h2">From signal to <em>response</em> in minutes.</h2>
+  <p class="section-sub">Three steps between a stranger typing about your problem and you being the first to respond.</p>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">01</div>
+      <div class="step-h">Set your keywords and competitors</div>
+      <p class="step-p">Tell us what you sell, who your competitors are, and which platforms matter. Setup takes 60 seconds. We handle the monitoring 24/7.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">02</div>
+      <div class="step-h">We surface only what matters</div>
+      <p class="step-p">Our intent engine classifies every post — switching signals, buying intent, hiring, research. You see scores, confidence levels, and the WHY behind every match.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">03</div>
+      <div class="step-h">Reply fast with AI-drafted responses</div>
+      <p class="step-p">Generate a community-toned reply in seconds. We tell you if the subreddit allows self-promotion, so you never get banned for trying to help.</p>
+    </div>
+  </div>
+</div>
+
+<hr class="hr">
 
 <!-- COMPARISON -->
-<section style="border-top: 1px solid var(--line);">
-  <span class="label">DELTA</span>
-  <h2 class="h-display">The <em>$300/mo</em> brand monitors<br>aren't built for this.</h2>
-  <p style="color: var(--ink-2); font-size: 16px; line-height: 1.7; max-width: 640px; margin: 12px 0 48px;">Most "social listening" tools tell you when someone says your name. We tell you when someone is shopping for what you make.</p>
+<div class="section">
+  <div class="section-label">COMPARISON</div>
+  <h2 class="section-h2">The $300/mo brand monitors<br>weren't built for <em>this.</em></h2>
+  <p class="section-sub">Most social listening tools tell you when someone says your name. We tell you when someone is shopping for what you make.</p>
 
-  <div class="compare">
-    <div class="compare-col">
+  <div class="compare-wrap">
+    <div class="compare-col them">
       <div class="compare-tag">// THEM</div>
-      <h3 class="compare-name">Brand24 / Mention / Sprout</h3>
+      <div class="compare-name">Brand24 / Mention / Sprout</div>
       <ul class="compare-list">
-        <li>Alerts on every keyword match — including unrelated noise</li>
-        <li>No buying-intent scoring — you triage by hand</li>
-        <li>No reply drafts — you write from a blank box</li>
-        <li>Reddit-only or social-only — misses Substack, Medium, GitHub threads</li>
-        <li>$99–$299/month for less keyword volume</li>
+        <li><div class="icon icon-x">✕</div>Alerts on every keyword match — including noise you triage by hand</li>
+        <li><div class="icon icon-x">✕</div>No buying-intent scoring — you guess what's worth replying to</li>
+        <li><div class="icon icon-x">✕</div>No reply drafts — you write from a blank box every time</li>
+        <li><div class="icon icon-x">✕</div>Reddit-only or social-only — misses GitHub, Medium, Substack threads</li>
+        <li><div class="icon icon-x">✕</div>$99–$299/month for less keyword volume and less signal</li>
       </ul>
     </div>
-    <div class="compare-col">
-      <div class="compare-tag">// EBENOVA</div>
-      <h3 class="compare-name">Insights</h3>
+    <div class="compare-col us">
+      <div class="compare-tag ours">// EBENOVA INSIGHTS</div>
+      <div class="compare-name">Intent engine, not a firehose</div>
       <ul class="compare-list">
-        <li>Intent score per match — only posts worth replying to</li>
-        <li>SKIP filter — won't draft replies that would get you banned</li>
-        <li>Reply drafts that sound like a community member, not an ad</li>
-        <li>Reddit + HN + GitHub + Medium + Substack + Fiverr + Product Hunt — all in</li>
-        <li>Free to start. $29/mo Growth. $199/mo Scale.</li>
+        <li><div class="icon icon-check">✓</div>Intent score per match — only posts worth your time, ranked by urgency</li>
+        <li><div class="icon icon-check">✓</div>WHY THIS MATCHED panel — see the reasoning behind every signal</li>
+        <li><div class="icon icon-check">✓</div>Community-safe AI reply drafts that won't get you banned</li>
+        <li><div class="icon icon-check">✓</div>13+ platforms including Reddit, HN, GitHub, Substack, Upwork and more</li>
+        <li><div class="icon icon-check">✓</div>Free to start. $29/mo Growth. Cancel anytime.</li>
       </ul>
     </div>
   </div>
-</section>
-
-<!-- MANIFESTO -->
-<section class="manifesto">
-  <p class="manifesto-quote">
-    "Most founders find their next customer<br>
-    <em>six months too late.</em><br>
-    The conversation already happened. The competitor<br>
-    already replied. We're trying to fix the timing problem."
-  </p>
-  <div class="manifesto-attr">— EBENOVA INSIGHTS // FOUNDING NOTE</div>
-</section>
+</div>
 
 <!-- PRICING -->
-<section id="pricing" style="border-top: 1px solid var(--line);">
-  <span class="label">PROVISIONS</span>
-  <h2 class="h-display">Pricing in <em>plain English.</em></h2>
-  <p style="color: var(--ink-2); font-size: 16px; line-height: 1.7; max-width: 640px; margin: 12px 0;">No "contact sales." No annual lock-ins. Cancel anytime, your matches stay accessible for 30 days.</p>
+<div class="section" id="pricing">
+  <div class="section-label">PRICING</div>
+  <h2 class="section-h2">Simple pricing.<br><em>No surprises.</em></h2>
+  <p class="section-sub">No "contact sales." No annual lock-ins. Your matches stay accessible for 30 days after cancellation.</p>
 
   <div class="pricing-grid">
     <div class="price-card">
-      <div class="price-cmd">ebnv start --plan starter</div>
-      <div class="price-name">Starter</div>
-      <div class="price-amount">$0<small>/mo</small></div>
+      <div class="price-tier">Starter</div>
+      <div class="price-name">Free</div>
+      <div class="price-amount">
+        <span class="price-num">$0</span>
+        <span class="price-mo">/month</span>
+      </div>
       <div class="price-bill">Free forever</div>
       <ul class="price-list">
         <li>1 active monitor</li>
         <li>10 keywords</li>
         <li>Email digest</li>
-        <li>All 7 platforms</li>
+        <li>All 13+ platforms</li>
+        <li>Intent scoring</li>
       </ul>
-      <a href="/dashboard" class="price-cta" aria-label="Start the free Starter plan">START FREE</a>
+      <a href="/dashboard" class="price-cta-btn">Start for free</a>
     </div>
+
     <div class="price-card featured">
-      <div class="price-cmd">ebnv subscribe --plan growth</div>
+      <div class="featured-badge">★ MOST POPULAR</div>
+      <div class="price-tier">Growth</div>
       <div class="price-name">Growth</div>
-      <div class="price-amount">$29<small>/mo</small></div>
-      <div class="price-bill">Billed monthly</div>
+      <div class="price-amount">
+        <span class="price-num">$29</span>
+        <span class="price-mo">/month</span>
+      </div>
+      <div class="price-bill">Billed monthly · cancel anytime</div>
       <ul class="price-list">
         <li>20 active monitors</li>
         <li>100 keywords</li>
         <li>Slack delivery</li>
-        <li>Reply drafts included</li>
-        <li>Cancel anytime</li>
+        <li>AI reply drafts</li>
+        <li>WHY panel + intent scoring</li>
+        <li>Engagement clock</li>
+        <li>Webhook export</li>
       </ul>
-      <a href="/dashboard?upgrade=growth" class="price-cta" aria-label="Upgrade to the Growth plan, $29 per month">UPGRADE TO GROWTH</a>
+      <a href="/dashboard?upgrade=growth" class="price-cta-btn">Start 14-day free trial</a>
     </div>
+
     <div class="price-card">
-      <div class="price-cmd">ebnv subscribe --plan scale</div>
+      <div class="price-tier">Scale</div>
       <div class="price-name">Scale</div>
-      <div class="price-amount">$199<small>/mo</small></div>
-      <div class="price-bill">Billed monthly</div>
+      <div class="price-amount">
+        <span class="price-num">$199</span>
+        <span class="price-mo">/month</span>
+      </div>
+      <div class="price-bill">Billed monthly · cancel anytime</div>
       <ul class="price-list">
         <li>100 active monitors</li>
         <li>500 keywords</li>
-        <li>Webhook delivery</li>
         <li>Priority support</li>
         <li>Everything in Growth</li>
+        <li>White-label report</li>
+        <li>Custom webhook SLA</li>
       </ul>
-      <a href="/dashboard?upgrade=scale" class="price-cta" aria-label="Upgrade to the Scale plan, $199 per month">GO SCALE</a>
+      <a href="/dashboard?upgrade=scale" class="price-cta-btn">Get started</a>
     </div>
   </div>
-</section>
-
-<!-- DISPATCH — weekly briefing capture -->
-<section id="dispatch">
-  <span class="label">DISPATCH</span>
-  <div class="dispatch-grid">
-    <div>
-      <h2 class="h-display">Want the signals<br>without the setup?<br><em>We send a digest.</em></h2>
-      <p class="dispatch-sub">Every Tuesday: a curated briefing of buying-intent posts we caught that week — anonymized, with the reply draft that worked.</p>
-    </div>
-    <form class="dispatch-form" id="dispatch-form" novalidate>
-      <label for="dispatch-email" class="dispatch-label">EMAIL</label>
-      <input type="email" id="dispatch-email" name="email" required placeholder="you@company.com" autocomplete="email" aria-describedby="dispatch-meta">
-      <button type="submit" class="dispatch-cta" id="dispatch-submit">SUBSCRIBE <span class="btn-arrow">→</span></button>
-      <div class="dispatch-meta" id="dispatch-meta">Free. Tuesdays. No "boost your reach" fluff.</div>
-    </form>
-  </div>
-</section>
+</div>
 
 <!-- CTA BANNER -->
 <div class="cta-banner">
-  <h2 class="cta-h">Open the terminal.<br>Watch the feed go <em>live.</em></h2>
-  <p class="cta-sub">Sixty seconds. No credit card. Your first match in fifteen minutes.</p>
-  <a href="/dashboard" class="btn btn-primary">OPEN TERMINAL <span class="btn-arrow">→</span></a>
+  <div class="cta-inner">
+    <h2 class="cta-h">Ready to find your next<br><em>high-intent opportunity?</em></h2>
+    <p class="cta-sub">Join teams turning internet conversations into pipeline. First match in under 15 minutes.</p>
+    <div class="cta-btns">
+      <a href="/dashboard" class="btn-lg btn-primary-lg">Start Free Trial →</a>
+      <a href="#how" class="btn-lg btn-outline-lg">Book a Demo 📅</a>
+    </div>
+    <div class="cta-meta">
+      <span><span class="cta-meta-check">✓</span> 14-day free trial</span>
+      <span><span class="cta-meta-check">✓</span> No credit card required</span>
+      <span><span class="cta-meta-check">✓</span> Cancel anytime</span>
+    </div>
+  </div>
 </div>
 
 <!-- FOOTER -->
 <footer>
-  <div>
-    EBENOVA INSIGHTS // v2.0
-    <span class="cursor"></span>
-  </div>
-  <div class="right">
-    <a href="/dashboard">DASHBOARD</a>
-    <a href="#pricing">PRICING</a>
-    <a href="mailto:info@ebenova.net">CONTACT</a>
+  <div class="footer-inner">
+    <div class="footer-logo">
+      <div class="footer-logo-mark">EI</div>
+      Ebenova Insights
+    </div>
+    <div class="footer-links">
+      <a href="/dashboard">Dashboard</a>
+      <a href="#pricing">Pricing</a>
+      <a href="mailto:info@ebenova.net">Contact</a>
+      <a href="https://ebenova.net">Ebenova Solutions</a>
+    </div>
+    <div class="footer-copy">© 2026 Ebenova Solutions · Calgary, AB 🍁</div>
   </div>
 </footer>
 
-<!-- Live-tail mock feed for the hero terminal + (later) platform selector.
-     No fetches — pool stays inline. Pauses on tab-hidden, reduced-motion,
-     and small viewports. -->
+<!-- Invite code propagation (preserve from old page) -->
 <script>
-(function () {
-  // Shared pool. window.__ebnvFeedPool exposed so the platform-selector
-  // script (loaded later in the page) can read the same source of truth.
-  // Marketing-honest pool: only platforms NOT in lib/platforms.js
-  // PLATFORM_DISABLED. When a platform comes back online, re-add its
-  // entries here AND its chip/pill above.
-  var POOL = [
-    { src: 'reddit',     cls: 'src-reddit',   title: '"Anyone using AI to draft sales emails? Looking for recommendations…"', score: 9.2, summary: 'r/SaaS · 14 comments · author has shipped before' },
-    { src: 'hackernews', cls: 'src-hn',       title: 'Show HN: I want to monitor Reddit for buying signals',                  score: 8.7, summary: '94 points · 22 comments' },
-    { src: 'medium',     cls: 'src-medium',   title: 'Why I\'m switching from Brand24 — looking for something less noisy',    score: 7.4, summary: 'article · 190 claps' },
-    { src: 'substack',   cls: 'src-substack', title: 'Open thread: which tools are you actually paying for in 2026?',         score: 8.9, summary: 'comments · 38 likes' },
-    { src: 'fiverr',     cls: 'src-fiverr',   title: 'Looking for a freelance copywriter who has worked with B2B SaaS',       score: 7.8, summary: 'buyer request · open' },
-    { src: 'github',     cls: 'src-github',   title: 'Issue: best library for AI prompt sanitization?',                       score: 6.5, summary: 'opened 8m ago · 2 reactions' },
-    { src: 'producthunt',cls: 'src-ph',       title: 'Frustrated by manual outreach — what\'s the modern stack?',             score: 8.1, summary: 'discussion · 6 comments' },
-    { src: 'substack',   cls: 'src-substack', title: 'Comment on "AI tools that actually save me time" → asks recs',         score: 7.0, summary: 'inline comment · 11 likes' },
-    { src: 'medium',     cls: 'src-medium',   title: 'How I built a dripped-out outbound stack on $50/mo',                    score: 6.8, summary: 'article · 240 claps' },
-    { src: 'reddit',     cls: 'src-reddit',   title: 'Need help finding leads in r/Entrepreneur without getting banned',      score: 8.4, summary: 'r/Entrepreneur · 9 comments' },
-    { src: 'hackernews', cls: 'src-hn',       title: 'Ask HN: how do you replace cold email in 2026?',                         score: 7.9, summary: '38 points · 19 comments' },
-    { src: 'fiverr',     cls: 'src-fiverr',   title: 'Want a designer who has shipped a SaaS marketing site before',          score: 7.1, summary: 'open brief · negotiable' },
-    { src: 'github',     cls: 'src-github',   title: 'PR comment: "Could we use OpenRouter instead of direct Groq?"',          score: 6.9, summary: 'review thread · merged' },
-    { src: 'producthunt',cls: 'src-ph',       title: 'Founders: what\'s actually working for new-customer acquisition?',     score: 8.0, summary: 'maker discussion · 14 comments' },
-    { src: 'substack',   cls: 'src-substack', title: 'Reply on "The death of paid ads" → asks for tool recs',                 score: 7.5, summary: 'comment · 8 likes' },
-    { src: 'medium',     cls: 'src-medium',   title: 'My honest review of every social-listening tool I tried in Q1',         score: 7.3, summary: 'article · 180 claps' },
-    { src: 'reddit',     cls: 'src-reddit',   title: 'r/SaaS: "Best way to monitor competitor mentions without paying $99/mo?"', score: 8.2, summary: 'r/SaaS · 28 comments' },
-    { src: 'hackernews', cls: 'src-hn',       title: 'Ask HN: tools you use to surface buying-intent threads in 2026?',       score: 8.5, summary: '52 points · 31 comments' },
-  ];
-  window.__ebnvFeedPool = POOL;
-
-  var heroFeed = document.getElementById('hero-feed');
-  if (!heroFeed) return;
-
-  var reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  var smallViewport = window.matchMedia && window.matchMedia('(max-width: 480px)').matches;
-  if (reducedMotion || smallViewport) return; // leave the static rows in place
-
-  function pad(n) { return n < 10 ? '0' + n : '' + n; }
-  function nowStamp() {
-    var d = new Date();
-    return pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
-  }
-  function rowMarkup(item) {
-    var titleClass = item.score >= 8 ? 'feed-title' : 'feed-title-low';
-    var summary = item.summary
-      ? '<span class="feed-summary">' + item.summary + '</span>'
-      : '';
-    return ''
-      + '<div class="feed-row">'
-      +   '<span class="feed-time">' + nowStamp() + '</span>'
-      +   '<span class="feed-source ' + item.cls + '">' + item.src.toUpperCase().replace('PRODUCTHUNT', 'PH').replace('HACKERNEWS', 'HN') + '</span>'
-      +   '<span class="' + titleClass + '">' + item.title + '</span>'
-      +   '<span class="feed-score">' + item.score.toFixed(1) + '</span>'
-      +   summary
-      + '</div>';
-  }
-  function pickItem() {
-    return POOL[Math.floor(Math.random() * POOL.length)];
-  }
-
-  var timer = null;
-  function tick() {
-    if (document.hidden) return;
-    var item = pickItem();
-    var temp = document.createElement('div');
-    temp.innerHTML = rowMarkup(item);
-    var newRow = temp.firstChild;
-    heroFeed.insertBefore(newRow, heroFeed.firstChild);
-    while (heroFeed.children.length > 8) {
-      heroFeed.removeChild(heroFeed.lastChild);
-    }
-  }
-  function schedule() {
-    var delay = 4000 + Math.floor(Math.random() * 2000); // 4–6 s jitter
-    timer = setTimeout(function () { tick(); schedule(); }, delay);
-  }
-  schedule();
-
-  document.addEventListener('visibilitychange', function () {
-    if (document.hidden) {
-      if (timer) { clearTimeout(timer); timer = null; }
-    } else if (!timer) {
-      schedule();
-    }
+(function(){
+  var p=new URLSearchParams(location.search),inv=p.get('invite');
+  if(!inv)return;
+  try{sessionStorage.setItem('ebi_invite',inv)}catch(e){}
+  document.querySelectorAll('a[href^="/dashboard"]').forEach(function(a){
+    var h=a.getAttribute('href'),sep=h.indexOf('?')===-1?'?':'&';
+    a.setAttribute('href',h+sep+'invite='+encodeURIComponent(inv));
   });
-})();
-</script>
-
-<script>
-(function () {
-  var STORAGE_KEY = 'ebnv_landing_platform_prefs';
-  // KNOWN mirrors the chip strip above — only platforms NOT in
-  // lib/platforms.js PLATFORM_DISABLED. The fetch below reconciles
-  // counts against /v1/platforms (which honors the disabled flag) so
-  // when a platform comes back online the eyebrow updates on next
-  // page load without redeploying.
-  var KNOWN = ['reddit','hackernews','github','medium','substack','fiverr','producthunt'];
-
-  // Drift-proof reconciliation: pull live platform list from the API
-  // and update the eyebrow + total count using only platforms that are
-  // currently enabled server-side. Best-effort; the static markup is
-  // the SEO floor.
-  fetch('/v1/platforms').then(function (r) { return r.ok ? r.json() : null }).then(function (d) {
-    if (!d || !Array.isArray(d.platforms) || d.platforms.length === 0) return;
-    var enabled = d.platforms.filter(function (p) { return !p.disabled; });
-    var n = enabled.length;
-    if (n <= 0) return;
-    var hero = document.getElementById('hero-platform-count');
-    var totalEl = document.getElementById('selector-total');
-    if (hero)    hero.textContent    = 'SIGNAL // ' + n + ' PLATFORMS';
-    if (totalEl) totalEl.textContent = String(n);
-  }).catch(function () { /* best-effort */ });
-
-  var grid = document.querySelector('.selector-grid');
-  var countEl = document.getElementById('selector-count');
-  if (!grid || !countEl) return;
-
-  var chips = Array.prototype.slice.call(grid.querySelectorAll('.selector-chip'));
-
-  // Active set — load from localStorage if valid, else default to all KNOWN.
-  var active = (function () {
-    try {
-      var raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return KNOWN.slice();
-      var parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed)) return KNOWN.slice();
-      var filtered = parsed.filter(function (k) { return KNOWN.indexOf(k) !== -1; });
-      return filtered.length > 0 ? filtered : KNOWN.slice();
-    } catch (e) { return KNOWN.slice(); }
-  })();
-
-  function persist() {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(active)); } catch (e) {}
-  }
-  function flickerCount() {
-    countEl.classList.add('flicker');
-    setTimeout(function () { countEl.classList.remove('flicker'); }, 120);
-  }
-  function render() {
-    chips.forEach(function (chip) {
-      var key = chip.getAttribute('data-platform');
-      var isOn = active.indexOf(key) !== -1;
-      chip.classList.toggle('on', isOn);
-      chip.setAttribute('aria-checked', isOn ? 'true' : 'false');
-    });
-    countEl.textContent = String(active.length);
-    flickerCount();
-  }
-
-  chips.forEach(function (chip) {
-    chip.addEventListener('click', function () {
-      var key = chip.getAttribute('data-platform');
-      var idx = active.indexOf(key);
-      if (idx === -1) active.push(key); else active.splice(idx, 1);
-      persist();
-      render();
-      // Fire a custom event so the selector-feed (Task 7) can react.
-      window.dispatchEvent(new CustomEvent('ebnv:selection-change', { detail: { active: active.slice() } }));
-    });
-  });
-
-  // Initial render reflects loaded state.
-  render();
-  // Expose for Task 7's feed renderer to read on init.
-  window.__ebnvSelection = active;
-  window.__ebnvSelectorChips = chips;
-})();
-</script>
-
-<script>
-(function () {
-  var feed = document.getElementById('selector-feed');
-  if (!feed) return;
-
-  var pool = window.__ebnvFeedPool || [];
-  if (pool.length === 0) return; // hero script didn't load
-
-  function pad(n) { return n < 10 ? '0' + n : '' + n; }
-  function nowStamp() {
-    var d = new Date();
-    return pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
-  }
-  function rowMarkup(item) {
-    var titleClass = item.score >= 8 ? 'feed-title' : 'feed-title-low';
-    var summary = item.summary
-      ? '<span class="feed-summary">' + item.summary + '</span>'
-      : '';
-    return ''
-      + '<div class="feed-row">'
-      +   '<span class="feed-time">' + nowStamp() + '</span>'
-      +   '<span class="feed-source ' + item.cls + '">' + item.src.toUpperCase().replace('PRODUCTHUNT', 'PH').replace('HACKERNEWS', 'HN') + '</span>'
-      +   '<span class="' + titleClass + '">' + item.title + '</span>'
-      +   '<span class="feed-score">' + item.score.toFixed(1) + '</span>'
-      +   summary
-      + '</div>';
-  }
-
-  function activeSet() {
-    return new Set(window.__ebnvSelection || []);
-  }
-  function filteredPool() {
-    var s = activeSet();
-    return pool.filter(function (it) { return s.has(it.src); });
-  }
-  function renderInitial() {
-    var pool2 = filteredPool();
-    var pick = pool2.slice(0, 6);
-    feed.innerHTML = pick.map(rowMarkup).join('');
-    if (pick.length === 0) {
-      feed.innerHTML = '<div style="padding:32px 14px;color:var(--ink-3);font-family:var(--mono);font-size:11px;letter-spacing:1px;text-align:center;">// NO PLATFORMS SELECTED</div>';
-    }
-  }
-
-  renderInitial();
-
-  var reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  var smallViewport = window.matchMedia && window.matchMedia('(max-width: 480px)').matches;
-
-  var timer = null;
-  function tick() {
-    if (document.hidden) return;
-    var pool2 = filteredPool();
-    if (pool2.length === 0) return; // selector-feed already shows the empty state
-    var item = pool2[Math.floor(Math.random() * pool2.length)];
-    var temp = document.createElement('div');
-    temp.innerHTML = rowMarkup(item);
-    var newRow = temp.firstChild;
-    feed.insertBefore(newRow, feed.firstChild);
-    while (feed.children.length > 6) feed.removeChild(feed.lastChild);
-  }
-  function schedule() {
-    var delay = 5000 + Math.floor(Math.random() * 3000); // 5–8 s
-    timer = setTimeout(function () { tick(); schedule(); }, delay);
-  }
-  if (!reducedMotion && !smallViewport) schedule();
-
-  // Re-render fully when the selection changes.
-  window.addEventListener('ebnv:selection-change', function () {
-    renderInitial();
-  });
-
-  document.addEventListener('visibilitychange', function () {
-    if (document.hidden) {
-      if (timer) { clearTimeout(timer); timer = null; }
-    } else if (!timer && !reducedMotion && !smallViewport) {
-      schedule();
-    }
-  });
-})();
-</script>
-
-<script>
-(function () {
-  var form = document.getElementById('dispatch-form');
-  if (!form) return;
-  var input = document.getElementById('dispatch-email');
-  var submit = document.getElementById('dispatch-submit');
-  var meta = document.getElementById('dispatch-meta');
-
-  function showError(message) {
-    var existing = form.querySelector('.dispatch-error');
-    if (existing) existing.remove();
-    var err = document.createElement('div');
-    err.className = 'dispatch-error';
-    err.textContent = '⚠ ' + message;
-    err.setAttribute('role', 'alert');
-    form.appendChild(err);
-    form.classList.remove('shake');
-    void form.offsetWidth; // restart animation
-    form.classList.add('shake');
-  }
-  function clearError() {
-    var existing = form.querySelector('.dispatch-error');
-    if (existing) existing.remove();
-  }
-  function setBusy(busy) {
-    if (busy) {
-      input.disabled = true;
-      submit.disabled = true;
-      submit.innerHTML = 'SUBSCRIBING<span style="display:inline-block;animation:dispatch-shake 0.5s infinite;">…</span>';
-    } else {
-      input.disabled = false;
-      submit.disabled = false;
-      submit.innerHTML = 'SUBSCRIBE <span class="btn-arrow">→</span>';
-    }
-  }
-  function showSuccess() {
-    form.innerHTML = ''
-      + '<div class="dispatch-success" role="status">'
-      +   '<span style="color:var(--green);font-family:var(--mono);font-size:14px;letter-spacing:1px;">✓ SUBSCRIBED.</span><br>'
-      +   'First dispatch lands Tuesday.'
-      +   '<small>Check your inbox if you don\'t see it by Wednesday.</small>'
-      + '</div>';
-  }
-
-  form.addEventListener('submit', function (e) {
-    e.preventDefault();
-    clearError();
-    var email = (input.value || '').trim();
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      showError('Enter a valid email address.');
-      return;
-    }
-    setBusy(true);
-    fetch('/v1/subscribe', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: email, plan: 'dispatch', source: 'landing_dispatch' }),
-    })
-      .then(function (r) {
-        if (r.status === 429) {
-          throw new Error('Too many requests. Try again in a minute.');
-        }
-        if (!r.ok) {
-          throw new Error('Subscription failed (' + r.status + '). Try again.');
-        }
-        return r.json();
-      })
-      .then(function (data) {
-        if (data && data.success) showSuccess();
-        else throw new Error('Unexpected response.');
-      })
-      .catch(function (err) {
-        setBusy(false);
-        showError(err.message || 'Network error. Try again.');
-      });
-  });
-})();
-</script>
-
-<!-- Invite-code propagation: if landed via ?invite=CODE, rewrite /dashboard
-     links to carry the code through to the AuthModal signup flow. -->
-<script>
-(function () {
-  var params = new URLSearchParams(location.search);
-  var invite = params.get('invite');
-  if (!invite) return;
-  // Persist for return visits within this session
-  try { sessionStorage.setItem('ebi_invite', invite); } catch (e) {}
-  // Append ?invite=CODE to every internal /dashboard link
-  document.querySelectorAll('a[href^="/dashboard"]').forEach(function (a) {
-    var href = a.getAttribute('href');
-    if (!href) return;
-    var sep = href.indexOf('?') === -1 ? '?' : '&';
-    a.setAttribute('href', href + sep + 'invite=' + encodeURIComponent(invite));
-  });
-  // Lightweight badge so the visitor knows the invite is active
-  var badge = document.createElement('div');
-  badge.textContent = '✦ DEMO INVITE ACTIVE · GROWTH PLAN · 30 DAYS';
-  badge.style.cssText = 'position:fixed;top:14px;right:14px;z-index:9999;background:rgba(255,107,53,.12);border:1px solid rgba(255,107,53,.4);color:#FF6B35;padding:8px 14px;border-radius:6px;font-size:11px;font-weight:700;letter-spacing:.5px;font-family:JetBrains Mono,monospace;box-shadow:0 4px 12px rgba(255,107,53,.15);';
-  document.body.appendChild(badge);
 })();
 </script>
 
