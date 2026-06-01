@@ -340,6 +340,22 @@ hr.div{border:none;border-top:1px solid #F1F5F9;margin:18px 0}
 .eng-clock i{font-size:12px}
 @keyframes clock-pulse{0%,100%{opacity:1}50%{opacity:.5}}
 .eng-clock-hot i{animation:clock-pulse 1.5s infinite}
+/* Rating buttons (WHY panel) */
+.rating-bar{display:flex;gap:6px;margin-top:12px;padding-top:10px;border-top:1px solid #E2E8F0;flex-wrap:wrap}
+.rating-btn{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #E2E8F0;background:#fff;color:#64748B;font-family:inherit;transition:all .15s}
+.rating-btn:hover{border-color:#CBD5E1;background:#F8FAFC}
+.rating-btn.selected-hot{background:#FEF3C7;border-color:#FDE68A;color:#92400E}
+.rating-btn.selected-replied{background:#DBEAFE;border-color:#BFDBFE;color:#1E40AF}
+.rating-btn.selected-noise{background:#F1F5F9;border-color:#CBD5E1;color:#475569}
+.rating-btn.selected-too_early{background:#FEF9C3;border-color:#FEF08A;color:#713F12}
+.rating-btn.selected-converted{background:#DCFCE7;border-color:#BBF7D0;color:#166534}
+.rating-btn.selected-wrong_intent{background:#FEE2E2;border-color:#FECACA;color:#991B1B}
+/* Zero-match cycles nudge */
+.zmatch-nudge{background:#FFFBEB;border:1px solid #FDE68A;border-left:4px solid #F59E0B;border-radius:8px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:flex-start;gap:12px}
+.zmatch-nudge-icon{font-size:20px;flex-shrink:0;margin-top:1px}
+.zmatch-nudge-body{flex:1}
+.zmatch-nudge-title{font-size:13px;font-weight:700;color:#92400E;margin-bottom:3px}
+.zmatch-nudge-text{font-size:12px;color:#B45309;line-height:1.5}
 .fb-overlay{position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:300;display:flex;align-items:center;justify-content:center;padding:20px;animation:fb-fade .15s ease-out}
 @keyframes fb-fade{from{opacity:0}to{opacity:1}}
 .fb-modal{background:#fff;border-radius:14px;padding:24px;max-width:480px;width:100%;box-shadow:0 24px 60px rgba(0,0,0,.25);max-height:90vh;overflow-y:auto}
@@ -1079,8 +1095,24 @@ function EngagementClock({ createdAt }) {
 }
 
 // ── WhyPanel ── explains why a match surfaced ─────────────────────────────────
-function WhyPanel({ match }) {
+function WhyPanel({ match, monitorId, apiKey }) {
   const [open, setOpen] = React.useState(false);
+  const [rating, setRating] = React.useState(match.rating || null);
+  const [saving, setSaving] = React.useState(false);
+
+  async function handleRating(r) {
+    if (saving) return;
+    setSaving(true);
+    try {
+      const res = await fetch('/v1/matches/' + match.id + '/rating', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
+        body: JSON.stringify({ monitor_id: monitorId, rating: r })
+      });
+      if (res.ok) setRating(r);
+    } catch(e) { /* silent — rating is best-effort */ }
+    setSaving(false);
+  }
 
   // Build signal list from existing match fields
   const signals = [];
@@ -1161,6 +1193,12 @@ function WhyPanel({ match }) {
               )}
             </div>
           )}
+          <div className="rating-bar">
+            <span style={{fontSize:10,fontWeight:700,color:'#94A3B8',marginRight:2,alignSelf:'center'}}>RATE:</span>
+            {[['hot_lead','🎯 Hot lead'],['replied','📬 Replied'],['noise','🔇 Noise'],['too_early','⏰ Too early'],['converted','✅ Converted'],['wrong_intent','❌ Wrong intent']].map(([r,label]) => (
+              <button key={r} className={`rating-btn${rating===r?' selected-'+r:''}`} onClick={() => handleRating(r)} disabled={saving}>{label}</button>
+            ))}
+          </div>
         </>
       )}
     </div>
@@ -1377,7 +1415,7 @@ function MatchCard({ match, monitorId, apiKey, onAction }) {
         {match.title}
       </a>
       {match.body && <p style={{fontSize:13,color:'#64748B',lineHeight:1.65,marginBottom:10}}>{match.body.slice(0,260)}{match.body.length>260?'…':''}</p>}
-      <WhyPanel match={match} />
+      <WhyPanel match={match} monitorId={monitorId} apiKey={apiKey} />
       <div style={{display:'flex',gap:8,alignItems:'center',fontSize:12,color:'#94A3B8',marginBottom:match.draft?0:10,flexWrap:'wrap'}}>
         {match.author && <span>u/{match.author}</span>}
         {match.score!=null && <span style={_engStyle}>· {match.score} pts</span>}
@@ -2122,8 +2160,19 @@ function MatchesFeed({ apiKey, monitors, onGoToSettings }) {
   const [loading, setLoading] = useState(false);
   const [sprintMode, setSprintMode] = useState(false);
   const [activeTab, setActiveTab] = useState('all');
+  const [zeroMatchCycles, setZeroMatchCycles] = React.useState(0);
 
   useEffect(()=>{ if (monitors.length && !selId) setSelId(monitors[0].id); },[monitors]);
+
+  // Fetch zero-match cycle count whenever the selected monitor changes
+  useEffect(() => {
+    if (!selId || !apiKey) return;
+    fetch('/v1/monitors/' + selId + '/zero-match-cycles', {
+      headers: { 'x-api-key': apiKey }
+    }).then(r => r.ok ? r.json() : null)
+      .then(d => { if (d && d.success) setZeroMatchCycles(d.zero_match_cycles || 0); })
+      .catch(() => {});
+  }, [selId, apiKey]);
 
   const load = useCallback(async id => {
     if (!id) return;
@@ -2334,6 +2383,15 @@ function MatchesFeed({ apiKey, monitors, onGoToSettings }) {
                 onClose={() => setSprintMode(false)}
                 onAction={handleAction}
               />
+            )}
+            {!sprintMode && !loading && zeroMatchCycles >= 3 && matches.length === 0 && (
+              <div className="zmatch-nudge">
+                <div className="zmatch-nudge-icon">🔍</div>
+                <div className="zmatch-nudge-body">
+                  <div className="zmatch-nudge-title">No matches in {zeroMatchCycles} consecutive cycles</div>
+                  <div className="zmatch-nudge-text">Your keywords may be too narrow or too broad. Try broadening phrases, removing quotes, or adding related terms. <a href="#settings" style={{color:'#B45309',fontWeight:600}}>Open Settings →</a></div>
+                </div>
+              </div>
             )}
             {!sprintMode && !loading && matches.length > 0 && (
               <IntelBrief matches={matches} lastUpdated={matches[0]?.createdAt} />

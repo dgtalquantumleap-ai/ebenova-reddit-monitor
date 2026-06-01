@@ -1,4 +1,4 @@
-// reddit-monitor/monitor-v2.js
+﻿// reddit-monitor/monitor-v2.js
 // Multi-tenant Insights worker — polls Redis for active monitors,
 // runs keyword searches for each, stores matches, sends email alerts.
 //
@@ -1485,6 +1485,9 @@ async function runMonitor(monitor) {
         m.intentConfidence = result.confidence
         m.intentScore = result.intent_score     // ← intent scoring 0-100
         m.intentReasoning = result.reasoning    // ← one-sentence reasoning
+        // Derive commercial_signal + specificity for WHY panel in dashboard
+        m.commercial_signal = ['buying', 'asking_for_tool'].includes(result.intent) || (result.intent_score >= 70)
+        m.specificity = (result.confidence === 'high' && result.intent_score >= 70) ? 'clear' : (result.confidence === 'low' || result.intent_score < 40) ? 'vague' : 'moderate'
       }
     }))
     if (i + CLASSIFY_CONCURRENCY < allMatches.length) await delay(CLASSIFY_DELAY_MS)
