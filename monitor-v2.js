@@ -157,27 +157,83 @@ function markSeen(monitorId, postId) {
 const delay = ms => new Promise(r => setTimeout(r, ms))
 
 // ── Approved subreddits — never draft a reply if not on this list ─────────────
-// Mirrors v1 whitelist. Monitor owners cannot override this.
+// Global whitelist. Organised by vertical so additions are easy to find.
+// Rule: if a monitor keyword could plausibly surface a post in a subreddit
+// where a founder reply would be welcome, it belongs here.
 const APPROVED_SUBREDDITS = new Set([
-  'freelance','freelancers','smallbusiness','Entrepreneur','EntrepreneurRideAlong',
-  'SoloDevelopment','agency','agencynewbies','Nigeria','lagos','naija','nairaland',
-  'LandlordLady','webdev','SaaS','startups','IndieHackers','buildinpublic',
-  'androiddev','iOSProgramming','Teachers','education','Professors','PublicSpeaking',
-  'churchtech','photography','eventplanning','Weddings','AV','hometheater',
-  'techsupport','SubstituteTeachers','OnlineLearning','edtech','wedding',
-  'weddingplanning','Christianity','church','Reformed','DIY','weddingphotography',
-  'cleaning','housekeeping','recruiting','HR','artificial','ClaudeAI','LocalLLaMA',
-  'LangChain','CursorIDE','legaltech','fintech','Africa','Kenya','Ghana',
-  'CryptoCurrency','Upwork','Fiverr','tax','CleaningBusiness','HVAC',
-  // ── AI Recruiting / Jobs (added for Insights clients in this space) ────────
-  'cscareerquestions','cscareeradvice','ExperiencedDevs','forhire',
-  'MachineLearning','learnmachinelearning','datascience','MLjobs',
-  'recruitinghell','jobsearchhacks','jobs','remotework','techjobs',
-  'YCombinator','venturecapital','angels','product_management','ProductManagement',
-  // ── Freelancers Union audience ───────────────────────────────────────
-  'freelance','freelancers','graphic_design','writing','copywriting',
-  'photography','videography','webdev','marketing','socialmediamanagement',
-  'malelivingspace','digitalnomad','workingdigitalnomad',
+
+  // ── SaaS / Startups / Entrepreneurship ────────────────────────────────────
+  'SaaS','startups','Entrepreneur','EntrepreneurRideAlong','SoloDevelopment',
+  'IndieHackers','buildinpublic','indiebiz','microsaas','SideProject',
+  'entj','smallbusiness','agency','agencynewbies','consulting',
+  'growthHacking','GrowthHacking','ProductLed','ProductLedGrowth',
+  'YCombinator','venturecapital','angels','FounderHub',
+
+  // ── Product / No-code / Tools ──────────────────────────────────────────────
+  'product_management','ProductManagement','ProductDesign','UXDesign',
+  'nocode','lowcode','webflow','bubble','zapier','n8n','makeautomation',
+  'automation','ArtificialIntelligence','artificial','ChatGPT','ClaudeAI',
+  'LocalLLaMA','LangChain','CursorIDE','OpenAI','MachineLearning',
+  'learnmachinelearning','datascience','MLjobs','deeplearning',
+
+  // ── Software Development ───────────────────────────────────────────────────
+  'webdev','web_design','Frontend','reactjs','vuejs','nextjs','node',
+  'javascript','typescript','Python','golang','rust','programming',
+  'softwaredevelopment','gamedev','androiddev','iOSProgramming',
+  'devops','docker','kubernetes','aws','googlecloud','azure',
+  'github','opensource','learnprogramming','cscareerquestions',
+  'cscareeradvice','ExperiencedDevs','coding','API','Backend',
+
+  // ── Freelance / Remote Work / Jobs ────────────────────────────────────────
+  'freelance','freelancers','Upwork','Fiverr','forhire',
+  'remotework','digitalnomad','workingdigitalnomad','techsupport',
+  'recruiting','HR','recruitinghell','jobsearchhacks','jobs','techjobs',
+  'graphic_design','writing','copywriting','videography',
+  'socialmediamanagement','marketing','SEO','content_marketing',
+
+  // ── Legal / Finance / Compliance ──────────────────────────────────────────
+  'legaltech','legaladvice','law','LawSchool','contracts',
+  'fintech','personalfinance','investing','CryptoCurrency','tax',
+  'accounting','smallbusinessfinance','LandlordLady','realestate',
+
+  // ── Sales / Marketing / CRM ───────────────────────────────────────────────
+  'sales','salestechniques','b2bmarketing','emailmarketing','cold_outreach',
+  'CustomerSuccess','CRM','hubspot','salesforce','outreach',
+  'digital_marketing','PPC','SEO','analytics','growthhacking',
+
+  // ── Education / EdTech ────────────────────────────────────────────────────
+  'Teachers','education','Professors','OnlineLearning','edtech',
+  'SubstituteTeachers','elearning','udemy','coursera','LMS',
+
+  // ── Design / Creative ─────────────────────────────────────────────────────
+  'Design','graphic_design','UI_Design','UXDesign','logodesign',
+  'photography','weddingphotography','videography','Filmmakers',
+  'AV','hometheater','podcasting','streaming',
+
+  // ── Events / Services / Home ──────────────────────────────────────────────
+  'eventplanning','Weddings','weddingplanning','wedding','DIY',
+  'cleaning','CleaningBusiness','housekeeping','HVAC','HomeImprovement',
+  'handyman','landscaping','petbusiness',
+
+  // ── Health / Fitness / Wellness ───────────────────────────────────────────
+  'fitness','personaltraining','nutrition','mentalhealth','therapy',
+  'coaching','LifeCoach','wellness','yoga','meditation',
+
+  // ── Creator Economy / Communities ─────────────────────────────────────────
+  'NewTubers','youtubers','Twitch','TwitchStreaming','podcast',
+  'blogging','newsletter','substack','ContentCreators','OnlineBusiness',
+  'PassiveIncome','affiliatemarketing','dropship','ecommerce','Shopify',
+  'AmazonFBA','etsy','printOnDemand',
+
+  // ── Communities by geography (global) ─────────────────────────────────────
+  // Kept where the subreddit has active business/tech discussion.
+  'Nigeria','lagos','naija','nairaland','Africa','Kenya','Ghana',
+  'india','indianstartups','AusFinance','ukbusiness','CanadaSmallBusiness',
+  'brasil','LATAM','singapore','SEABusinesses','dubai','southafrica',
+
+  // ── Faith / Niche verticals ───────────────────────────────────────────────
+  'Christianity','church','Reformed','churchtech',
+  'PublicSpeaking','malelivingspace',
 ])
 
 // ── Semantic search (V2) ─────────────────────────────────────────────────────
