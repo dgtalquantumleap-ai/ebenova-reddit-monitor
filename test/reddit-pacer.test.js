@@ -11,20 +11,32 @@ test('paceRedditRequest: first call returns immediately', async () => {
   assert.ok(elapsed < 50, `expected near-zero wait, got ${elapsed}ms`)
 })
 
-test('paceRedditRequest: enforces minimum gap between consecutive calls', async () => {
+test('paceRedditRequest: enforces the default gap between consecutive calls', async () => {
   _internals.reset()
-  await paceRedditRequest(150)
+  await paceRedditRequest()            // no arg → DEFAULT_GAP_MS
   const t0 = Date.now()
-  await paceRedditRequest(150)
+  await paceRedditRequest()            // second call waits ~DEFAULT_GAP_MS + jitter
   const elapsed = Date.now() - t0
-  // Queue-based pacer uses DEFAULT_GAP_MS (1500ms) internally, not the
-  // gapMs param (kept for API compat only). The second call waits the full
-  // default gap + jitter. Upper bound is generous to avoid flakiness on slow CI.
   const defaultGap = _internals.getDefaultGapMs()
   const jitter = _internals.getJitterMs()
   const maxWait = defaultGap + jitter + 500  // 500ms slack for slow runners
-  assert.ok(elapsed >= Math.min(130, defaultGap * 0.8), `expected meaningful wait, got ${elapsed}ms`)
+  assert.ok(elapsed >= defaultGap * 0.8, `expected ~default-gap wait, got ${elapsed}ms`)
   assert.ok(elapsed < maxWait, `expected wait ≤ ${maxWait}ms (gap+jitter+slack), got ${elapsed}ms`)
+})
+
+test('paceRedditRequest: honours a per-caller gapMs override below the default', async () => {
+  _internals.reset()
+  await paceRedditRequest(300)         // first call seeds _lastFetchAt (~0 wait)
+  const t0 = Date.now()
+  await paceRedditRequest(300)         // its OWN 300ms gap, well under the 1500ms default
+  const elapsed = Date.now() - t0
+  const defaultGap = _internals.getDefaultGapMs()
+  // Proves the drain applies the caller's gap, not a fixed default. Under the
+  // old "param ignored" behaviour this would wait ~defaultGap and fail the
+  // upper bound. (The same mechanism lets dynamic subreddits request a WIDER
+  // 3000ms gap — see searchReddit in monitor-v2.js.)
+  assert.ok(elapsed >= 250, `expected ~300ms gap honoured, got ${elapsed}ms`)
+  assert.ok(elapsed < defaultGap, `expected wait below the ${defaultGap}ms default, got ${elapsed}ms`)
 })
 
 test('paceRedditRequest: gapMs=0 disables pacing entirely', async () => {
