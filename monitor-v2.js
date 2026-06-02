@@ -67,7 +67,6 @@ import { runVisibilitySweep } from './lib/ai-visibility.js'
 import { normalizeKeywordList, isoWeekLabel } from './lib/keyword-types.js'
 import { runEngagementSweep, processPendingChecks } from './lib/reply-tracker.js'
 import { isBuilderPost, extractTopics, recordBuilderProfile, getBuilderProfiles, sendBuilderDigest, PLATFORMS_WITH_REAL_USERNAMES } from './lib/builder-tracker.js'
-import { getCorridor } from './lib/diaspora-corridors.js'
 import { passesRelevanceCheck } from './lib/relevance.js'
 import { updateKeywordHealth } from './lib/keyword-health.js'
 import { buildCompetitorKeywords } from './lib/competitor-tracker.js'
@@ -1108,27 +1107,6 @@ async function runMonitor(monitor) {
     } catch (_migErr) {
       console.warn(`[v2][${monitor.id}] Keyword migration write failed: ${_migErr.message}`)
     }
-  }
-
-  // PR #36 — diaspora corridor override. When set, we swap in the
-  // corridor's keywords + platforms for THIS cycle only (don't mutate the
-  // stored monitor record — the user can flip the corridor off and recover
-  // their original config). Reddit subreddits are also swapped via a
-  // corridor override consulted by searchReddit below.
-  const corridor = getCorridor(monitor.diasporaCorridor)
-  if (corridor) {
-    monitor = {
-      ...monitor,
-      // searchReddit reads subreddits off the keyword entry, so attach the
-      // corridor's subreddit list to every keyword for this cycle.
-      keywords:   corridor.keywords.map(term => ({
-        keyword:    term,
-        type:       'keyword',
-        subreddits: corridor.subreddits,
-      })),
-      platforms:  corridor.platforms,
-    }
-    console.log(`[v2][${monitor.id}] Diaspora corridor active: ${corridor.label}`)
   }
 
   // Resolve which platforms this monitor wants. New monitors set platforms[]

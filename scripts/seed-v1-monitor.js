@@ -356,7 +356,6 @@ async function seed() {
       minConsistency:     'all',
       totalBuildersFound: 0,
       brandName:          '',
-      diasporaCorridor:   null,
       dealValue:          0,
       active:             true,
       plan:               'scale',   // system monitor — no plan-limit enforcement at poll time
