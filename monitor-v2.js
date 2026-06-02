@@ -68,6 +68,7 @@ import { normalizeKeywordList, isoWeekLabel } from './lib/keyword-types.js'
 import { runEngagementSweep, processPendingChecks } from './lib/reply-tracker.js'
 import { isBuilderPost, extractTopics, recordBuilderProfile, getBuilderProfiles, sendBuilderDigest, PLATFORMS_WITH_REAL_USERNAMES } from './lib/builder-tracker.js'
 import { passesRelevanceCheck } from './lib/relevance.js'
+import { groundingContext, groundIntent } from './lib/intent-grounding.js'
 import { updateKeywordHealth } from './lib/keyword-health.js'
 import { buildCompetitorKeywords } from './lib/competitor-tracker.js'
 import { buildBulkEmailExtras } from './lib/email-headers.js'
@@ -1497,6 +1498,35 @@ async function runMonitor(monitor) {
     if (_dropped) console.log(`${label} Feed filter dropped ${_dropped}/${_before} matches`)
   }
   // ── End feed filters ───────────────────────────────────────────────────────
+
+  // ── Intent-grounding pre-filter (Stage 2: semantic disambiguation) ───────────
+  // Sits between retrieval (passesRelevanceCheck) and classify. Drops candidates
+  // that are mis-grounded BEFORE the classifier sees them, so the model is never
+  // asked to compensate for domain/direction errors:
+  //   - domain mismatch  (polysemy): a code-artifact post (GitHub/SO) on a
+  //     non-developer monitor — e.g. "MVP validation" matching a CI-pipeline PR.
+  //   - stance inversion (intent direction): a supply/announce post ("I built X",
+  //     "Show HN") matching a demand keyword ("looking for a co-founder").
+  // Competitor matches are skipped (they have the #84 brand gate). Deterministic
+  // and recall-conservative — only drops on strong signal. Runs before classify
+  // so mis-grounded posts don't cost a Groq call. See lib/intent-grounding.js.
+  {
+    const _gctx = groundingContext(monitor)
+    const _before = allMatches.length
+    const _reasons = { domain_mismatch: 0, stance_inversion: 0 }
+    const _kept = allMatches.filter(m => {
+      if (m.matchType === 'competitor' || m.keywordType === 'competitor') return true
+      const g = groundIntent(m, _gctx)
+      if (!g.admit) { _reasons[g.reason] = (_reasons[g.reason] || 0) + 1 }
+      return g.admit
+    })
+    const _dropped = _before - _kept.length
+    allMatches.splice(0, allMatches.length, ..._kept)
+    if (_dropped) {
+      console.log(`${label} Intent-grounding dropped ${_dropped}/${_before} (domain=${_reasons.domain_mismatch}, stance=${_reasons.stance_inversion})`)
+    }
+  }
+  // ── End intent-grounding ─────────────────────────────────────────────────────
 
   if (allMatches.length === 0) {
     console.log(`${label} No new matches`)
