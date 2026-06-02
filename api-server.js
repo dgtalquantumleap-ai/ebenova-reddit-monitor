@@ -76,6 +76,7 @@ import { makeCostCap } from './lib/cost-cap.js'
 import { verifyCaptcha } from './lib/captcha.js'
 import { applyInviteToUser } from './lib/invite.js'
 import { draftCall, extractInjectedUtmUrl } from './lib/draft-call.js'
+import { validateMonitorQuality } from './lib/monitor-quality.js'
 import { evaluatePost } from './lib/post-evaluator.js'
 import { validatePlatforms, migrateLegacyPlatforms, VALID_PLATFORMS, PLATFORM_LABELS, PLATFORM_EMOJIS, PLATFORM_DISABLED, isPlatformDisabled } from './lib/platforms.js'
 import { classifyMatch, intentPriority } from './lib/classify.js'
@@ -685,6 +686,14 @@ app.post('/v1/monitors', async (req, res) => {
       return res.status(400).json({ success: false, error: { code: 'MISSING_FIELD', message: '"keywords" must be a non-empty array' } })
     if (keywords.length > limits.keywords)
       return res.status(400).json({ success: false, error: { code: 'KEYWORD_LIMIT_EXCEEDED', message: `Max ${limits.keywords} keywords on ${plan} plan` } })
+    // Onboarding quality guardrail (creation-time only; existing monitors are
+    // untouched). Blocks identity-free / single-generic-token monitors ("Youth",
+    // "I advocate") before they enter the system — no runtime filter can save
+    // them. Conservative + guiding: rejects only unambiguous garbage.
+    const _quality = validateMonitorQuality({ keywords, productContext, name, mode: resolvedMode })
+    if (!_quality.ok) {
+      return res.status(400).json({ success: false, error: { code: 'LOW_QUALITY_MONITOR', message: _quality.errors.map(e => e.message).join(' ') } })
+    }
   }
   try {
     const redis = getRedis()
