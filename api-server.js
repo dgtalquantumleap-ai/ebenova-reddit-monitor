@@ -1224,25 +1224,11 @@ app.patch('/v1/monitors/:id', async (req, res) => {
   }
 })
 
-// ── GET /v1/monitors/:id/subreddits ──────────────────────────────────────────
-app.get('/v1/monitors/:id/subreddits', async (req, res) => {
-  const auth = await authenticate(req)
-  if (!auth.ok) return res.status(auth.status).json({ success: false, error: auth.error })
-  const monitorId = req.params.id
-  try {
-    const redis = getRedis()
-    const monRaw = await redis.get(`insights:monitor:${monitorId}`)
-    if (!monRaw) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Monitor not found' } })
-    const mon = typeof monRaw === 'string' ? JSON.parse(monRaw) : monRaw
-    if (mon.owner !== auth.owner) return res.status(403).json({ success: false, error: { code: 'FORBIDDEN' } })
-    const raw = await redis.get(`monitor:${monitorId}:suggested_subreddits`)
-    const subreddits = raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : []
-    return res.json({ success: true, subreddits: Array.isArray(subreddits) ? subreddits : [] })
-  } catch (err) {
-    console.error('[subreddit-intel] GET error:', err.message)
-    return res.status(500).json({ success: false, error: { code: 'INTERNAL' } })
-  }
-})
+// NOTE: GET /v1/monitors/:id/subreddits is defined once, lower in this file
+// (search "AI-suggested subreddits"). A duplicate registration used to live
+// here; Express only ever runs the first match, so this one was dead code and
+// disagreed with the canonical handler on the cross-owner response (403 here
+// vs the 404 convention used everywhere else to avoid existence leaks). Removed.
 
 // ── GET /v1/email-feedback ────────────────────────────────────────────────
 // Unauthenticated one-click feedback from alert emails. Returns HTML so the

@@ -1115,7 +1115,7 @@ function WhyPanel({ match, monitorId, apiKey }) {
     try {
       const res = await fetch('/v1/matches/' + match.id + '/rating', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
         body: JSON.stringify({ monitor_id: monitorId, rating: r })
       });
       if (res.ok) setRating(r);
@@ -2177,7 +2177,7 @@ function MatchesFeed({ apiKey, monitors, onGoToSettings }) {
   useEffect(() => {
     if (!selId || !apiKey) return;
     fetch('/v1/monitors/' + selId + '/zero-match-cycles', {
-      headers: { 'x-api-key': apiKey }
+      headers: { 'Authorization': 'Bearer ' + apiKey }
     }).then(r => r.ok ? r.json() : null)
       .then(d => { if (d && d.success) setZeroMatchCycles(d.zero_match_cycles || 0); })
       .catch(() => {});
