@@ -127,9 +127,37 @@ test('rss: parseRSSFeed strips HTML tags from body', () => {
 
 // ── searchRSS: graceful failure ──────────────────────────────────────────────
 
-test('rss: searchRSS returns [] when no feeds configured', async () => {
-  const result = await searchRSS(null, { allKeywords: ['CRM'], rssFeeds: [] })
-  assert.deepEqual(result, [])
+// searchRSS always runs CURATED_FEEDS + Google News per-keyword feeds in
+// addition to any user-configured rssFeeds (the "global expansion" design).
+// So an empty rssFeeds list no longer short-circuits — instead the contract
+// is that any fetch/parse failure degrades gracefully to []. These two tests
+// stub globalThis.fetch so they never touch the live network.
+
+test('rss: searchRSS returns [] when all feed fetches fail (graceful failure)', async () => {
+  const origFetch = globalThis.fetch
+  globalThis.fetch = async () => { throw new Error('network down') }
+  try {
+    const result = await searchRSS(null, { allKeywords: ['CRM'], rssFeeds: [] })
+    assert.deepEqual(result, [])
+  } finally {
+    globalThis.fetch = origFetch
+  }
+})
+
+test('rss: searchRSS always attempts curated + Google News feeds even with no user feeds', async () => {
+  const origFetch = globalThis.fetch
+  const calledUrls = []
+  globalThis.fetch = async (url) => {
+    calledUrls.push(url)
+    return { ok: true, text: async () => '<rss><channel></channel></rss>' }
+  }
+  try {
+    await searchRSS(null, { allKeywords: ['CRM'], rssFeeds: [] })
+  } finally {
+    globalThis.fetch = origFetch
+  }
+  assert.ok(calledUrls.some(u => u.includes('news.google.com')), 'expected a Google News feed fetch')
+  assert.ok(calledUrls.length >= CURATED_FEEDS.length, 'expected curated feeds to be attempted')
 })
 
 test('rss: searchRSS returns [] when no keywords provided', async () => {
