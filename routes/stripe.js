@@ -71,8 +71,8 @@ router.post('/checkout', async (req, res) => {
       mode: 'subscription',
       payment_method_types: ['card'],
       line_items: [{ price: planConfig.priceId, quantity: 1 }],
-      success_url: successUrl || `${req.headers.origin || 'https://ebenova.dev'}/dashboard?upgrade=success`,
-      cancel_url:  cancelUrl  || `${req.headers.origin || 'https://ebenova.dev'}/dashboard?upgrade=cancelled`,
+      success_url: successUrl || `${req.headers.origin || process.env.APP_URL || 'https://ebenova.org'}/dashboard?upgrade=success`,
+      cancel_url:  cancelUrl  || `${req.headers.origin || process.env.APP_URL || 'https://ebenova.org'}/dashboard?upgrade=cancelled`,
       metadata: { apiKey: auth.apiKey, owner: auth.owner, plan, ownerEmail: auth.keyData.email || auth.owner },
       customer_email: auth.keyData.email || undefined,
     })
@@ -95,7 +95,7 @@ router.post('/portal', async (req, res) => {
     const stripe = getStripe()
     const session = await stripe.billingPortal.sessions.create({
       customer: customerId,
-      return_url: req.body?.returnUrl || `${req.headers.origin || 'https://ebenova.dev'}/dashboard`,
+      return_url: req.body?.returnUrl || `${req.headers.origin || process.env.APP_URL || 'https://ebenova.org'}/dashboard`,
     })
     res.json({ success: true, portalUrl: session.url })
   } catch (err) {
