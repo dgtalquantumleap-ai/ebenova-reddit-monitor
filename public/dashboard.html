@@ -1180,7 +1180,7 @@ function WhyPanel({ match, monitorId, apiKey }) {
               <span className="why-text">{s.text}</span>
             </div>
           ))}
-          {(stage || match.intentScore > 0 || match.confidence) && (
+          {(stage || match.intentScore > 0 || match.intentConfidence || match.confidence) && (
             <div className="why-meta">
               {stage && (
                 <div className="why-meta-item">
@@ -1194,10 +1194,10 @@ function WhyPanel({ match, monitorId, apiKey }) {
                   <span className="why-meta-val" style={{color:scoreColor}}>{match.intentScore}/100</span>
                 </div>
               )}
-              {match.confidence && (
+              {(match.intentConfidence || match.confidence) && (
                 <div className="why-meta-item">
                   <span className="why-meta-label">Signal Strength</span>
-                  <span className="why-meta-val" style={{textTransform:'capitalize'}}>{match.confidence}</span>
+                  <span className="why-meta-val" style={{textTransform:'capitalize'}}>{match.intentConfidence || match.confidence}</span>
                 </div>
               )}
             </div>
@@ -1326,6 +1326,29 @@ function IntentTabBar({ matches, activeTab, onTab }) {
   );
 }
 
+// Match-card truth surface helpers.
+// Platforms that return REAL engagement counts. On every other platform the
+// score/comments fields are hardcoded 0, so we hide the stat rather than render
+// a misleading "0 pts · 0 replies" that makes every lead look dead.
+const PLATFORM_HAS_ENGAGEMENT = new Set(['hackernews', 'producthunt', 'substack', 'github']);
+
+// The evidence snippet: the exact window of the post where the keyword matched,
+// so a human can verify the match in their own words in <3 seconds. Returns
+// { pre, hit, post } or null when the keyword isn't literally present (e.g.
+// competitor brand-gate matches), in which case the card falls back to the body.
+function evidenceSnippet(match) {
+  const kw = (match.matchedKeyword || match.keyword || '').toLowerCase();
+  const hay = `${match.title || ''}  ${match.body || ''}`;
+  const i = kw ? hay.toLowerCase().indexOf(kw) : -1;
+  if (i === -1) return null;
+  const a = Math.max(0, i - 60), b = Math.min(hay.length, i + kw.length + 90);
+  return {
+    pre:  (a > 0 ? '…' : '') + hay.slice(a, i),
+    hit:  hay.slice(i, i + kw.length),
+    post: hay.slice(i + kw.length, b) + (b < hay.length ? '…' : ''),
+  };
+}
+
 function MatchCard({ match, monitorId, apiKey, onAction }) {
   const [drafting, setDrafting] = useState(false);
   const [gone, setGone] = useState(false);
@@ -1396,39 +1419,46 @@ function MatchCard({ match, monitorId, apiKey, onAction }) {
   const _engAny   = (match.score||0) >= 1  || (match.comments||0) >= 1;
   const _engStyle = { fontWeight: _engHigh ? 600 : 400, color: _engHigh ? '#10b981' : _engAny ? 'inherit' : '#6b7280' };
 
+  const ev = evidenceSnippet(match);
+  const hasEng = PLATFORM_HAS_ENGAGEMENT.has(match.source);
   return (
     <div className="result-card fade-up">
-      <div style={{display:'flex',alignItems:'flex-start',gap:8,marginBottom:10,flexWrap:'wrap'}}>
+      {/* 1. Identity + signal — minimal: source · intent · one score · flags · time */}
+      <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8,flexWrap:'wrap'}}>
         <SourceBadge source={match.source} subreddit={match.subreddit} />
-        {match.priority_score >= 8 && <span className="badge badge-hot"><i className="ph-fill ph-lightning" style={{fontSize:10,marginRight:2}}></i>High priority</span>}
-        <ClassificationBadge spec={SENTIMENT_BADGE[match.sentiment]} />
-        <ClassificationBadge spec={INTENT_BADGE[match.intent]} />
-        {match.demandScore > 0 && (() => {
-          const s = match.demandScore;
-          const [cls, label] = s >= 10 ? ['demand-gold','⚡ PEAK'] : s >= 8 ? ['demand-orange',`🔥 ${s}/10`] : s >= 5 ? ['demand-blue',`${s}/10`] : ['demand-grey',`${s}/10`];
-          return <span className={`demand-pill ${cls}`} title="Demand score: how urgently this person wants a solution. 8–10 = act now. 5–7 = warm lead. Below 5 = low priority.">{label}</span>;
-        })()}
+        {INTENT_BADGE[match.intent] && <ClassificationBadge spec={INTENT_BADGE[match.intent]} />}
         {typeof match.intentScore === 'number' && (() => {
           const s = match.intentScore;
           const bg = s >= 80 ? '#fef3c7' : s >= 60 ? '#eff6ff' : '#f1f5f9';
           const color = s >= 80 ? '#92400e' : s >= 60 ? '#1d4ed8' : '#64748b';
-          return <span style={{padding:'2px 7px',borderRadius:10,background:bg,color,fontSize:10,fontWeight:700,letterSpacing:.2}} title={`Intent score: ${s}/100`}>{s}</span>;
+          return <span style={{padding:'2px 8px',borderRadius:10,background:bg,color,fontSize:10,fontWeight:700,letterSpacing:.2}} title={`Buying-intent score: ${s}/100`}>{s} intent</span>;
         })()}
         {match.keywordType === 'competitor' && <span style={{padding:'2px 7px',borderRadius:10,background:'#FEF2F2',color:'#991B1B',fontSize:10,fontWeight:700,letterSpacing:.2}}>⚔️ Competitor</span>}
         {match.isUnanswered && <span className="unanswered-badge">🟢 No replies yet</span>}
         <span style={{marginLeft:'auto',fontSize:11,color:'#94A3B8'}}>{timeAgo(match.createdAt)}</span>
         <EngagementClock createdAt={match.createdAt} />
       </div>
+      {/* 2. Title */}
       <a href={match.url} target="_blank" rel="noreferrer"
         style={{fontSize:14,fontWeight:600,color:'#0F172A',textDecoration:'none',display:'block',marginBottom:6,lineHeight:1.5}}>
         {match.title}
       </a>
-      {match.body && <p style={{fontSize:13,color:'#64748B',lineHeight:1.65,marginBottom:10}}>{match.body.slice(0,260)}{match.body.length>260?'…':''}</p>}
+      {/* 3. Evidence snippet — the matched phrase in the author's own words (truth surface) */}
+      {ev && (
+        <div style={{fontSize:13,lineHeight:1.6,color:'#475569',background:'#F8FAFC',borderLeft:'3px solid #CBD5E1',padding:'7px 11px',borderRadius:'0 6px 6px 0',marginBottom:8}}>
+          {ev.pre}<mark style={{background:'#FEF08A',color:'#0F172A',fontWeight:600,padding:'0 2px',borderRadius:2}}>{ev.hit}</mark>{ev.post}
+        </div>
+      )}
+      {/* 4. Why it fired — the one-line reason, surfaced (no longer hidden in a drawer) */}
+      {match.intentReasoning && <div style={{fontSize:12,color:'#64748B',fontStyle:'italic',marginBottom:10}}>{match.intentReasoning}</div>}
+      {/* 5. Body — fallback context only when there's no evidence snippet */}
+      {!ev && match.body && <p style={{fontSize:13,color:'#64748B',lineHeight:1.65,marginBottom:10}}>{match.body.slice(0,220)}{match.body.length>220?'…':''}</p>}
       <WhyPanel match={match} monitorId={monitorId} apiKey={apiKey} />
+      {/* Metadata — engagement shown ONLY on platforms that return it, and only when > 0 */}
       <div style={{display:'flex',gap:8,alignItems:'center',fontSize:12,color:'#94A3B8',marginBottom:match.draft?0:10,flexWrap:'wrap'}}>
         {match.author && <span>u/{match.author}</span>}
-        {match.score!=null && <span style={_engStyle}>· {match.score} pts</span>}
-        {match.comments!=null && <span style={_engStyle}>· {match.comments} replies</span>}
+        {hasEng && match.score > 0 && <span style={_engStyle}>· {match.score} pts</span>}
+        {hasEng && match.comments > 0 && <span style={_engStyle}>· {match.comments} replies</span>}
         {match.keyword && <span style={{padding:'1px 7px',background:'#F8FAFC',border:'1px solid #E2E8F0',borderRadius:4,color:'#64748B',marginLeft:4}}>"{match.keyword}"</span>}
       </div>
       {match.draft && (
