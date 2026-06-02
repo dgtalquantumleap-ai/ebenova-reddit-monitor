@@ -1202,14 +1202,16 @@ function WhyPanel({ match, monitorId, apiKey }) {
               )}
             </div>
           )}
-          <div className="rating-bar">
-            <span style={{fontSize:10,fontWeight:700,color:'#94A3B8',marginRight:2,alignSelf:'center'}}>RATE:</span>
-            {[['hot_lead','🎯 Hot lead'],['replied','📬 Replied'],['noise','🔇 Noise'],['too_early','⏰ Too early'],['converted','✅ Converted'],['wrong_intent','❌ Wrong intent']].map(([r,label]) => (
-              <button key={r} className={`rating-btn${rating===r?' selected-'+r:''}`} onClick={() => handleRating(r)} disabled={saving}>{label}</button>
-            ))}
-          </div>
         </>
       )}
+      {/* Rating bar — relocated OUT of the collapsed section so it's always
+          visible and actually gets used. These are the gold training labels. */}
+      <div className="rating-bar">
+        <span style={{fontSize:10,fontWeight:700,color:'#94A3B8',marginRight:2,alignSelf:'center'}}>RATE:</span>
+        {[['hot_lead','🎯 Hot lead'],['replied','📬 Replied'],['noise','🔇 Noise'],['too_early','⏰ Too early'],['converted','✅ Converted'],['wrong_intent','❌ Wrong intent']].map(([r,label]) => (
+          <button key={r} className={`rating-btn${rating===r?' selected-'+r:''}`} onClick={() => handleRating(r)} disabled={saving}>{label}</button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -1373,10 +1375,13 @@ function MatchCard({ match, monitorId, apiKey, onAction }) {
     if (r.ok) onAction('draft', match.id, r.data.draft, r.data.draftedBy);
   };
 
-  const feedback = async (fb) => {
-    await apiFetch('/v1/matches/feedback',{method:'POST',body:JSON.stringify({monitor_id:monitorId,match_id:match.id,feedback:fb})},apiKey);
-    setGone(true);
+  // Implicit label beacons (copied / edited / opened / skipped) — the cheapest,
+  // highest-volume training signal, captured as a byproduct of actions the user
+  // already takes. Fire-and-forget; best-effort.
+  const signal = (type) => {
+    apiFetch('/v1/matches/signal',{method:'POST',body:JSON.stringify({monitor_id:monitorId,match_id:match.id,signal:type})},apiKey).catch(()=>{});
   };
+  const draftEdited = () => !!draftText && draftText !== extractDraftText(match.draft);
 
   const togglePosted = async () => {
     setPosting(true);
@@ -1391,6 +1396,7 @@ function MatchCard({ match, monitorId, apiKey, onAction }) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }).catch(() => {});
+    signal('copied'); if (draftEdited()) signal('edited');
   };
 
   // One-click reply workflow. Copies the (edited) draft to clipboard,
@@ -1404,6 +1410,7 @@ function MatchCard({ match, monitorId, apiKey, onAction }) {
     try { await navigator.clipboard.writeText(draftText) } catch (_) {}
     setCopied(true); setTimeout(() => setCopied(false), 2000);
     if (match.url) window.open(match.url, '_blank', 'noopener,noreferrer');
+    signal('copied'); if (draftEdited()) signal('edited');
     if (!postedAt && !posting) {
       setPosting(true);
       try {
@@ -1507,11 +1514,11 @@ function MatchCard({ match, monitorId, apiKey, onAction }) {
           </button>
         </Tip>
         <Tip text="Dismiss this match — signals it's not relevant">
-          <button className="btn btn-sm" style={{background:'transparent',border:'1px solid #F1F5F9',color:'#94A3B8',cursor:'pointer'}} onClick={()=>feedback('down')}>
+          <button className="btn btn-sm" style={{background:'transparent',border:'1px solid #F1F5F9',color:'#94A3B8',cursor:'pointer'}} onClick={()=>{ signal('skipped'); setGone(true); }}>
             <i className="ph ph-x"></i> Skip
           </button>
         </Tip>
-        <a href={match.url} target="_blank" rel="noreferrer" className="btn btn-sm" style={{marginLeft:'auto',background:'transparent',border:'none',color:'#FF6B35',fontWeight:600,padding:'6px 4px',gap:4}}>
+        <a href={match.url} target="_blank" rel="noreferrer" onClick={()=>signal('opened')} className="btn btn-sm" style={{marginLeft:'auto',background:'transparent',border:'none',color:'#FF6B35',fontWeight:600,padding:'6px 4px',gap:4}}>
           Open thread <i className="ph ph-arrow-square-out"></i>
         </a>
       </div>

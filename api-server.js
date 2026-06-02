@@ -2060,6 +2060,36 @@ app.post('/v1/matches/feedback', async (req, res) => {
   }
 })
 
+// ── POST /v1/matches/signal ────────────────────────────────────────────────
+// Records lightweight implicit interaction labels as set-once timestamps on the
+// match: copied / edited / opened / skipped. These are the cheapest, highest-
+// volume training labels — captured as a byproduct of actions the user already
+// takes — and feed the eventual outcome-ranking loop. Set-once = first occurrence.
+const SIGNAL_FIELDS = { copied: 'copiedAt', edited: 'editedAt', opened: 'openedAt', skipped: 'skippedAt' }
+app.post('/v1/matches/signal', async (req, res) => {
+  const auth = await authenticate(req)
+  if (!auth.ok) return res.status(auth.status).json({ success: false, error: auth.error })
+  const { monitor_id, match_id, signal } = req.body
+  const field = SIGNAL_FIELDS[signal]
+  if (!monitor_id || !match_id || !field)
+    return res.status(400).json({ success: false, error: { code: 'INVALID_INPUT', message: 'monitor_id, match_id, and signal (copied|edited|opened|skipped) required' } })
+  try {
+    const redis = getRedis()
+    const monitorRaw = await redis.get(`insights:monitor:${monitor_id}`)
+    if (!monitorRaw) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Monitor not found' } })
+    const monitor = typeof monitorRaw === 'string' ? JSON.parse(monitorRaw) : monitorRaw
+    if (monitor.owner !== auth.owner) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Monitor not found' } })
+    const key = `insights:match:${monitor_id}:${match_id}`
+    const raw = await redis.get(key)
+    if (!raw) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Match not found' } })
+    const match = typeof raw === 'string' ? JSON.parse(raw) : raw
+    if (!match[field]) await redis.set(key, JSON.stringify({ ...match, [field]: new Date().toISOString() }))
+    res.json({ success: true, match_id, signal })
+  } catch (err) {
+    serverError(res, err)
+  }
+})
+
 // ── POST /v1/matches/draft ─────────────────────────────────────────────────
 
 // -- PATCH /v1/matches/:id/rating -----------------------------------------
