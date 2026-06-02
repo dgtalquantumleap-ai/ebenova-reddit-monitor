@@ -1,4 +1,4 @@
-// scripts/send-demo-invites.js — Send branded demo invites to a list of testers.
+﻿// scripts/send-demo-invites.js — Send branded demo invites to a list of testers.
 //
 // Usage:
 //   railway run node scripts/send-demo-invites.js scripts/testers.csv --dry-run
@@ -62,57 +62,69 @@ function parseEntry(entry) {
 
 function buildEmail({ firstName, demoUrl }) {
   const greeting = firstName ? `Hi ${firstName},` : 'Hi there,'
-  const subject = 'A quiet invite — come test what I\'ve been building'
+  const subject = 'Ebenova Insights just got a lot smarter'
 
   const html = `<!DOCTYPE html><html><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:560px;margin:0 auto;padding:32px 24px;background:#f5f5f5;color:#0F172A;line-height:1.6;">
-    <div style="padding:24px;background:#0e0e0e;border-radius:8px;margin-bottom:20px;">
-      <div style="font-size:18px;font-weight:700;color:#FF6B35;letter-spacing:-.3px;">📡 Ebenova Insights</div>
-      <div style="font-size:11px;font-weight:600;color:#64748B;text-transform:uppercase;letter-spacing:.6px;margin-top:3px;">QUIET INVITE // 30-DAY DEMO</div>
-    </div>
-    <div style="padding:28px;background:#fff;border-radius:8px;border:1px solid #eee;">
-      <p style="margin:0 0 18px;font-size:15px;">${greeting}</p>
-      <p style="margin:0 0 18px;font-size:15px;color:#334155;">I built something I want you to break before anyone else does.</p>
-      <p style="margin:0 0 22px;font-size:15px;color:#334155;"><strong>Ebenova Insights</strong> finds people on Reddit and 8 other platforms the moment they're asking for what you sell. It surfaces the thread, the buying context, and a reply draft you can edit and post in seconds. No outbound spam. No CSV upload. Just the right conversation, at the right moment.</p>
-      <p style="margin:0 0 14px;font-size:14px;color:#64748B;">Your 30-day Growth-tier access is ready. One click, no card:</p>
-      <a href="${demoUrl}" style="display:inline-block;background:#FF6B35;color:#fff;font-weight:700;padding:14px 28px;border-radius:6px;text-decoration:none;font-size:15px;letter-spacing:.2px;margin-bottom:24px;">Open the terminal →</a>
-      <div style="margin:0 0 18px;padding:18px 20px;background:#FFF7F3;border-left:3px solid #FF6B35;border-radius:4px;">
-        <div style="font-size:11px;font-weight:700;color:#9A3412;text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px;">THREE THINGS TO TRY</div>
-        <p style="margin:0 0 8px;font-size:14px;color:#334155;"><strong>1.</strong> Describe your business in a sentence on the <em>Find Customers</em> screen. See what conversations surface.</p>
-        <p style="margin:0 0 8px;font-size:14px;color:#334155;"><strong>2.</strong> Save a monitor. First matches usually arrive within 15 minutes.</p>
-        <p style="margin:0;font-size:14px;color:#334155;"><strong>3.</strong> Click the floating <strong>💬 Feedback</strong> button anytime. Brutal honesty is the gift.</p>
+    <div style="padding:20px 24px;background:#0D1520;border-radius:8px 8px 0 0;display:flex;align-items:center;gap:12px;">
+      <div style="width:34px;height:34px;background:linear-gradient(135deg,#6366F1,#818CF8);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#fff;">EI</div>
+      <div>
+        <div style="font-size:15px;font-weight:700;color:#F8FAFC;letter-spacing:-.3px;">Ebenova Insights</div>
+        <div style="font-size:10px;font-weight:600;color:#475569;text-transform:uppercase;letter-spacing:.6px;">Product Update</div>
       </div>
-      <p style="margin:0 0 14px;font-size:14px;color:#475569;">The product is rough in places. That's what you're here for. Anything broken, confusing, or surprising — tell me through that feedback widget and I'll see it in real time.</p>
-      <p style="margin:0 0 4px;font-size:14px;color:#475569;">Thanks for spending an afternoon (or thirty) with this.</p>
+    </div>
+    <div style="padding:32px;background:#fff;border-radius:0 0 8px 8px;border:1px solid #eee;border-top:none;">
+      <p style="margin:0 0 18px;font-size:15px;">${greeting}</p>
+      <p style="margin:0 0 18px;font-size:15px;color:#334155;">Since you last used Ebenova Insights, we've shipped a significant update based on real user feedback. Here's what's new:</p>
+
+      <div style="margin:0 0 16px;padding:16px 20px;background:#F8FAFC;border-radius:8px;border:1px solid #E2E8F0;">
+        <div style="font-size:11px;font-weight:700;color:#6366F1;text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px;">What's new</div>
+        <p style="margin:0 0 10px;font-size:14px;color:#334155;"><strong>🔥 Hot Leads tab</strong> — separates switching signals and buying intent from background noise. No more manual triage.</p>
+        <p style="margin:0 0 10px;font-size:14px;color:#334155;"><strong>💡 WHY THIS MATCHED</strong> — every signal now shows exactly why it surfaced: competitor named, budget signal, switching language, urgency. No black box.</p>
+        <p style="margin:0 0 10px;font-size:14px;color:#334155;"><strong>⏱ 3-hour engagement clock</strong> — shows time remaining in the peak reply window on every match. Amber when you're running out of time.</p>
+        <p style="margin:0 0 10px;font-size:14px;color:#334155;"><strong>📊 Intelligence Brief</strong> — 5-number daily summary at the top of your feed: hot leads, evaluation signals, expiring posts, and engagement wins.</p>
+        <p style="margin:0;font-size:14px;color:#334155;"><strong>🌙 Full dark redesign</strong> — the dashboard now matches the product's intent: focused, signal-first, no noise.</p>
+      </div>
+
+      <p style="margin:0 0 22px;font-size:15px;color:#334155;">The product now answers the question your monitor was always trying to answer: <em>not just what people are saying — but who is ready to buy.</em></p>
+
+      <a href="${demoUrl}" style="display:inline-block;background:linear-gradient(135deg,#6366F1,#818CF8);color:#fff;font-weight:700;padding:14px 28px;border-radius:8px;text-decoration:none;font-size:15px;letter-spacing:.2px;margin-bottom:28px;">Open Ebenova Insights →</a>
+
+      <div style="margin:0 0 24px;padding:18px 20px;background:#FFFBEB;border-left:3px solid #F59E0B;border-radius:4px;">
+        <div style="font-size:11px;font-weight:700;color:#92400E;text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;">One ask</div>
+        <p style="margin:0;font-size:14px;color:#78350F;">If the product is delivering value, Growth is <strong>$29/month</strong> — 20 monitors, 100 keywords, Slack delivery, AI reply drafts, and everything above. If you're not ready, no pressure. The free tier stays free.</p>
+      </div>
+
+      <p style="margin:0 0 4px;font-size:14px;color:#475569;">As always, hit the 💬 Feedback button inside the dashboard — I read every one.</p>
       <p style="margin:0;font-size:14px;color:#475569;">— Olumide</p>
     </div>
-    <p style="margin:18px 0 0;font-size:11px;color:#94A3B8;text-align:center;">This invite link was sent only to you. If you'd rather not, no worries — just ignore.</p>
+    <p style="margin:18px 0 0;font-size:11px;color:#94A3B8;text-align:center;">Ebenova Solutions · Calgary, Alberta · <a href="https://ebenova.org" style="color:#94A3B8;">ebenova.org</a></p>
   </body></html>`
 
   const text = `${greeting}
 
-I built something I want you to break before anyone else does.
+Since you last used Ebenova Insights, we've shipped a significant update. Here's what's new:
 
-Ebenova Insights finds people on Reddit and 8 other platforms the moment they're asking for what you sell. It surfaces the thread, the buying context, and a reply draft you can edit and post in seconds. No outbound spam. No CSV upload. Just the right conversation, at the right moment.
+🔥 Hot Leads tab — separates switching signals and buying intent from background noise.
+💡 WHY THIS MATCHED — every signal now explains why it surfaced: competitor named, budget signal, switching language, urgency.
+⏱ 3-hour engagement clock — shows time remaining in the peak reply window on every match.
+📊 Intelligence Brief — 5-number daily summary at the top of your feed.
+🌙 Full dark redesign — the dashboard now matches the product's intent: focused, signal-first, no noise.
 
-Your 30-day Growth-tier access is ready. One click, no card:
+The product now answers the question your monitor was always trying to answer: not just what people are saying — but who is ready to buy.
 
+Open the dashboard:
 → ${demoUrl}
 
-Three things to try:
+If the product is delivering value, Growth is $29/month — 20 monitors, 100 keywords, Slack delivery, and AI reply drafts. Free tier stays free if you're not ready.
 
-1. Describe your business in a sentence on the Find Customers screen. See what conversations surface.
-2. Save a monitor. First matches usually arrive within 15 minutes.
-3. Click the floating Feedback button anytime. Brutal honesty is the gift.
+Hit the Feedback button inside the dashboard anytime — I read every one.
 
-The product is rough in places. That's what you're here for. Anything broken, confusing, or surprising — tell me through that feedback widget and I'll see it in real time.
+— Olumide
 
-Thanks for spending an afternoon (or thirty) with this.
-
-— Olumide`
+Ebenova Solutions · Calgary, Alberta · ebenova.org`
 
   return { subject, html, text }
 }
-
 async function main() {
   const { entries, dryRun, source } = parseArgs()
 
