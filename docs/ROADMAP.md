@@ -279,19 +279,16 @@ Add to platform selector as 🇳🇬 Jiji.ng
 
 ---
 
-### PR #36 — Diaspora Monitor Mode
+### PR #36 — Diaspora Monitor Mode — ❌ REMOVED (global focus)
 
-- Layer: 1 — Geographic intelligence
-- Files: `lib/diaspora-corridors.js` + `public/dashboard.html`
-
-Pre-configured platform bundles per diaspora corridor:
-
-- Lagos ↔ London: Gumtree UK + Reddit UK + r/unitedkingdom
-- Lagos ↔ Toronto: Kijiji Canada + Reddit Canada + r/toronto
-- Lagos ↔ Houston: Reddit + Craigslist (Phase 2)
-
-One toggle in dashboard, not 6 chips to configure manually.
-This is unique positioning — no competitor monitors diaspora corridors.
+This feature was built (`lib/diaspora-corridors.js` + corridor picker in the
+dashboard + `/v1/corridors` endpoints + a per-cycle worker override) but has
+been **removed**. It was Nigeria-anchored (Lagos ↔ London / Toronto / Houston),
+which conflicts with the global-focus direction (commit `97ef480`, "remove
+Nigerian-market monitors — global focus only"). The keyword presets that were
+similarly Nigeria-locked were globalized at the same time. Revisit only if a
+deliberate diaspora/Africa play is chosen — and then lean into it everywhere
+rather than as a half-configured option.
 
 ---
 
@@ -335,8 +332,8 @@ This turns drafts from an incidental discovery into an intentional workflow.
 | Twitter | ⚠️ Partial | `lib/scrapers/twitter.js` (live test skipped) |
 | Nairaland | ❌ Planned | Not yet built |
 | Jiji.ng | ❌ Planned | PR #35 |
-| Gumtree UK | ❌ Phase 2 | PR #36 |
-| Kijiji Canada | ❌ Phase 2 | PR #36 |
+| Gumtree UK | ❌ Dropped | was PR #36 (diaspora mode removed) |
+| Kijiji Canada | ❌ Dropped | was PR #36 (diaspora mode removed) |
 
 ---
 
