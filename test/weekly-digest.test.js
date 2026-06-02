@@ -256,13 +256,17 @@ test('runMonitorDigest: skips when no alertEmail', async () => {
   assert.equal(r.sent, false)
 })
 
-test('runMonitorDigest: skips zero-match weeks (does not send empty email)', async () => {
+test('runMonitorDigest: zero-match week sends a quiet-week email (never goes silent)', async () => {
+  // Zero-match weeks intentionally send a lightweight "quiet week" email
+  // rather than skipping — silence trains users to forget the tool exists.
   const monitor = { id: 'm', alertEmail: 'a@b.co', name: 'M' }
   const resend = mockResend()
   const r = await runMonitorDigest({ monitor, redis: mockRedis(), resend, fromEmail: 'f@x.co' })
-  assert.equal(r.sent, false)
-  assert.equal(r.reason, 'zero-matches')
-  assert.equal(resend.sent.length, 0)
+  assert.equal(r.sent, true)
+  assert.equal(r.reason, 'quiet-week')
+  assert.equal(r.total, 0)
+  assert.equal(resend.sent.length, 1)
+  assert.match(resend.sent[0].subject, /No matches this week/)
 })
 
 test('runMonitorDigest: send fails → returns sent:false with reason', async () => {
@@ -474,7 +478,7 @@ test('gatherDigestData: returns allMatches array for downstream briefing', async
 
 // ── runAllDigests (loop + isolation) ───────────────────────────────────────
 
-test('runAllDigests: skips inactive monitors', async () => {
+test('runAllDigests: skips inactive monitors, sends quiet-week for active zero-match', async () => {
   const redis = mockRedis({
     activeMonitorIds: ['m1', 'm2'],
     monitors: {
@@ -485,7 +489,7 @@ test('runAllDigests: skips inactive monitors', async () => {
   })
   const r = await runAllDigests({ redis, resend: mockResend(), fromEmail: 'f@x.co' })
   assert.equal(r.ran, 2)
-  // m1 inactive → skipped; m2 active but zero matches → also skipped
-  assert.equal(r.sent, 0)
-  assert.equal(r.skipped, 2)
+  // m1 inactive → skipped; m2 active with zero matches → quiet-week email sent
+  assert.equal(r.sent, 1)
+  assert.equal(r.skipped, 1)
 })
