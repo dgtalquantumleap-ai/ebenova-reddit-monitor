@@ -73,6 +73,28 @@ test('competitor: missing word → fails', () => {
   assert.equal(passesRelevanceCheck({ title: 'DocuSign pricing', body: '' }, 'DocuSign too expensive', 'competitor'), false)
 })
 
+// ── retrieval containment gate (competitor pipeline) ─────────────────────────
+// Competitor matches are gated on the BRAND NAME (not the expanded query phrase)
+// at the injection boundary in monitor-v2.js. These pin that contract: a loose
+// Reddit/HN hit for an expanded query like "Deloitte Digital vs" is admitted only
+// if the brand actually appears in title+body.
+
+test('containment: off-brand cross-domain hit is rejected on brand name', () => {
+  // Real production leak: "Deloitte Digital vs" fuzzy-matched a wrestling thread.
+  const wrestling = { title: 'Best of the Super Juniors 33 B Block Standings', body: 'Welcome back to my coverage of the block standings' }
+  assert.equal(passesRelevanceCheck(wrestling, 'Deloitte Digital', 'competitor'), false)
+})
+
+test('containment: genuine brand mention is admitted', () => {
+  const real = { title: 'Anyone switching off Deloitte Digital?', body: 'We are evaluating alternatives to Deloitte Digital for our rebrand.' }
+  assert.equal(passesRelevanceCheck(real, 'Deloitte Digital', 'competitor'), true)
+})
+
+test('containment: single-token brand must still appear', () => {
+  assert.equal(passesRelevanceCheck({ title: 'random unrelated post', body: '' }, 'Salesforce', 'competitor'), false)
+  assert.equal(passesRelevanceCheck({ title: 'thinking of leaving Salesforce', body: '' }, 'Salesforce', 'competitor'), true)
+})
+
 // ── edge cases ────────────────────────────────────────────────────────────────
 
 test('missing title and body → fails for non-empty keyword', () => {

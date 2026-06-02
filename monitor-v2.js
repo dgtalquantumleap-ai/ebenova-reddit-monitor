@@ -1212,6 +1212,7 @@ async function runMonitor(monitor) {
         for (const m of matches) {
           m.matchType = 'competitor'
           m.competitorKeyword = phrase
+          m.competitorName = compKwEntry.competitorName
           m.keywordType = 'competitor'
           m.productContext = monitor.productContext || ''
           competitorMatches.push(m)
@@ -1230,6 +1231,7 @@ async function runMonitor(monitor) {
         for (const m of matches) {
           m.matchType = 'competitor'
           m.competitorKeyword = phrase
+          m.competitorName = compKwEntry.competitorName
           m.keywordType = 'competitor'
           competitorMatches.push(m)
         }
@@ -1241,8 +1243,23 @@ async function runMonitor(monitor) {
       console.log(`${label} Competitor tracking: ${competitorMatches.length} total matches from ${monitor.competitors.length} competitors`)
     }
   }
-  // Merge competitor matches into allMatches (they bypass intent score filter below)
-  for (const m of competitorMatches) allMatches.push(m)
+  // Merge competitor matches into allMatches (they bypass intent score filter below).
+  //
+  // RETRIEVAL CONTAINMENT GATE (competitor pipeline only). Competitor matches are
+  // the one ingestion path that does NOT run passesRelevanceCheck during fetch, so
+  // loose Reddit/HN hits for expanded queries ("X vs", "replace X", "X alternative")
+  // leak unrelated cross-domain threads into the feed. Default-deny here: a
+  // competitor candidate is admitted only if the BRAND NAME itself appears in
+  // title+body — the expansion phrase is NOT used as a validation signal. This
+  // does not touch the keyword/feed pipelines or passesRelevanceCheck behavior.
+  let _compDropped = 0
+  for (const m of competitorMatches) {
+    if (!m.competitorName || !passesRelevanceCheck(m, m.competitorName, 'competitor')) { _compDropped++; continue }
+    allMatches.push(m)
+  }
+  if (_compDropped) {
+    console.log(`${label} Competitor containment: dropped ${_compDropped}/${competitorMatches.length} off-brand matches`)
+  }
   // ── End competitor tracking ──────────────────────────────────────────────────
 
   // Reddit — explicitly opt-in per platforms array. No longer always-on.
