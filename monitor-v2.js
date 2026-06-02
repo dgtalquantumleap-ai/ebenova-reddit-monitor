@@ -397,11 +397,24 @@ async function semanticSearchSubreddit(monitorId, subreddit, keywordEntry, query
 //
 // Failure logging: every non-2xx is logged with status + URL so cycle logs
 // surface problems immediately (vs. silently returning Medium-only).
-async function searchReddit(monitorId, keywordEntry) {
+//
+// Per-monitor request budget: to prevent one heavy monitor (27 keywords ×
+// 5 subreddits = 135 URLs) from monopolizing the global pacer queue and
+// starving other monitors for minutes, each monitor gets a cap of
+// MONITOR_REDDIT_URL_CAP (default 40) URLs per cycle. Excess URLs are
+// skipped with a warning. This is per-searchReddit-invocation total, shared
+// via the requestsUsed counter passed in opts.
+async function searchReddit(monitorId, keywordEntry, opts = {}) {
   const keyword = resolveKeyword(keywordEntry)
   const { subreddits = [] } = keywordEntry
   const _isDynamic = !!keywordEntry._dynamicSubreddits
   const results = []
+
+  // Per-monitor request budget — shared counter across all searchReddit calls
+  // for one monitor cycle. Passed in via opts.requestBudget = { used, max }.
+  // When the budget is exhausted, remaining URLs are skipped so this monitor
+  // doesn't monopolize the global pacer queue.
+  const budget = opts.requestBudget || null
 
   // One URL per named subreddit, or a single global search if none are set.
   // Pass keyword type so phrase keywords get force-quoted in the Reddit query.
@@ -425,12 +438,23 @@ async function searchReddit(monitorId, keywordEntry) {
   }
 
   for (const [sr, url] of urlPairs) {
+    // Per-monitor budget check — skip remaining URLs if this monitor has
+    // used its allocation for the cycle.
+    if (budget) {
+      if (budget.used >= budget.max) {
+        console.warn(`[v2][reddit:rss] "${keyword}" — per-monitor request budget exhausted (${budget.used}/${budget.max}), skipping remaining subreddits`)
+        break
+      }
+      budget.used++
+    }
     try {
       // Global Reddit IP-pacer — see lib/reddit-pacer.js. The per-monitor
       // interDelay above prevents one monitor from bursting; this prevents
       // multiple monitors-in-parallel from cumulatively bursting against
-      // the same outbound IP.
-      await paceRedditRequest()
+      // the same outbound IP. Dynamically-suggested subreddits hit fresh,
+      // unwarmed CDN edges and 429 sooner than approved subs, so they ask the
+      // global pacer for a wider gap (3000ms) than the default (1500ms).
+      await paceRedditRequest(_isDynamic ? 3000 : undefined)
       const res = await fetch(url, { headers })
       if (!res.ok) {
         const retryAfter = parseRetryAfter(res.headers)
@@ -875,9 +899,15 @@ async function runBuilderTrackerMonitor(monitor) {
     type: 'keyword',
   }))
 
+  // Per-monitor Reddit request budget — same cap as the keyword-monitor cycle.
+  // Builder Tracker's subreddit fan-out (BUILDER_KEYWORDS × BUILDER_SUBREDDITS)
+  // is the original 429 culprit called out in lib/reddit-pacer.js, so it draws
+  // from the same shared pool to avoid monopolizing the global pacer queue.
+  const _redditBudget = { used: 0, max: parseInt(process.env.MONITOR_REDDIT_URL_CAP || '40') }
+
   // Reddit
   for (const kw of builderKws) {
-    const matches = await searchReddit(monitor.id, kw)
+    const matches = await searchReddit(monitor.id, kw, { requestBudget: _redditBudget })
     matches.forEach(m => allMatches.push(m))
     await delay(2000)
   }
@@ -1178,8 +1208,12 @@ async function runMonitor(monitor) {
     : monitor.keywords
   const effectiveKeywords = [...kwWithSubs, ...expandedKeywords]
 
-  // Competitor keywords — generated from monitor.competitors[] brand names
-  const competitorKeywords = buildCompetitorKeywords(monitor.competitors || [], monitor.productContext || '')
+  // Per-monitor Reddit request budget. Shared counter passed into every
+  // searchReddit call so all keyword/subreddit combinations for this monitor
+  // draw from the same pool. Default 40 = ~1 min of pacer time at 1500ms/req;
+  // enough for 8 keywords × 5 subreddits. Tune via MONITOR_REDDIT_URL_CAP.
+  const MONITOR_REDDIT_URL_CAP = parseInt(process.env.MONITOR_REDDIT_URL_CAP || '40')
+  const _redditBudget = { used: 0, max: MONITOR_REDDIT_URL_CAP }
 
   const allMatches = []
   const seenIds = { has: (id) => hasSeen(monitor.id, id), add: (id) => markSeen(monitor.id, id) }
@@ -1191,13 +1225,12 @@ async function runMonitor(monitor) {
   // ── Competitor mention tracking ─────────────────────────────────────────────
   const competitorMatches = []
   if ((monitor.competitors || []).length > 0) {
-    const { buildCompetitorKeywords } = await import('./lib/competitor-tracker.js')
     const compKwEntries = buildCompetitorKeywords(monitor.competitors, monitor.productContext || '')
     if (platforms.includes('reddit')) {
       for (const compKwEntry of compKwEntries) {
         const phrase = compKwEntry.keyword
         const compKw = { keyword: phrase, type: 'competitor', subreddits: [], productContext: monitor.productContext || '' }
-        const matches = await searchReddit(monitor.id, compKw)
+        const matches = await searchReddit(monitor.id, compKw, { requestBudget: _redditBudget })
         for (const m of matches) {
           m.matchType = 'competitor'
           m.competitorKeyword = phrase
@@ -1267,7 +1300,7 @@ async function runMonitor(monitor) {
       if (_useSuggested) {
         console.log(`${label} [subreddit-intel] Using ${_kwSubs.length} suggested subreddits for "${kw.keyword}"`)
       }
-      const redditMatches = await searchReddit(monitor.id, kwWithSubs)
+      const redditMatches = await searchReddit(monitor.id, kwWithSubs, { requestBudget: _redditBudget })
       let _redditIrrelevant = 0
       for (const m of redditMatches) {
         m.productContext = ctx
@@ -1440,26 +1473,14 @@ async function runMonitor(monitor) {
     if (feedMatches.length) await delay(1500)
   }
 
-  // ── Competitor keyword searches ──────────────────────────────────────────
-  // Runs after regular keyword searches. Competitor matches bypass the
-  // minIntentScore filter (people complaining about competitors are leads).
-  if (competitorKeywords.length > 0) {
-    for (const kw of competitorKeywords) {
-      const redditMatches = await searchReddit(monitor.id, kw)
-      for (const m of redditMatches) {
-        m.productContext = kw.productContext
-        m.keywordType = 'competitor'
-        m.matchedKeyword = kw.keyword
-        m.competitorName = kw.competitorName
-        allMatches.push(m)
-      }
-      if (redditMatches.length) {
-        console.log(`${label} Competitor Reddit "${kw.keyword}": ${redditMatches.length} matches`)
-      }
-      await delay(2000)
-    }
-  }
-  // ── End competitor searches ───────────────────────────────────────────────
+  // NOTE: competitor keywords used to be searched on Reddit a second time here,
+  // but that loop was redundant with the competitor-tracking block above (both
+  // derive identical global-search URLs from buildCompetitorKeywords, which
+  // always returns subreddits:[]). The earlier block runs first and marks those
+  // entries seen, so this loop returned ~0 new matches while still firing the
+  // requests — and worse, it was NOT gated on platforms.includes('reddit'), so
+  // it hit Reddit even for monitors that hadn't selected it. The budgeted,
+  // reddit-gated competitor loop above is the single source of truth. Removed.
 
   // ── Feed filters: excludeTerms + blockedSubreddits ───────────────────────
   // Applied before classify to avoid spending Groq tokens on posts that will
@@ -1486,11 +1507,14 @@ async function runMonitor(monitor) {
     console.log(`${label} No new matches`)
     // Track consecutive zero-match cycles in Redis so the dashboard can
     // surface a "your keywords may need tuning" nudge to the user.
+    // Counter resets when ANY post makes it through the relevance gate
+    // (i.e. allMatches.length > 0 here, before intent filter). This
+    // distinguishes "no posts at all" from "posts found but all low-intent".
     if (redis) {
       try {
         const zeroKey = `monitor:${monitor.id}:zero_match_cycles`
         const count = await redis.incr(zeroKey)
-        await redis.expire(zeroKey, 60 * 60 * 24 * 7) // 7-day TTL, resets on any match
+        await redis.expire(zeroKey, 60 * 60 * 24 * 7) // 7-day TTL
         if (count >= 3) {
           console.warn(`${label} ⚠️  ${count} consecutive zero-match cycles — keywords may need tuning`)
         }
@@ -1498,7 +1522,7 @@ async function runMonitor(monitor) {
     }
     return
   }
-  // Reset zero-match counter on any successful match cycle
+  // Reset zero-match counter — we found relevant posts this cycle
   if (redis) redis.del(`monitor:${monitor.id}:zero_match_cycles`).catch(() => {})
 
   // ── Classify sentiment + intent (best-effort, before drafting) ───────────
