@@ -7,18 +7,24 @@
 // becomes visible. No Redis, no network — run with: node scripts/relevance-eval.mjs
 import { readFileSync } from 'node:fs'
 import { passesRelevanceCheck } from '../lib/relevance.js'
+import { groundIntent } from '../lib/intent-grounding.js'
 
 const fixture = JSON.parse(readFileSync(new URL('../test/fixtures/relevance-truthset.json', import.meta.url)))
 const rows = fixture.rows
 
-// Replicate the live pipeline gates (post-#84):
-//   competitor rows → gate on the BRAND NAME (retrieval containment, PR #84)
-//   keyword rows    → gate on the matched keyword (existing keyword/feed gate)
+// All 8 monitors in the fixture are non-developer, demand-side (keyword-mode)
+// monitors, so the intent-grounding context is constant here.
+const FIXTURE_CTX = { developerAudience: false, desiredStance: 'seek' }
+
+// Replicate the full live gate stack:
+//   competitor rows → brand gate (#84)
+//   keyword rows    → passesRelevanceCheck (retrieval) THEN groundIntent (semantic)
 function admitted(r) {
   if (r.keywordType === 'competitor') {
     return !!r.competitorName && passesRelevanceCheck(r, r.competitorName, 'competitor')
   }
-  return passesRelevanceCheck(r, r.query, r.keywordType || 'keyword')
+  if (!passesRelevanceCheck(r, r.query, r.keywordType || 'keyword')) return false
+  return groundIntent(r, FIXTURE_CTX).admit
 }
 
 const CLASSES = ['retrieval', 'polysemy', 'intent_inversion', 'borderline', 'relevant', 'unknown']

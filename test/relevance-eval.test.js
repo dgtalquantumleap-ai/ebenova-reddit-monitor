@@ -11,16 +11,21 @@ import { test } from 'node:test'
 import { strict as assert } from 'node:assert'
 import { readFileSync } from 'node:fs'
 import { passesRelevanceCheck } from '../lib/relevance.js'
+import { groundIntent } from '../lib/intent-grounding.js'
 
 const fixture = JSON.parse(readFileSync(new URL('./fixtures/relevance-truthset.json', import.meta.url)))
 const rows = fixture.rows
 
-// Mirror the live pipeline gates (post-#84).
+// All 8 fixture monitors are non-developer, demand-side (keyword-mode) monitors.
+const FIXTURE_CTX = { developerAudience: false, desiredStance: 'seek' }
+
+// Mirror the full live gate stack: retrieval gate + intent-grounding pre-filter.
 function admitted(r) {
   if (r.keywordType === 'competitor') {
     return !!r.competitorName && passesRelevanceCheck(r, r.competitorName, 'competitor')
   }
-  return passesRelevanceCheck(r, r.query, r.keywordType || 'keyword')
+  if (!passesRelevanceCheck(r, r.query, r.keywordType || 'keyword')) return false
+  return groundIntent(r, FIXTURE_CTX).admit
 }
 
 function leakOf(failureType) {
