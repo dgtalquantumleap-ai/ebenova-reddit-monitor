@@ -458,7 +458,17 @@ async function searchReddit(monitorId, keywordEntry, opts = {}) {
       const res = await fetch(url, { headers })
       if (!res.ok) {
         const retryAfter = parseRetryAfter(res.headers)
-        console.warn(`[v2][reddit:rss] ${res.status} for "${keyword}" → ${url.slice(0, 100)}…${retryAfter ? ` (Retry-After: ${retryAfter}s)` : ''}`)
+        const is429 = res.status === 429
+        // Suppress per-URL logs for 429s that arrive while a cooldown is
+        // already active. During a rate-limit burst every request 429s, and
+        // logging each one floods the cycle log with hundreds of identical
+        // lines (the original cause of the unreadable production logs). Real
+        // failures (404/403/5xx) and the FIRST 429 that opens a cooldown
+        // window are still logged in full.
+        const alreadyCoolingDown = is429 && cooldownRemainingMs() > 0
+        if (!alreadyCoolingDown) {
+          console.warn(`[v2][reddit:rss] ${res.status} for "${keyword}" → ${url.slice(0, 100)}…${retryAfter ? ` (Retry-After: ${retryAfter}s)` : ''}`)
+        }
         // 404 OR 403 → permanently bad subreddit; blacklist for 30d.
         // Applies to BOTH dynamic AND explicit subreddit lists — Reddit
         // saying "this sub doesn't exist / is private" is ground truth
@@ -474,14 +484,14 @@ async function searchReddit(monitorId, keywordEntry, opts = {}) {
         // across all monitors will pause for the Retry-After (or default 30s).
         // Without this, the next keyword's first request fires after only the
         // baseline 1500ms gap and we hammer the still-hot IP.
-        if (res.status === 429) {
+        if (is429) {
           const cooldownMs = Math.max((retryAfter || 30) * 1000, 30000)
+          // Log only the 429 that OPENS a cooldown window; subsequent 429s in
+          // the same burst extend it silently (see alreadyCoolingDown above).
+          if (!alreadyCoolingDown) {
+            console.warn(`[v2][reddit:rss] 429 → global pacer cooldown ~${Math.ceil(cooldownMs / 1000)}s (further 429s suppressed until it clears)`)
+          }
           pushCooldown(cooldownMs)
-          // Log when entering cooldown (only first 429 in a burst — subsequent
-          // ones in the same loop pass through quickly because the next
-          // paceRedditRequest will block on the cooldown).
-          const remainingS = Math.ceil(cooldownRemainingMs() / 1000)
-          console.warn(`[v2][reddit:rss] 429 → global pacer cooldown ~${remainingS}s`)
         }
         // Always wait at least interDelay after a non-2xx so the next URL in the
         // loop doesn't fire immediately. The continue below skips the interDelay
@@ -2014,14 +2024,20 @@ if (!redis) {
     console.log('[v2] ⏳ Idle — waiting for Redis to be configured…')
   }, 300_000)
 } else {
-  // Memory usage logging every 5 minutes
+  // Memory usage logging every 5 minutes. The worker's steady-state working
+  // set is ~360–400MB heap, so the old `> 300MB` threshold fired on every
+  // single tick and cried "possible leak" when nothing was wrong. Warn only
+  // above HEAP_WARN_MB (default 700) — well above normal but low enough to
+  // catch a genuine runaway. A real leak shows heapUsed climbing across
+  // cycles; it currently oscillates and resets each cycle.
+  const HEAP_WARN_MB = parseInt(process.env.MONITOR_HEAP_WARN_MB || '700')
   setInterval(() => {
     const m = process.memoryUsage()
     const heapUsedMB = Math.round(m.heapUsed/1024/1024)
     const heapTotalMB = Math.round(m.heapTotal/1024/1024)
     console.log(`[v2] 📊 Memory: Heap ${heapUsedMB}/${heapTotalMB}MB | RSS ${Math.round(m.rss/1024/1024)}MB | Seen entries (cycle): ${_cycleSeenIds.size} | EmbedCache: ${embeddingCache.size}`)
-    if (heapUsedMB > 300) {
-      console.warn(`[v2] ⚠️  HIGH HEAP: ${heapUsedMB}MB — possible leak`)
+    if (heapUsedMB > HEAP_WARN_MB) {
+      console.warn(`[v2] ⚠️  Elevated heap: ${heapUsedMB}MB (warn threshold ${HEAP_WARN_MB}MB)`)
       // Force a GC hint and trim the embedding cache aggressively
       if (embeddingCache.size > 500) {
         let trimmed = 0
