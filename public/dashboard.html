@@ -10,7 +10,13 @@
 <script src="https://unpkg.com/@phosphor-icons/web@2.1.1" defer></script>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<!-- Pinned to v7 (classic JSX runtime). The bare/unpinned URL resolves to
+     unpkg's `latest`, which rolled to v8 — whose preset-react defaults to the
+     automatic runtime and injects `import {jsx} from "react/jsx-runtime"` into
+     this page's in-browser-compiled classic <script>, blanking the dashboard.
+     See test/dashboard-babel-pin.test.js. Do not unpin or bump to v8 without
+     also providing react/jsx-runtime (import map + type="module"). -->
+<script src="https://unpkg.com/@babel/standalone@7.29.7/babel.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Inter',system-ui,sans-serif;background:#080D14;color:#F8FAFC;-webkit-font-smoothing:antialiased;font-size:14px}
