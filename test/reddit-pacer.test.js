@@ -1,6 +1,10 @@
 import { test } from 'node:test'
 import { strict as assert } from 'node:assert'
-import { paceRedditRequest, pushCooldown, cooldownRemainingMs, _internals } from '../lib/reddit-pacer.js'
+import {
+  paceRedditRequest, pushCooldown, cooldownRemainingMs,
+  recordReddit429, recordRedditSuccess, isRedditBreakerOpen, breakerRemainingMs,
+  _internals,
+} from '../lib/reddit-pacer.js'
 
 test('paceRedditRequest: first call returns immediately', async () => {
   _internals.reset()
@@ -133,4 +137,55 @@ test('paceRedditRequest: adds jitter on top of base gap', async () => {
   }
   const mean = waits.reduce((a, b) => a + b, 0) / waits.length
   assert.ok(mean > 100, `jitter should push mean above pure gap; got mean ${mean}ms`)
+})
+
+// ── Circuit breaker ────────────────────────────────────────────────────────
+
+test('breaker: opens after BREAKER_THRESHOLD consecutive 429s', () => {
+  _internals.reset()
+  const threshold = _internals.getBreakerThreshold()
+  for (let i = 0; i < threshold - 1; i++) {
+    assert.equal(recordReddit429(), false, `429 #${i + 1} should not open the breaker yet`)
+    assert.equal(isRedditBreakerOpen(), false)
+  }
+  assert.equal(recordReddit429(), true, 'the threshold-th consecutive 429 opens the breaker')
+  assert.equal(isRedditBreakerOpen(), true)
+  assert.ok(breakerRemainingMs() > 0, 'remaining time should be positive while open')
+})
+
+test('breaker: recordRedditSuccess resets the 429 streak', () => {
+  _internals.reset()
+  const threshold = _internals.getBreakerThreshold()
+  for (let i = 0; i < threshold - 1; i++) recordReddit429()
+  recordRedditSuccess()
+  assert.equal(_internals.getConsecutive429(), 0, 'a clean fetch resets the streak')
+  // A single 429 after a reset must NOT open it (the streak restarted).
+  assert.equal(recordReddit429(), false)
+  assert.equal(isRedditBreakerOpen(), false)
+})
+
+test('breaker: does not re-trip or extend the window while already open', () => {
+  _internals.reset()
+  const threshold = _internals.getBreakerThreshold()
+  for (let i = 0; i < threshold; i++) recordReddit429()
+  assert.equal(isRedditBreakerOpen(), true)
+  const openUntil = _internals.getBreakerOpenUntil()
+  assert.equal(recordReddit429(), false, 'a 429 while open returns false')
+  assert.equal(_internals.getBreakerOpenUntil(), openUntil, 'the open window is not pushed further out')
+})
+
+test('breaker: closes once the cooldown window passes', () => {
+  _internals.reset()
+  const threshold = _internals.getBreakerThreshold()
+  for (let i = 0; i < threshold; i++) recordReddit429()
+  assert.equal(isRedditBreakerOpen(), true)
+  _internals.setBreakerOpenUntil(Date.now() - 1)  // simulate the cooldown elapsing
+  assert.equal(isRedditBreakerOpen(), false)
+  assert.equal(breakerRemainingMs(), 0)
+})
+
+test('breaker: closed by default after reset', () => {
+  _internals.reset()
+  assert.equal(isRedditBreakerOpen(), false)
+  assert.equal(_internals.getConsecutive429(), 0)
 })

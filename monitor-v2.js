@@ -57,7 +57,8 @@ import { embeddingCacheKey } from './lib/embedding-cache.js'
 import { makeCostCap } from './lib/cost-cap.js'
 import { draftCall, extractInjectedUtmUrl } from './lib/draft-call.js'
 import { parseRedditRSS, buildRedditSearchUrl, parseRetryAfter, resolveKeyword } from './lib/reddit-rss.js'
-import { paceRedditRequest, pushCooldown, cooldownRemainingMs } from './lib/reddit-pacer.js'
+import { paceRedditRequest, pushCooldown, cooldownRemainingMs, recordReddit429, recordRedditSuccess, isRedditBreakerOpen, breakerRemainingMs } from './lib/reddit-pacer.js'
+import { makeRedditCache } from './lib/reddit-cache.js'
 import { generateUnsubscribeToken, buildEmailFooter } from './lib/account-deletion.js'
 import { classifyMatch, intentPriority, isHighPriority } from './lib/classify.js'
 import { recordAuthor } from './lib/author-profiles.js'
@@ -404,6 +405,11 @@ async function semanticSearchSubreddit(monitorId, subreddit, keywordEntry, query
 // MONITOR_REDDIT_URL_CAP (default 40) URLs per cycle. Excess URLs are
 // skipped with a warning. This is per-searchReddit-invocation total, shared
 // via the requestsUsed counter passed in opts.
+// Dynamic subreddit-intel fan-out per keyword. Reddit rate-limits aggressive
+// RSS fan-out, so cap the suggested-subreddit list; combined with the circuit
+// breaker this keeps request volume under the anonymous ceiling. Env-tunable.
+const REDDIT_INTEL_FANOUT = parseInt(process.env.REDDIT_INTEL_FANOUT || '3')
+
 async function searchReddit(monitorId, keywordEntry, opts = {}) {
   const keyword = resolveKeyword(keywordEntry)
   const { subreddits = [] } = keywordEntry
@@ -437,9 +443,69 @@ async function searchReddit(monitorId, keywordEntry, opts = {}) {
     'Accept': 'application/atom+xml,application/rss+xml,application/xml;q=0.9,text/xml;q=0.8',
   }
 
+  // Short-TTL result cache (lib/reddit-cache.js): a cache hit skips the fetch,
+  // the pacer, AND the per-monitor budget — proactively cutting the request
+  // volume that triggers Reddit's anonymous-IP 429s. Misses fall through to a
+  // live fetch which then populates the cache.
+  const cache = makeRedditCache(redis)
+  let _breakerSkipLogged = false
+
+  // Shared consumer for parsed RSS entries — used by BOTH the live-fetch and
+  // cache-hit paths so seen/age dedup behaves identically. Pushes new matches
+  // onto `results` (closed over above).
+  const processEntries = async (entries, { cached } = {}) => {
+    let newCount = 0
+    let agedOut = 0
+    for (const entry of entries) {
+      if (await hasSeenWithRedis(monitorId, entry.id)) continue
+      const ageMs = Date.now() - new Date(entry.createdAt).getTime()
+      if (ageMs > POST_MAX_AGE_MS) { agedOut++; continue }
+      markSeen(monitorId, entry.id)
+      newCount++
+      results.push({
+        id:        entry.id,
+        title:     entry.title || '(no title)',
+        url:       entry.url,
+        subreddit: entry.subreddit,
+        author:    entry.author,
+        score:     0,        // RSS doesn't include score
+        comments:  0,        // RSS doesn't include comment count
+        body:      entry.body || '',
+        createdAt: entry.createdAt,
+        keyword,
+        source:    'reddit',
+        approved:  APPROVED_SUBREDDITS.has(entry.subreddit),
+      })
+    }
+    console.log(`[v2][reddit:rss] "${keyword}" → ${entries.length} fetched, ${newCount} new, ${agedOut} stale${entries.length === 0 ? ' (empty feed)' : ''}${cached ? ' (cached)' : ''}`)
+  }
+
   for (const [sr, url] of urlPairs) {
-    // Per-monitor budget check — skip remaining URLs if this monitor has
-    // used its allocation for the cycle.
+    const cacheParams = { keyword, subreddit: sr, type: kwType }
+
+    // 1) Serve from cache when fresh — no fetch, no pacer, no budget spend.
+    //    The seen/age filter in processEntries still runs, so a cache hit never
+    //    re-emits a match that was already surfaced.
+    const cachedEntries = await cache.get(cacheParams)
+    if (cachedEntries) {
+      await processEntries(cachedEntries, { cached: true })
+      continue
+    }
+
+    // 2) Circuit breaker — once repeated 429s trip it, skip ALL Reddit fetching
+    //    until it closes (~25 min, cross-cycle). This is what stops a hot IP
+    //    from stretching a poll cycle to hours; other platforms are unaffected.
+    //    Logged once per searchReddit call to avoid spam.
+    if (isRedditBreakerOpen()) {
+      if (!_breakerSkipLogged) {
+        console.warn(`[v2][reddit:rss] circuit-breaker open (~${Math.ceil(breakerRemainingMs() / 60000)}m left) — skipping Reddit, other platforms continue`)
+        _breakerSkipLogged = true
+      }
+      continue
+    }
+
+    // 3) Per-monitor budget — only real fetches (not cache hits / breaker
+    //    skips) count against it.
     if (budget) {
       if (budget.used >= budget.max) {
         console.warn(`[v2][reddit:rss] "${keyword}" — per-monitor request budget exhausted (${budget.used}/${budget.max}), skipping remaining subreddits`)
@@ -492,6 +558,11 @@ async function searchReddit(monitorId, keywordEntry, opts = {}) {
             console.warn(`[v2][reddit:rss] 429 → global pacer cooldown ~${Math.ceil(cooldownMs / 1000)}s (further 429s suppressed until it clears)`)
           }
           pushCooldown(cooldownMs)
+          // Feed the circuit breaker. After REDDIT_BREAKER_THRESHOLD consecutive
+          // 429s it opens and the checks above skip Reddit for the cooldown.
+          if (recordReddit429()) {
+            console.warn(`[v2][reddit:rss] ⛔ circuit-breaker OPEN ~${Math.ceil(breakerRemainingMs() / 60000)}m after repeated 429s — pausing Reddit (other platforms unaffected)`)
+          }
         }
         // Always wait at least interDelay after a non-2xx so the next URL in the
         // loop doesn't fire immediately. The continue below skips the interDelay
@@ -501,31 +572,9 @@ async function searchReddit(monitorId, keywordEntry, opts = {}) {
       }
       const xml = await res.text()
       const entries = parseRedditRSS(xml)
-      let newCount = 0
-      let agedOut = 0
-
-      for (const entry of entries) {
-        if (await hasSeenWithRedis(monitorId, entry.id)) continue
-        const ageMs = Date.now() - new Date(entry.createdAt).getTime()
-        if (ageMs > POST_MAX_AGE_MS) { agedOut++; continue }
-        markSeen(monitorId, entry.id)
-        newCount++
-        results.push({
-          id:        entry.id,
-          title:     entry.title || '(no title)',
-          url:       entry.url,
-          subreddit: entry.subreddit,
-          author:    entry.author,
-          score:     0,        // RSS doesn't include score
-          comments:  0,        // RSS doesn't include comment count
-          body:      entry.body || '',
-          createdAt: entry.createdAt,
-          keyword,
-          source:    'reddit',
-          approved:  APPROVED_SUBREDDITS.has(entry.subreddit),
-        })
-      }
-      console.log(`[v2][reddit:rss] "${keyword}" → ${entries.length} fetched, ${newCount} new, ${agedOut} stale${entries.length === 0 ? ' (empty feed)' : ''}`)
+      recordRedditSuccess()                  // IP responded — reset the 429 streak
+      await cache.set(cacheParams, entries)  // populate the short-TTL result cache
+      await processEntries(entries, { cached: false })
     } catch (err) {
       console.error(`[v2][reddit:rss] fetch error "${keyword}":`, err.message)
     }
@@ -1166,8 +1215,10 @@ async function runMonitor(monitor) {
     }
   }
   // Load suggested subreddits and attach to keywords that have none.
-  // Capped at 5 — Reddit rate-limits aggressive RSS fan-out, and returns
-  // diminish past the top-ranked few suggestions per keyword.
+  // Capped at REDDIT_INTEL_FANOUT (default 3) — Reddit rate-limits aggressive
+  // RSS fan-out, and returns diminish past the top-ranked few suggestions per
+  // keyword. Combined with the circuit breaker this keeps request volume under
+  // the anonymous ceiling.
   let suggestedSubreddits = []
   if (redis) {
     let _raw = null
@@ -1188,7 +1239,7 @@ async function runMonitor(monitor) {
     if (_raw) {
       try {
         const _arr = typeof _raw === 'string' ? JSON.parse(_raw) : _raw
-        if (Array.isArray(_arr)) suggestedSubreddits = _arr.slice(0, 5)
+        if (Array.isArray(_arr)) suggestedSubreddits = _arr.slice(0, REDDIT_INTEL_FANOUT)
       } catch (_) {}
     }
   }
