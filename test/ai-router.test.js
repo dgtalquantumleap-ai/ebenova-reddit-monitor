@@ -219,9 +219,82 @@ test('DEFAULT_PROVIDERS has all 4 providers with required interface', () => {
   }
 })
 
-test('DEFAULT_PROVIDERS model strings match spec', () => {
-  assert.equal(DEFAULT_PROVIDERS.GROQ_FAST.model,    'llama-3.1-8b-instant')
-  assert.equal(DEFAULT_PROVIDERS.GROQ_QUALITY.model, 'llama-3.3-70b-versatile')
-  assert.equal(DEFAULT_PROVIDERS.DEEPSEEK.model,     'deepseek-chat')
+test('DEFAULT_PROVIDERS use currently offered model defaults', () => {
+  assert.equal(DEFAULT_PROVIDERS.GROQ_FAST.model,    'qwen/qwen3.8-27b')
+  assert.equal(DEFAULT_PROVIDERS.GROQ_QUALITY.model, 'qwen/qwen3.8-27b')
+  assert.equal(DEFAULT_PROVIDERS.DEEPSEEK.model,     'deepseek-flash')
   assert.equal(DEFAULT_PROVIDERS.CLAUDE.model,       'claude-sonnet-4-6')
+})
+
+test('real provider request builders use current IDs and preserve JSON and token budgets', async t => {
+  const requests = []
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    requests.push({ url, body: JSON.parse(options.body) })
+    return Response.json({ choices: [{ message: { content: '{"ok":true}' } }] })
+  })
+  for (const key of ['GROQ_FAST', 'GROQ_QUALITY', 'DEEPSEEK']) {
+    assert.equal(await DEFAULT_PROVIDERS[key].call({ prompt: 'Return JSON.', maxTokens: 256, jsonMode: true }), '{"ok":true}')
+    const body = requests.at(-1).body
+    assert.equal(body.model, DEFAULT_PROVIDERS[key].model)
+    assert.equal(body.max_tokens, 256)
+    assert.deepEqual(body.response_format, { type: 'json_object' })
+    if (key === 'DEEPSEEK') assert.deepEqual(body.thinking, { type: 'disabled' })
+    else assert.equal(body.reasoning_effort, 'none')
+  }
+})
+
+test('model overrides are trimmed, used in requests and metadata, and blank overrides fall back', async t => {
+  let sent
+  t.mock.method(globalThis, 'fetch', async (_url, options) => {
+    sent = JSON.parse(options.body)
+    return Response.json({ choices: [{ message: { content: 'ok' } }] })
+  })
+  const cases = [
+    ['GROQ_FAST', 'GROQ_FAST_MODEL', 'qwen/qwen3.8-27b'],
+    ['GROQ_QUALITY', 'GROQ_QUALITY_MODEL', 'qwen/qwen3.8-27b'],
+    ['DEEPSEEK', 'DEEPSEEK_MODEL', 'deepseek-flash'],
+  ]
+  for (const [key, variable, fallback] of cases) {
+    const original = process.env[variable]
+    t.after(() => { if (original === undefined) delete process.env[variable]; else process.env[variable] = original })
+    process.env[variable] = '  synthetic-override  '
+    await DEFAULT_PROVIDERS[key].call({ prompt: 'x' })
+    assert.equal(sent.model, 'synthetic-override')
+    assert.equal(DEFAULT_PROVIDERS[key].model, sent.model)
+    if (key !== 'DEEPSEEK') assert.equal('reasoning_effort' in sent, false)
+    process.env[variable] = '   '
+    await DEFAULT_PROVIDERS[key].call({ prompt: 'x' })
+    assert.equal(sent.model, fallback)
+    assert.equal(DEFAULT_PROVIDERS[key].model, fallback)
+  }
+})
+
+test('empty or truncated provider completions fail so a usable fallback can run', async t => {
+  for (const key of ['GROQ_FAST', 'DEEPSEEK']) {
+    for (const choice of [
+      { finish_reason: 'stop', message: { content: '   ' } },
+      { finish_reason: 'length', message: { content: '{"partial":' } },
+    ]) {
+      const stub = t.mock.method(globalThis, 'fetch', async () => Response.json({ choices: [choice] }))
+      await assert.rejects(DEFAULT_PROVIDERS[key].call({ prompt: 'x' }), /empty|truncated/i)
+      stub.mock.restore()
+    }
+  }
+})
+
+test('reasoning-budget exhaustion reaches the next usable provider', async t => {
+  let attempts = 0
+  t.mock.method(globalThis, 'fetch', async () => Response.json({ choices: [++attempts === 1
+    ? { finish_reason: 'length', message: { content: '' } }
+    : { finish_reason: 'stop', message: { content: '{"intent":"buying"}' } }] }))
+  const catalog = {
+    GROQ_FAST: { ...DEFAULT_PROVIDERS.GROQ_FAST, available: () => true },
+    GROQ_QUALITY: { ...DEFAULT_PROVIDERS.GROQ_QUALITY, available: () => false },
+    DEEPSEEK: { ...DEFAULT_PROVIDERS.DEEPSEEK, available: () => true },
+  }
+  const result = await routeAIWithProviders(catalog, { task: 'classify_match', prompt: 'Return JSON.', maxTokens: 120 })
+  assert.equal(result.ok, true)
+  assert.equal(result.providerKey, 'DEEPSEEK')
+  assert.equal(result.text, '{"intent":"buying"}')
+  assert.equal(attempts, 2)
 })
