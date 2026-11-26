@@ -577,13 +577,14 @@ app.get('/v1/monitors', async (req, res) => {
       const raw = await redis.get(`insights:monitor:${id}`)
       if (raw) {
         const m = typeof raw === 'string' ? JSON.parse(raw) : raw
-        if (m.active === false) continue
+        if (m.active === false && m.setupOnly !== true) continue
         const kwStrings = m.keywords?.map(k => k.keyword) || []
         const health = await getKeywordHealth(redis, m.id)
         const staleKws = getStaleKeywords(health, kwStrings)
         const noiseKws = getNoiseKeywords(health, kwStrings)
         monitors.push({
           id: m.id, name: m.name, active: m.active,
+          setup_only: m.setupOnly === true,
           keyword_count: m.keywords?.length || 0,
           keywords: kwStrings,
           keywords_full: m.keywords || [],
@@ -655,6 +656,16 @@ app.post('/v1/monitors', async (req, res) => {
     minIntentScore,
     competitors,
     includeMedium, includeSubstack, includeQuora, includeUpworkForum, includeFiverrForum } = req.body
+
+  // Setup-only is opt-in and has no scan/AI/email side effects. Validate before
+  // allocating the owner's plan slot; strings like "false" must not start work.
+  for (const field of ['setupOnly', 'emailEnabled']) {
+    if (Object.prototype.hasOwnProperty.call(req.body, field) && typeof req.body[field] !== 'boolean') {
+      return res.status(400).json({ success: false, error: { code: 'INVALID_INPUT', message: `\`${field}\` must be a boolean` } })
+    }
+  }
+  const setupOnly = req.body.setupOnly === true
+  const emailEnabled = !setupOnly && req.body.emailEnabled !== false
 
   // PR #31: monitor mode. 'keyword' (default) or 'builder_tracker'. Unknown
   // values fall back to 'keyword' so a typo doesn't accidentally lock a
@@ -769,7 +780,7 @@ app.post('/v1/monitors', async (req, res) => {
       includeUpworkForum: resolvedPlatforms.includes('upwork'),
       includeFiverrForum: resolvedPlatforms.includes('fiverr'),
       // Email opt-out + delete-account flow (per PR #13)
-      emailEnabled:       true,
+      emailEnabled,
       unsubscribeToken,
       shareToken,
       // PR #31: Builder Tracker mode + minimum consistency display filter.
@@ -785,15 +796,17 @@ app.post('/v1/monitors', async (req, res) => {
       competitors: Array.isArray(competitors)
         ? competitors.filter(c => typeof c === 'string' && c.trim()).map(c => c.trim().slice(0, 60)).slice(0, 10)
         : [],
-      active: true, plan, createdAt: now, lastPollAt: null, totalMatchesFound: 0 }
+      ...(setupOnly ? { setupOnly: true } : {}),
+      active: !setupOnly, plan, createdAt: now, lastPollAt: null, totalMatchesFound: 0 }
     await redis.set(`insights:monitor:${id}`, JSON.stringify(monitor))
     await redis.expire(`insights:monitor:${id}`, ONE_YEAR_SECONDS).catch(() => {})
     await redis.set(`unsubscribe:${unsubscribeToken}`, id)
     await redis.expire(`unsubscribe:${unsubscribeToken}`, ONE_YEAR_SECONDS).catch(() => {})
     await redis.set(`report:token:${shareToken}`, id)
     await redis.expire(`report:token:${shareToken}`, ONE_YEAR_SECONDS).catch(() => {})
-    await redis.sadd('insights:active_monitors', id)
+    if (!setupOnly) await redis.sadd('insights:active_monitors', id)
 
+    if (!setupOnly) {
     // Fire-and-forget keyword expansion (non-blocking).
     // Single retry with backoff on transient failure — covers AI 429 / brief
     // network blips that previously left monitors with a permanently empty
@@ -854,6 +867,7 @@ app.post('/v1/monitors', async (req, res) => {
     // Fire-and-forget "your monitor is scanning" email — sets expectations
     // before the first alert lands. Required unsubscribe footer per CASL/NDPR.
     ;(async () => {
+      if (!monitor.emailEnabled) return
       const resendKey = process.env.RESEND_API_KEY
       if (!resendKey) return
       try {
@@ -893,10 +907,12 @@ app.post('/v1/monitors', async (req, res) => {
         console.error('[monitor] scanning email setup failed:', err.message)
       }
     })()
+    }
 
     res.status(201).json({ success: true, monitor_id: id, name: monitor.name, keyword_count: cleanKws.length,
-      keywords: cleanKws.map(k => k.keyword), plan, alert_email: monitor.alertEmail, active: true,
-      email_enabled: true,
+      keywords: cleanKws.map(k => k.keyword), plan, alert_email: monitor.alertEmail, active: monitor.active,
+      setup_only: setupOnly,
+      email_enabled: monitor.emailEnabled,
       platforms: resolvedPlatforms,
       product_url:   monitor.productUrl,
       utm_source:    monitor.utmSource,
@@ -907,7 +923,7 @@ app.post('/v1/monitors', async (req, res) => {
       mode:            monitor.mode,
       min_consistency: monitor.minConsistency,
       brand_name:        monitor.brandName,
-      created_at: now, next_poll_eta: 'Within 15 minutes' })
+      created_at: now, next_poll_eta: setupOnly ? null : 'Within 15 minutes' })
   } catch (err) {
     serverError(res, err)
   }

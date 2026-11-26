@@ -1,0 +1,25 @@
+{
+  "name": "Ebenova Front Desk — owner enquiry problems",
+  "setupOnly": true,
+  "emailEnabled": false,
+  "mode": "keyword",
+  "platforms": ["reddit"],
+  "keywords": [
+    { "keyword": "salon receptionist" },
+    { "keyword": "barbershop booking software" },
+    { "keyword": "missed client calls" },
+    { "keyword": "answering calls while working" },
+    { "keyword": "appointment scheduling for my salon" },
+    { "keyword": "after hours appointment calls" },
+    { "keyword": "AI receptionist for small business" },
+    { "keyword": "customers cannot reach us" }
+  ],
+  "productContext": "Ebenova Front Desk helps owners of appointment-based service businesses handle incoming customer calls and texts, answer configured business questions, capture callback requests and assist with appointments only through enabled, supported booking connections. Prioritize owners describing missed enquiries, interruptions while serving customers, after-hours enquiry handling or scheduling administration. Exclude consumer salon/product recommendations, receptionist job searches, vendor promotions and generic AI news. Do not infer the poster's country, authority or willingness to buy. Unknown integration fit requires qualification. Do not promise universal calendar access, guaranteed revenue or autonomous business decisions.",
+  "replyTone": "professional",
+  "minIntentScore": 70,
+  "brandName": "Ebenova Front Desk",
+  "productUrl": "https://ebenova.net/salons",
+  "utmSource": "ebenova-insights",
+  "utmMedium": "community",
+  "utmCampaign": "frontdesk-owner-discovery"
+}

@@ -3,6 +3,11 @@
 Monitor Reddit and Nairaland for keyword mentions, with AI-drafted replies ready to post.
 Self-hosted, no Reddit API key required.
 
+For the internal Front Desk customer-discovery experiment, see the
+[safe setup and activation guide](docs/FRONTDESK-DISCOVERY-OPERATIONS.md).
+Technical access without an API key does not establish permission for
+commercial Reddit data use; verify the current platform requirements first.
+
 ## Quick Start
 
 ```bash
