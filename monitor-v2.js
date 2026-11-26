@@ -898,14 +898,19 @@ async function sendMonitorAlert(monitor, matches) {
     const unsubUrl = monitor.unsubscribeToken
       ? `${appUrl}/unsubscribe?token=${encodeURIComponent(monitor.unsubscribeToken)}`
       : `${appUrl}/`
-    await resend.emails.send({
+    const receipt = await resend.emails.send({
       from:    `Ebenova Insights <${FROM_EMAIL}>`,
       to:      monitor.alertEmail,
       subject,
       html,
       ...buildBulkEmailExtras({ html, unsubscribeUrl: unsubUrl }),
     })
-    console.log(`[v2][${monitor.id}] Alert sent to ${monitor.alertEmail} — ${matches.length} matches`)
+    // Resend's SDK resolves API refusals as { data:null, error }, rather than
+    // throwing. Only a receipt establishes acceptance; it is not inbox delivery.
+    if (receipt?.error || typeof receipt?.data?.id !== 'string' || !receipt.data.id.trim()) {
+      throw new Error('Alert provider did not acknowledge acceptance')
+    }
+    console.log(`[v2][${monitor.id}] Alert accepted by provider — ${matches.length} matches`)
     // Stamp lastEmailSentAt so the admin diagnostics endpoint can surface it.
     if (redis) {
       try {
